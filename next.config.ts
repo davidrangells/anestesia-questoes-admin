@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  reactCompiler: true,
+  turbopack: {}, // deixa vazio (não liga turbo automaticamente)
 };
 
 export default nextConfig;
