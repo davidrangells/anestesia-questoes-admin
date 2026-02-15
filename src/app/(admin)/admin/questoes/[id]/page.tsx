@@ -10,13 +10,20 @@ import {
   serverTimestamp,
   updateDoc,
   deleteDoc,
-  addDoc,
-  collection,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import {
+  getDownloadURL,
+  getStorage,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 
-type Option = { id: "A" | "B" | "C" | "D" | "E"; text: string; imageUrl?: string | null };
+type Option = {
+  id: "A" | "B" | "C" | "D" | "E";
+  text: string;
+  imageUrl?: string | null;
+};
 
 type QBQuestion = {
   prompt?: string;
@@ -41,46 +48,25 @@ function classNames(...xs: Array<string | false | undefined | null>) {
   return xs.filter(Boolean).join(" ");
 }
 
-function safeExtFromName(name: string) {
+function safeExt(name: string) {
   const ext = (name.split(".").pop() || "jpg").toLowerCase();
   if (!/^[a-z0-9]+$/.test(ext)) return "jpg";
   if (ext.length > 6) return "jpg";
   return ext;
 }
 
-/**
- * Upload padronizado + retorno do {url, path}
- */
 async function uploadImageToStorage(file: File, folder: string) {
   const storage = getStorage();
-  const ext = safeExtFromName(file.name);
-  const path = `${folder}/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+  const ext = safeExt(file.name);
+  const path = `${folder}/${Date.now()}-${Math.random()
+    .toString(16)
+    .slice(2)}.${ext}`;
+
   const storageRef = ref(storage, path);
   await uploadBytes(storageRef, file);
   const url = await getDownloadURL(storageRef);
-  return { url, path };
-}
 
-/**
- * Registra na galeria (Firestore) para aparecer em /midias
- */
-async function registerMedia(params: {
-  url: string;
-  path: string;
-  origin: "questionsBank" | "midias";
-  kind: "prompt" | "option";
-  refId: string; // id da questão
-  label?: string; // ex: "Alternativa A"
-}) {
-  await addDoc(collection(db, "midias"), {
-    url: params.url,
-    path: params.path,
-    origin: params.origin,
-    kind: params.kind,
-    refId: params.refId,
-    label: params.label ?? null,
-    createdAt: serverTimestamp(),
-  });
+  return { url, path };
 }
 
 export default function EditarQuestaoPage() {
@@ -106,10 +92,19 @@ export default function EditarQuestaoPage() {
     correctOptionId: Option["id"];
   } | null>(null);
 
+  // ✅ helper seguro (evita TS quebrar quando form é null)
+  const patchForm = (
+    patch: Partial<NonNullable<typeof form>>
+  ) => {
+    setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
   const canSave = useMemo(() => {
     if (!form) return false;
     const hasPrompt = form.prompt.trim().length > 0;
-    const hasOptions = form.options.every((o) => o.text.trim().length > 0);
+    const hasOptions = form.options.every(
+      (o) => o.text.trim().length > 0
+    );
     return hasPrompt && hasOptions && !saving;
   }, [form, saving]);
 
@@ -118,6 +113,7 @@ export default function EditarQuestaoPage() {
     try {
       const refDoc = doc(db, "questionsBank", id);
       const snap = await getDoc(refDoc);
+
       if (!snap.exists()) {
         alert("Questão não encontrada.");
         router.replace("/admin/questoes");
@@ -126,7 +122,12 @@ export default function EditarQuestaoPage() {
 
       const data = snap.data() as QBQuestion;
 
-      const prompt = (data.prompt ?? data.questionText ?? data.statement ?? "").toString();
+      const prompt = (
+        data.prompt ??
+        data.questionText ??
+        data.statement ??
+        ""
+      ).toString();
 
       const options: Option[] =
         Array.isArray(data.options) && data.options.length
@@ -148,7 +149,9 @@ export default function EditarQuestaoPage() {
         examType: (data.examType ?? "TSA").toString(),
         examYear: data.examYear ? String(data.examYear) : "",
         examSource: (data.examSource ?? "").toString(),
-        themes: Array.isArray(data.themes) ? (data.themes as any) : [],
+        themes: Array.isArray(data.themes)
+          ? (data.themes as any)
+          : [],
         isActive: data.isActive !== false,
         imageUrl: (data.imageUrl ?? "").toString(),
         options,
@@ -161,7 +164,7 @@ export default function EditarQuestaoPage() {
 
   useEffect(() => {
     if (!id) return;
-    load();
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -170,7 +173,9 @@ export default function EditarQuestaoPage() {
       if (!prev) return prev;
       return {
         ...prev,
-        options: prev.options.map((o) => (o.id === oid ? { ...o, ...patch } : o)),
+        options: prev.options.map((o) =>
+          o.id === oid ? { ...o, ...patch } : o
+        ),
       };
     });
   };
@@ -178,54 +183,45 @@ export default function EditarQuestaoPage() {
   const addThemeFromInput = () => {
     const v = themeInput.trim();
     if (!v || !form) return;
-    setForm((p) => (p ? { ...p, themes: p.themes.includes(v) ? p.themes : [...p.themes, v] } : p));
+    patchForm({
+      themes: form.themes.includes(v)
+        ? form.themes
+        : [...form.themes, v],
+    });
     setThemeInput("");
   };
 
   const removeTheme = (t: string) => {
-    setForm((p) => (p ? { ...p, themes: p.themes.filter((x) => x !== t) } : p));
+    if (!form) return;
+    patchForm({ themes: form.themes.filter((x) => x !== t) });
   };
 
   const handleUploadPrompt = async (file: File | null) => {
     if (!file || !form) return;
     setUploading("prompt");
     try {
-      const folder = `admin_uploads/questionsBank/${id}/prompt`;
-      const { url, path } = await uploadImageToStorage(file, folder);
-
-      setForm((p) => (p ? { ...p, imageUrl: url } : p));
-
-      // ✅ registra na galeria já com refId
-      await registerMedia({
-        url,
-        path,
-        origin: "questionsBank",
-        kind: "prompt",
-        refId: id,
-        label: "Enunciado",
-      });
+      const { url } = await uploadImageToStorage(
+        file,
+        "admin_uploads/questionsBank/prompt"
+      );
+      patchForm({ imageUrl: url });
     } finally {
       setUploading(null);
     }
   };
 
-  const handleUploadOption = async (oid: Option["id"], file: File | null) => {
+  const handleUploadOption = async (
+    oid: Option["id"],
+    file: File | null
+  ) => {
     if (!file || !form) return;
     setUploading(oid);
     try {
-      const folder = `admin_uploads/questionsBank/${id}/options/${oid}`;
-      const { url, path } = await uploadImageToStorage(file, folder);
-
+      const { url } = await uploadImageToStorage(
+        file,
+        `admin_uploads/questionsBank/options/${oid}`
+      );
       setOption(oid, { imageUrl: url });
-
-      await registerMedia({
-        url,
-        path,
-        origin: "questionsBank",
-        kind: "option",
-        refId: id,
-        label: `Alternativa ${oid}`,
-      });
     } finally {
       setUploading(null);
     }
@@ -235,27 +231,30 @@ export default function EditarQuestaoPage() {
     if (!form || !canSave) return;
     setSaving(true);
     try {
-      const examYearNum = form.examYear.trim() ? Number(form.examYear.trim()) : undefined;
+      const examYearNum = form.examYear.trim()
+        ? Number(form.examYear.trim())
+        : undefined;
 
       const payload = {
         prompt: form.prompt.trim(),
         explanation: form.explanation.trim(),
         examType: form.examType || "",
-        examYear: Number.isFinite(examYearNum) ? examYearNum : null,
+        examYear: Number.isFinite(examYearNum)
+          ? examYearNum
+          : null,
         examSource: form.examSource || "",
         themes: form.themes,
         isActive: form.isActive,
 
-        imageUrl: form.imageUrl?.trim() ? form.imageUrl.trim() : null,
+        imageUrl: form.imageUrl?.trim() ? form.imageUrl.trim() : "",
 
         options: form.options.map((o) => ({
           id: o.id,
           text: o.text.trim(),
-          imageUrl: o.imageUrl?.trim() ? o.imageUrl.trim() : null,
+          imageUrl: o.imageUrl?.trim() ? o.imageUrl.trim() : "",
         })),
 
         correctOptionId: form.correctOptionId,
-
         updatedAt: serverTimestamp(),
       };
 
@@ -282,7 +281,9 @@ export default function EditarQuestaoPage() {
   if (loading || !form) {
     return (
       <AdminShell title="Editar questão" subtitle="Carregando...">
-        <div className="rounded-2xl border bg-white p-6 text-sm text-slate-600">Carregando…</div>
+        <div className="rounded-2xl border bg-white p-6 text-sm text-slate-600">
+          Carregando…
+        </div>
       </AdminShell>
     );
   }
@@ -299,12 +300,15 @@ export default function EditarQuestaoPage() {
           >
             Voltar
           </Link>
+
           <button
             onClick={save}
             disabled={!canSave}
             className={classNames(
               "rounded-xl px-4 py-2 text-sm font-semibold text-white",
-              canSave ? "bg-slate-900 hover:bg-slate-800" : "bg-slate-300 cursor-not-allowed"
+              canSave
+                ? "bg-slate-900 hover:bg-slate-800"
+                : "bg-slate-300 cursor-not-allowed"
             )}
           >
             {saving ? "Salvando..." : "Salvar"}
@@ -319,15 +323,20 @@ export default function EditarQuestaoPage() {
           <div className="rounded-2xl border bg-white p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-extrabold text-slate-900">Enunciado</div>
+                <div className="text-sm font-extrabold text-slate-900">
+                  Enunciado
+                </div>
                 <div className="text-xs text-slate-500">Campo: prompt</div>
               </div>
+
               <label className="text-xs font-semibold text-slate-700 cursor-pointer">
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => handleUploadPrompt(e.target.files?.[0] || null)}
+                  onChange={(e) =>
+                    handleUploadPrompt(e.target.files?.[0] || null)
+                  }
                 />
                 <span className="rounded-xl border bg-white px-3 py-2 hover:bg-slate-50 inline-flex">
                   {uploading === "prompt" ? "Enviando..." : "Upload imagem"}
@@ -337,22 +346,24 @@ export default function EditarQuestaoPage() {
 
             <textarea
               value={form.prompt}
-              onChange={(e) => setForm((p) => ({ ...p, prompt: e.target.value }))}
+              onChange={(e) => patchForm({ prompt: e.target.value })}
               className="mt-3 w-full min-h-[140px] rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
             />
 
             <div className="mt-3">
-              <div className="text-xs font-semibold text-slate-600 mb-1">URL da imagem do enunciado (opcional)</div>
+              <div className="text-xs font-semibold text-slate-600 mb-1">
+                URL da imagem do enunciado (opcional)
+              </div>
               <div className="flex gap-2">
                 <input
                   value={form.imageUrl}
-                  onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
+                  onChange={(e) => patchForm({ imageUrl: e.target.value })}
                   placeholder="https://firebasestorage.googleapis.com/..."
                   className="flex-1 rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                 />
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, imageUrl: "" }))}
+                  onClick={() => patchForm({ imageUrl: "" })}
                   className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
                 >
                   Limpar
@@ -361,7 +372,9 @@ export default function EditarQuestaoPage() {
 
               {form.imageUrl?.trim() ? (
                 <div className="mt-3 rounded-2xl border bg-slate-50 p-3">
-                  <div className="text-xs font-extrabold text-slate-700 mb-2">Preview</div>
+                  <div className="text-xs font-extrabold text-slate-700 mb-2">
+                    Preview
+                  </div>
                   <img
                     src={form.imageUrl}
                     alt="Preview enunciado"
@@ -374,8 +387,12 @@ export default function EditarQuestaoPage() {
 
           {/* Alternativas */}
           <div className="rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Alternativas</div>
-            <div className="text-xs text-slate-500">Campo: options[] + correctOptionId</div>
+            <div className="text-sm font-extrabold text-slate-900">
+              Alternativas
+            </div>
+            <div className="text-xs text-slate-500">
+              Campo: options[] + correctOptionId
+            </div>
 
             <div className="mt-4 space-y-3">
               {form.options.map((opt) => {
@@ -387,16 +404,20 @@ export default function EditarQuestaoPage() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setForm((p) => ({ ...p, correctOptionId: opt.id }))}
+                          onClick={() => patchForm({ correctOptionId: opt.id })}
                           className={classNames(
                             "h-9 w-9 rounded-xl border text-sm font-black",
-                            isCorrect ? "bg-emerald-600 text-white border-emerald-600" : "bg-white hover:bg-slate-50"
+                            isCorrect
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : "bg-white hover:bg-slate-50"
                           )}
                           title="Marcar como correta"
                         >
                           {opt.id}
                         </button>
-                        <div className="text-xs text-slate-500">{isCorrect ? "Correta" : "Marcar como correta"}</div>
+                        <div className="text-xs text-slate-500">
+                          {isCorrect ? "Correta" : "Marcar como correta"}
+                        </div>
                       </div>
 
                       <label className="text-xs font-semibold text-slate-700 cursor-pointer">
@@ -404,7 +425,9 @@ export default function EditarQuestaoPage() {
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) => handleUploadOption(opt.id, e.target.files?.[0] || null)}
+                          onChange={(e) =>
+                            handleUploadOption(opt.id, e.target.files?.[0] || null)
+                          }
                         />
                         <span className="rounded-xl border bg-white px-3 py-2 hover:bg-slate-50 inline-flex">
                           {uploading === opt.id ? "Enviando..." : "Upload imagem"}
@@ -440,7 +463,9 @@ export default function EditarQuestaoPage() {
 
                       {opt.imageUrl?.trim() ? (
                         <div className="mt-3 rounded-2xl border bg-slate-50 p-3">
-                          <div className="text-xs font-extrabold text-slate-700 mb-2">Preview</div>
+                          <div className="text-xs font-extrabold text-slate-700 mb-2">
+                            Preview
+                          </div>
                           <img
                             src={opt.imageUrl}
                             alt={`Preview alternativa ${opt.id}`}
@@ -457,11 +482,13 @@ export default function EditarQuestaoPage() {
 
           {/* Comentário */}
           <div className="rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Comentário / Explicação</div>
+            <div className="text-sm font-extrabold text-slate-900">
+              Comentário / Explicação
+            </div>
             <div className="text-xs text-slate-500">Campo: explanation</div>
             <textarea
               value={form.explanation}
-              onChange={(e) => setForm((p) => ({ ...p, explanation: e.target.value }))}
+              onChange={(e) => patchForm({ explanation: e.target.value })}
               className="mt-3 w-full min-h-[140px] rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
@@ -478,7 +505,7 @@ export default function EditarQuestaoPage() {
                 <div className="text-xs font-semibold text-slate-600 mb-1">Prova</div>
                 <select
                   value={form.examType}
-                  onChange={(e) => setForm((p) => ({ ...p, examType: e.target.value }))}
+                  onChange={(e) => patchForm({ examType: e.target.value })}
                   className="w-full rounded-xl border px-4 py-3 text-sm bg-white"
                 >
                   <option value="TSA">TSA</option>
@@ -491,7 +518,7 @@ export default function EditarQuestaoPage() {
                 <div className="text-xs font-semibold text-slate-600 mb-1">Ano</div>
                 <input
                   value={form.examYear}
-                  onChange={(e) => setForm((p) => ({ ...p, examYear: e.target.value }))}
+                  onChange={(e) => patchForm({ examYear: e.target.value })}
                   placeholder="2014"
                   className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                 />
@@ -501,7 +528,7 @@ export default function EditarQuestaoPage() {
                 <div className="text-xs font-semibold text-slate-600 mb-1">Fonte (opcional)</div>
                 <input
                   value={form.examSource}
-                  onChange={(e) => setForm((p) => ({ ...p, examSource: e.target.value }))}
+                  onChange={(e) => patchForm({ examSource: e.target.value })}
                   placeholder="SBA / banca / prova..."
                   className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                 />
@@ -514,7 +541,7 @@ export default function EditarQuestaoPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, isActive: !p.isActive }))}
+                  onClick={() => patchForm({ isActive: !form.isActive })}
                   className={classNames(
                     "rounded-full border px-3 py-2 text-xs font-extrabold",
                     form.isActive
@@ -577,7 +604,9 @@ export default function EditarQuestaoPage() {
           {/* Perigo */}
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
             <div className="text-sm font-extrabold text-rose-900">Zona de risco</div>
-            <div className="text-xs text-rose-700 mt-1">Excluir remove a questão do questionsBank.</div>
+            <div className="text-xs text-rose-700 mt-1">
+              Excluir remove a questão do questionsBank.
+            </div>
             <button
               onClick={remove}
               className="mt-3 w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700"
