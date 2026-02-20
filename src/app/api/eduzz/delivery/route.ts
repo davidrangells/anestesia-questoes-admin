@@ -1,4 +1,6 @@
 // src/app/api/eduzz/delivery/route.ts
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 
@@ -39,7 +41,10 @@ export async function POST(req: NextRequest) {
   try {
     const ORIGIN_SECRET = process.env.EDUZZ_ORIGIN_SECRET || "";
     if (!ORIGIN_SECRET) {
-      return NextResponse.json({ ok: false, error: "Missing EDUZZ_ORIGIN_SECRET" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: "Missing EDUZZ_ORIGIN_SECRET" },
+        { status: 500 }
+      );
     }
 
     const payload = await readBody(req);
@@ -64,7 +69,8 @@ export async function POST(req: NextRequest) {
     const contractStatus = String(fields["edz_con_status"] ?? "");
     const contractStatusCod = String(fields["edz_con_status_cod"] ?? "");
 
-    const db = adminDb();
+    // ✅ adminDb é o Firestore (não é função)
+    const db = adminDb;
 
     // Dedupe simples: fatura + type
     const eventId = fatCod ? `${fatCod}_${type}` : `${Date.now()}_${type}`;
@@ -129,7 +135,7 @@ export async function POST(req: NextRequest) {
         { merge: true }
       );
     } else {
-      // eventos "não pagos ainda" (ex: status diferente de 3)
+      // eventos "não pagos ainda" (status != 3)
       await entRef.set(
         {
           email,
@@ -150,7 +156,10 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 }
+    );
   }
 }
