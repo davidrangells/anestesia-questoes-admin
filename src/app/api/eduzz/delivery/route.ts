@@ -92,7 +92,11 @@ export async function POST(req: NextRequest) {
 
     // 1) Captura originSecret no formato novo (Developer Hub)
     const p = payload as DeveloperHubPayload;
-    const originSecretNew = pickFirstString(p?.data?.producer?.originSecret);
+    const originSecretNew = pickFirstString(
+      (p as any)?.secret,
+      (p as any)?.originSecret,
+      p?.data?.producer?.originSecret
+    );
 
     // 2) Captura originSecret no formato legado (form-data)
     const legacy = payload as LegacyFormPayload;
