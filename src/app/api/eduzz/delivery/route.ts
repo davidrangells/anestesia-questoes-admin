@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
     const invoiceId = pickFirstString(p?.data?.invoice?.id);
     const invoiceStatus = pickFirstString(p?.data?.invoice?.status);
 
-    const db = adminDb();
+    const db = adminDb;
 
     // Dedupe do evento
     const eventId = pickFirstString(p?.id, invoiceId, fatCod) || `${Date.now()}_${Math.random().toString(16).slice(2)}`;
