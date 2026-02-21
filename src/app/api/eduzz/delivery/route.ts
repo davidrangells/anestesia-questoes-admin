@@ -45,7 +45,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const ORIGIN_SECRET = process.env.EDUZZ_ORIGIN_SECRET || "";
+    const ORIGIN_SECRET = process.env.EDUZZ_WEBHOOK_SECRET || "";
     const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
     const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "";
     const APP_URL = process.env.APP_URL || "";
