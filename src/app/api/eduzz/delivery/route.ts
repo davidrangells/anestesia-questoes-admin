@@ -1,4 +1,3 @@
-// src/app/api/eduzz/delivery/route.ts
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,12 +19,12 @@ function normalizeEmail(v: unknown): string {
 
 async function readBody(req: NextRequest): Promise<AnyObj> {
   const ct = req.headers.get("content-type") || "";
+
   if (ct.includes("application/json")) {
     const json = (await req.json()) as AnyObj;
     return json ?? {};
   }
 
-  // fallback: x-www-form-urlencoded / multipart
   const fd = await req.formData();
   const obj: AnyObj = {};
   fd.forEach((val, key) => {
@@ -34,199 +33,208 @@ async function readBody(req: NextRequest): Promise<AnyObj> {
   return obj;
 }
 
-/**
- * Eduzz "Verificar URL" às vezes manda POST sem os campos.
- * Pra verificação: sempre retorna 200.
- * Pro evento real: exige EDUZZ_ORIGIN_SECRET bater.
- */
 export async function GET() {
   return NextResponse.json({ ok: true, service: "eduzz-delivery" }, { status: 200 });
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const ORIGIN_SECRET = process.env.EDUZZ_WEBHOOK_SECRET || "";
+    const WEBHOOK_SECRET =
+      process.env.EDUZZ_WEBHOOK_SECRET ||
+      process.env.EDUZZ_ORIGIN_SECRET ||
+      "";
+
     const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
     const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "";
     const APP_URL = process.env.APP_URL || "";
 
-    if (!ORIGIN_SECRET) {
-      return NextResponse.json({ ok: false, error: "Missing EDUZZ_ORIGIN_SECRET" }, { status: 500 });
+    if (!WEBHOOK_SECRET) {
+      return NextResponse.json(
+        { ok: false, error: "Missing EDUZZ_WEBHOOK_SECRET env" },
+        { status: 500 }
+      );
     }
 
     const raw = await readBody(req);
 
-    // Eduzz pode mandar formatos diferentes (flat ou nested)
-    const data = (raw?.data as AnyObj) || (raw?.fields as AnyObj) || raw;
+    const data = (raw?.data as AnyObj) || raw;
+    const fields = data as AnyObj;
 
-    // Se for só verificação (sem campos), responde 200
-    const maybeEmail = pickFirstString(
-      data["edz_cli_email"],
-      (data["customer"] as AnyObj)?.email,
-      (data["buyer"] as AnyObj)?.email
+    // -------------------------------
+    // 🔐 SECRET VALIDATION (robusto)
+    // -------------------------------
+
+    const secretCandidates: Array<{ key: string; value: string }> = [
+      { key: "edz_cli_origin_secret", value: String(fields["edz_cli_origin_secret"] ?? "") },
+      { key: "edz_origin_secret", value: String(fields["edz_origin_secret"] ?? "") },
+      { key: "origin_secret", value: String(fields["origin_secret"] ?? "") },
+      { key: "eduzz_secret", value: String(fields["eduzz_secret"] ?? "") },
+      { key: "secret", value: String(fields["secret"] ?? "") },
+    ];
+
+    const matched = secretCandidates.find(
+      (c) => c.value && c.value === WEBHOOK_SECRET
     );
-    const originSecret = pickFirstString(data["edz_cli_origin_secret"], data["origin_secret"]);
 
-    if (!maybeEmail && !originSecret) {
-      return NextResponse.json({ ok: true, service: "eduzz-delivery", mode: "verify" }, { status: 200 });
+    if (!matched) {
+      const present = secretCandidates
+        .filter((c) => !!c.value)
+        .map((c) => c.key);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Unauthorized",
+          debug: {
+            receivedKeys: Object.keys(fields),
+            secretFieldsPresent: present,
+          },
+        },
+        { status: 401 }
+      );
     }
 
-    // Segurança: exige origin secret correto
-    if (originSecret !== ORIGIN_SECRET) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
+    // -------------------------------
+    // 📩 EMAIL
+    // -------------------------------
 
-    const email = normalizeEmail(maybeEmail);
+    const email = normalizeEmail(
+      pickFirstString(
+        fields["edz_cli_email"],
+        (fields["customer"] as AnyObj)?.email,
+        (fields["buyer"] as AnyObj)?.email,
+        fields["email"]
+      )
+    );
+
     if (!email) {
-      return NextResponse.json({ ok: false, error: "Missing email" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Missing email in payload" },
+        { status: 400 }
+      );
     }
 
-    // Identifica evento
-    const eventName = pickFirstString(raw["type"], raw["event"], raw["name"], data["type"], data["event"], data["name"]).toLowerCase();
+    // -------------------------------
+    // 📦 EVENT INFO
+    // -------------------------------
 
-    // Campos comuns (podem existir ou não)
-    const invoiceId = pickFirstString(
-      data["edz_fat_cod"],
-      (data["invoice"] as AnyObj)?.id,
-      data["invoice_id"]
-    );
+    const eventName = pickFirstString(
+      raw["type"],
+      raw["event"],
+      fields["event"],
+      fields["type"]
+    ).toLowerCase();
 
     const invoiceStatus = pickFirstString(
-      (data["invoice"] as AnyObj)?.status,
-      data["edz_fat_status"],
-      data["invoice_status"]
+      fields["edz_fat_status"],
+      (fields["invoice"] as AnyObj)?.status
     ).toLowerCase();
 
     const productId = pickFirstString(
-      data["edz_cnt_cod"],
-      (data["product"] as AnyObj)?.id,
-      data["product_id"]
+      fields["edz_cnt_cod"],
+      (fields["product"] as AnyObj)?.id
     );
 
     const productTitle = pickFirstString(
-      data["edz_cnt_titulo"],
-      (data["product"] as AnyObj)?.title,
-      data["product_title"]
+      fields["edz_cnt_titulo"],
+      (fields["product"] as AnyObj)?.title
     );
 
-    // Regras de ativação (ajuste conforme a Eduzz mandar)
     const isPaid =
-      eventName.includes("invoice_paid") ||
+      eventName.includes("paid") ||
       invoiceStatus === "paid" ||
-      invoiceStatus === "pago" ||
-      invoiceStatus === "3"; // alguns fluxos usam 3 = pago
+      invoiceStatus === "3";
 
     const isCanceled =
-      eventName.includes("invoice_canceled") ||
-      eventName.includes("invoice_cancelled") ||
-      invoiceStatus === "canceled" ||
-      invoiceStatus === "cancelado";
+      eventName.includes("cancel") ||
+      invoiceStatus === "canceled";
 
-    const shouldActivate = isPaid;
-    const shouldDeactivate = isCanceled;
-    const shouldPending = !shouldActivate && !shouldDeactivate;
+    // -------------------------------
+    // 📝 LOG EVENT
+    // -------------------------------
 
-    // Log do evento (dedupe simples)
     const eventId =
-      pickFirstString(raw["id"], invoiceId, data["edz_fat_cod"]) || `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      pickFirstString(raw["id"]) ||
+      `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-    await adminDb
-      .collection("eduzz_events")
-      .doc(eventId)
-      .set(
-        {
-          receivedAt: FieldValue.serverTimestamp(),
-          eventName: eventName || null,
-          email,
-          invoiceId: invoiceId || null,
-          invoiceStatus: invoiceStatus || null,
-          productId: productId || null,
-          productTitle: productTitle || null,
-          raw,
-        },
-        { merge: true }
-      );
+    await adminDb.collection("eduzz_events").doc(eventId).set(
+      {
+        receivedAt: FieldValue.serverTimestamp(),
+        eventName,
+        email,
+        productId,
+        productTitle,
+        invoiceStatus,
+        raw,
+      },
+      { merge: true }
+    );
 
-    // 1) Garante usuário no Firebase Auth
-    let userUid = "";
+    // -------------------------------
+    // 👤 AUTH USER
+    // -------------------------------
+
+    let uid = "";
     let isNewUser = false;
 
     try {
-      const u = await adminAuth.getUserByEmail(email);
-      userUid = u.uid;
+      const user = await adminAuth.getUserByEmail(email);
+      uid = user.uid;
     } catch {
-      // cria com senha aleatória (usuário vai definir a dele via reset link)
-      const randomPass = Math.random().toString(36).slice(2) + "A!9";
-      const u = await adminAuth.createUser({ email, password: randomPass, emailVerified: false, disabled: false });
-      userUid = u.uid;
+      const randomPass =
+        Math.random().toString(36).slice(2) + "A!9";
+      const user = await adminAuth.createUser({
+        email,
+        password: randomPass,
+      });
+      uid = user.uid;
       isNewUser = true;
     }
 
-    // 2) users/{uid}
-    await adminDb
-      .collection("users")
-      .doc(userUid)
-      .set(
-        {
-          uid: userUid,
-          email,
-          role: "student",
-          updatedAt: FieldValue.serverTimestamp(),
-          ...(isNewUser ? { createdAt: FieldValue.serverTimestamp() } : {}),
-        },
-        { merge: true }
-      );
+    // -------------------------------
+    // 📁 USERS COLLECTION
+    // -------------------------------
 
-    // 3) entitlements/{uid}
-    await adminDb
-      .collection("entitlements")
-      .doc(userUid)
-      .set(
-        {
-          uid: userUid,
-          email,
-          active: shouldActivate ? true : shouldDeactivate ? false : false,
-          pending: shouldPending ? true : false,
-          source: "eduzz",
-          productId: productId || null,
-          productTitle: productTitle || null,
-          invoiceId: invoiceId || null,
-          invoiceStatus: invoiceStatus || null,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+    await adminDb.collection("users").doc(uid).set(
+      {
+        uid,
+        email,
+        role: "student",
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(isNewUser
+          ? { createdAt: FieldValue.serverTimestamp() }
+          : {}),
+      },
+      { merge: true }
+    );
 
-    // 4) E-mail (somente quando ativar)
-    if (shouldActivate) {
-      if (!RESEND_API_KEY || !RESEND_FROM_EMAIL || !APP_URL) {
-        // não quebra o webhook se e-mail ainda não estiver pronto
-        return NextResponse.json(
-          { ok: true, warning: "Activated, but missing RESEND_* or APP_URL env vars" },
-          { status: 200 }
-        );
-      }
+    // -------------------------------
+    // 🎓 ENTITLEMENT
+    // -------------------------------
 
-      // link para definir senha (reset link do Firebase = serve para “criar senha” também)
-      const resetLink = await adminAuth.generatePasswordResetLink(email, {
-        url: `${APP_URL}/aluno/entrar?reset=1`,
-      });
+    await adminDb.collection("entitlements").doc(uid).set(
+      {
+        uid,
+        email,
+        active: isPaid ? true : false,
+        pending: !isPaid && !isCanceled,
+        productId,
+        productTitle,
+        source: "eduzz",
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
 
-      const html = `
-        <div style="font-family:Arial,sans-serif;line-height:1.5">
-          <h2>Acesso liberado ✅</h2>
-          <p>Seu acesso ao <b>Anestesia Questões</b> foi liberado.</p>
-          <p>Clique no botão abaixo para <b>definir sua senha</b>:</p>
-          <p>
-            <a href="${resetLink}" style="display:inline-block;padding:12px 16px;background:#0f172a;color:#fff;text-decoration:none;border-radius:10px">
-              Definir minha senha
-            </a>
-          </p>
-          <p style="color:#64748b;font-size:12px">
-            Se você não solicitou isso, ignore este e-mail.
-          </p>
-        </div>
-      `;
+    // -------------------------------
+    // 📧 EMAIL (se pago)
+    // -------------------------------
+
+    if (isPaid && RESEND_API_KEY && RESEND_FROM_EMAIL && APP_URL) {
+      const resetLink =
+        await adminAuth.generatePasswordResetLink(email, {
+          url: `${APP_URL}/aluno/entrar`,
+        });
 
       await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -238,13 +246,20 @@ export async function POST(req: NextRequest) {
           from: RESEND_FROM_EMAIL,
           to: [email],
           subject: "Acesso liberado — Anestesia Questões",
-          html,
+          html: `
+            <h2>Acesso liberado ✅</h2>
+            <p>Seu acesso foi liberado.</p>
+            <p><a href="${resetLink}">Clique aqui para definir sua senha</a></p>
+          `,
         }),
       });
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (e: unknown) {
-    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 }
+    );
   }
 }
