@@ -1,14 +1,15 @@
+// src/app/api/eduzz/delivery/route.ts
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";
 
-type AnyObj = Record<string, unknown>;
+type AnyRecord = Record<string, unknown>;
 
 function pickFirstString(...vals: unknown[]): string {
   for (const v of vals) {
     if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
   }
   return "";
 }
@@ -17,246 +18,259 @@ function normalizeEmail(v: unknown): string {
   return String(v ?? "").trim().toLowerCase();
 }
 
-async function readBody(req: NextRequest): Promise<AnyObj> {
+function docIdFromEmail(email: string): string {
+  // Firestore docId safe
+  return encodeURIComponent(email);
+}
+
+function safeJsonParse(str: string): unknown | null {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
+
+function parseQueryString(str: string): AnyRecord {
+  // suporte básico para "a=1&b=2"
+  const out: AnyRecord = {};
+  const s = str.startsWith("?") ? str.slice(1) : str;
+  for (const part of s.split("&")) {
+    if (!part) continue;
+    const [k, v = ""] = part.split("=");
+    const key = decodeURIComponent(k || "").trim();
+    if (!key) continue;
+    out[key] = decodeURIComponent(v || "");
+  }
+  return out;
+}
+
+async function readBody(req: NextRequest): Promise<AnyRecord> {
   const ct = req.headers.get("content-type") || "";
 
+  // JSON
   if (ct.includes("application/json")) {
-    const json = (await req.json()) as AnyObj;
+    const json = (await req.json()) as AnyRecord;
     return json ?? {};
   }
 
+  // form-data / x-www-form-urlencoded
   const fd = await req.formData();
-  const obj: AnyObj = {};
+  const obj: AnyRecord = {};
   fd.forEach((val, key) => {
     obj[key] = typeof val === "string" ? val : "";
   });
   return obj;
 }
 
+function extractFields(payload: AnyRecord): AnyRecord {
+  /**
+   * A Eduzz (Developer Hub) pode enviar:
+   * - { message: "..." }
+   * - { message: {...} }
+   * - ou direto os campos (edz_*)
+   */
+  const message = payload["message"];
+
+  // 1) message como objeto
+  if (message && typeof message === "object" && !Array.isArray(message)) {
+    return message as AnyRecord;
+  }
+
+  // 2) message como string -> pode ser JSON string OU querystring
+  if (typeof message === "string" && message.trim()) {
+    const msg = message.trim();
+
+    const asJson = safeJsonParse(msg);
+    if (asJson && typeof asJson === "object" && !Array.isArray(asJson)) {
+      return asJson as AnyRecord;
+    }
+
+    // fallback querystring
+    const asQs = parseQueryString(msg);
+    if (Object.keys(asQs).length) return asQs;
+  }
+
+  // 3) sem message: usa payload inteiro
+  return payload;
+}
+
+function getExpectedSecret(): string {
+  // aceita qualquer um desses nomes no ENV
+  return (
+    process.env.EDUZZ_ORIGIN_SECRET ||
+    process.env.EDUZZ_WEBHOOK_SECRET ||
+    process.env.EDUZZ_SECRET ||
+    ""
+  ).trim();
+}
+
+function getIncomingSecret(req: NextRequest, fields: AnyRecord): string {
+  // tenta pegar secret em vários lugares
+  return pickFirstString(
+    fields["edz_cli_origin_secret"],
+    fields["origin_secret"],
+    fields["secret"],
+    req.headers.get("x-eduzz-secret"),
+    req.headers.get("x-webhook-secret"),
+    req.headers.get("x-signature")
+  );
+}
+
 export async function GET() {
-  return NextResponse.json({ ok: true, service: "eduzz-delivery" }, { status: 200 });
+  // Para "Verificar URL" e healthcheck
+  return NextResponse.json(
+    { ok: true, service: "eduzz-delivery" },
+    { status: 200 }
+  );
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const WEBHOOK_SECRET =
-      process.env.EDUZZ_WEBHOOK_SECRET ||
-      process.env.EDUZZ_ORIGIN_SECRET ||
-      "";
+    const expectedSecret = getExpectedSecret();
+    const payload = await readBody(req);
+    const fields = extractFields(payload);
 
-    const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-    const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "";
-    const APP_URL = process.env.APP_URL || "";
+    const incomingSecret = getIncomingSecret(req, fields);
 
-    if (!WEBHOOK_SECRET) {
+    // ✅ Se não veio secret no TESTE da Eduzz:
+    // retorna 200 pra ela aceitar a URL, mas não processa nada.
+    if (!incomingSecret || !expectedSecret) {
       return NextResponse.json(
-        { ok: false, error: "Missing EDUZZ_WEBHOOK_SECRET env" },
-        { status: 500 }
+        {
+          ok: true,
+          ignored: true,
+          reason: !expectedSecret
+            ? "Missing server secret env (EDUZZ_ORIGIN_SECRET)"
+            : "Missing secret in request (test/verify payload)",
+          debug: {
+            receivedKeys: Object.keys(payload),
+            fieldKeys: Object.keys(fields),
+          },
+        },
+        { status: 200 }
       );
     }
 
-    const raw = await readBody(req);
-
-    const data = (raw?.data as AnyObj) || raw;
-    const fields = data as AnyObj;
-
-    // -------------------------------
-    // 🔐 SECRET VALIDATION (robusto)
-    // -------------------------------
-
-    const secretCandidates: Array<{ key: string; value: string }> = [
-      { key: "edz_cli_origin_secret", value: String(fields["edz_cli_origin_secret"] ?? "") },
-      { key: "edz_origin_secret", value: String(fields["edz_origin_secret"] ?? "") },
-      { key: "origin_secret", value: String(fields["origin_secret"] ?? "") },
-      { key: "eduzz_secret", value: String(fields["eduzz_secret"] ?? "") },
-      { key: "secret", value: String(fields["secret"] ?? "") },
-    ];
-
-    const matched = secretCandidates.find(
-      (c) => c.value && c.value === WEBHOOK_SECRET
-    );
-
-    if (!matched) {
-      const present = secretCandidates
-        .filter((c) => !!c.value)
-        .map((c) => c.key);
-
+    // ✅ valida secret
+    if (incomingSecret !== expectedSecret) {
       return NextResponse.json(
         {
           ok: false,
           error: "Unauthorized",
           debug: {
-            receivedKeys: Object.keys(fields),
-            secretFieldsPresent: present,
+            receivedKeys: Object.keys(payload),
+            fieldKeys: Object.keys(fields),
           },
         },
         { status: 401 }
       );
     }
 
-    // -------------------------------
-    // 📩 EMAIL
-    // -------------------------------
+    // ---------------------------
+    // A PARTIR DAQUI: autorizado
+    // ---------------------------
 
     const email = normalizeEmail(
-      pickFirstString(
-        fields["edz_cli_email"],
-        (fields["customer"] as AnyObj)?.email,
-        (fields["buyer"] as AnyObj)?.email,
-        fields["email"]
-      )
+      fields["edz_cli_email"] ??
+        fields["email"] ??
+        fields["customer_email"] ??
+        fields["buyer_email"]
     );
 
     if (!email) {
       return NextResponse.json(
-        { ok: false, error: "Missing email in payload" },
+        { ok: false, error: "Missing email" },
         { status: 400 }
       );
     }
 
-    // -------------------------------
-    // 📦 EVENT INFO
-    // -------------------------------
-
+    // Tipo do evento (depende do que a Eduzz mandar)
     const eventName = pickFirstString(
-      raw["type"],
-      raw["event"],
       fields["event"],
-      fields["type"]
+      fields["type"],
+      fields["name"]
     ).toLowerCase();
 
-    const invoiceStatus = pickFirstString(
-      fields["edz_fat_status"],
-      (fields["invoice"] as AnyObj)?.status
-    ).toLowerCase();
+    // Seus eventos selecionados: myeduzz.invoice_opened / paid / canceled
+    // Vamos mapear pra estados:
+    const invoiceStatus = eventName.includes("paid")
+      ? "paid"
+      : eventName.includes("canceled") || eventName.includes("cancelled")
+      ? "canceled"
+      : eventName.includes("opened")
+      ? "opened"
+      : pickFirstString(fields["edz_fat_status"], fields["invoice_status"]);
+
+    // IDs úteis
+    const invoiceId = pickFirstString(
+      fields["invoice_id"],
+      fields["edz_fat_cod"],
+      fields["fatCod"]
+    );
 
     const productId = pickFirstString(
+      fields["product_id"],
       fields["edz_cnt_cod"],
-      (fields["product"] as AnyObj)?.id
+      fields["cntCod"]
     );
 
     const productTitle = pickFirstString(
+      fields["product_title"],
       fields["edz_cnt_titulo"],
-      (fields["product"] as AnyObj)?.title
+      fields["cntTitulo"]
     );
 
-    const isPaid =
-      eventName.includes("paid") ||
-      invoiceStatus === "paid" ||
-      invoiceStatus === "3";
+    // Firestore
+    const db = adminDb;
 
-    const isCanceled =
-      eventName.includes("cancel") ||
-      invoiceStatus === "canceled";
-
-    // -------------------------------
-    // 📝 LOG EVENT
-    // -------------------------------
-
+    // Dedupe do evento
     const eventId =
-      pickFirstString(raw["id"]) ||
+      pickFirstString(fields["id"], invoiceId) ||
       `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-    await adminDb.collection("eduzz_events").doc(eventId).set(
+    await db.collection("eduzz_events").doc(eventId).set(
       {
-        receivedAt: FieldValue.serverTimestamp(),
+        receivedAt: new Date(),
         eventName,
         email,
-        productId,
-        productTitle,
+        invoiceId,
         invoiceStatus,
-        raw,
-      },
-      { merge: true }
-    );
-
-    // -------------------------------
-    // 👤 AUTH USER
-    // -------------------------------
-
-    let uid = "";
-    let isNewUser = false;
-
-    try {
-      const user = await adminAuth.getUserByEmail(email);
-      uid = user.uid;
-    } catch {
-      const randomPass =
-        Math.random().toString(36).slice(2) + "A!9";
-      const user = await adminAuth.createUser({
-        email,
-        password: randomPass,
-      });
-      uid = user.uid;
-      isNewUser = true;
-    }
-
-    // -------------------------------
-    // 📁 USERS COLLECTION
-    // -------------------------------
-
-    await adminDb.collection("users").doc(uid).set(
-      {
-        uid,
-        email,
-        role: "student",
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(isNewUser
-          ? { createdAt: FieldValue.serverTimestamp() }
-          : {}),
-      },
-      { merge: true }
-    );
-
-    // -------------------------------
-    // 🎓 ENTITLEMENT
-    // -------------------------------
-
-    await adminDb.collection("entitlements").doc(uid).set(
-      {
-        uid,
-        email,
-        active: isPaid ? true : false,
-        pending: !isPaid && !isCanceled,
         productId,
         productTitle,
-        source: "eduzz",
-        updatedAt: FieldValue.serverTimestamp(),
+        raw: { payload, fields },
       },
       { merge: true }
     );
 
-    // -------------------------------
-    // 📧 EMAIL (se pago)
-    // -------------------------------
+    const entId = docIdFromEmail(email);
+    const entRef = db.collection("entitlements").doc(entId);
 
-    if (isPaid && RESEND_API_KEY && RESEND_FROM_EMAIL && APP_URL) {
-      const resetLink =
-        await adminAuth.generatePasswordResetLink(email, {
-          url: `${APP_URL}/aluno/entrar`,
-        });
+    // Regras de ativação:
+    // - paid => active true
+    // - canceled => active false
+    // - opened => pending true (boleto aberto etc)
+    const shouldActivate = invoiceStatus === "paid";
+    const shouldDeactivate = invoiceStatus === "canceled";
+    const pending = !shouldActivate && !shouldDeactivate;
 
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: RESEND_FROM_EMAIL,
-          to: [email],
-          subject: "Acesso liberado — Anestesia Questões",
-          html: `
-            <h2>Acesso liberado ✅</h2>
-            <p>Seu acesso foi liberado.</p>
-            <p><a href="${resetLink}">Clique aqui para definir sua senha</a></p>
-          `,
-        }),
-      });
-    }
+    await entRef.set(
+      {
+        email,
+        active: shouldActivate ? true : false,
+        pending,
+        source: "eduzz",
+        productId: productId || null,
+        productTitle: productTitle || null,
+        invoiceId: invoiceId || null,
+        invoiceStatus: invoiceStatus || null,
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
 
     return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (err) {
+  } catch (e) {
     return NextResponse.json(
       { ok: false, error: "Internal error" },
       { status: 500 }
