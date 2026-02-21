@@ -1,9 +1,9 @@
 import { Suspense } from "react";
-import EntrarClient from "./EntrarClient";
+import AlunoLoginClient from "./AlunoLoginClient";
 
 export const dynamic = "force-dynamic";
 
-export default function EntrarPage() {
+export default function AlunoEntrarPage() {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export default function EntrarPage() {
         </div>
       }
     >
-      <EntrarClient />
+      <AlunoLoginClient />
     </Suspense>
   );
 }
