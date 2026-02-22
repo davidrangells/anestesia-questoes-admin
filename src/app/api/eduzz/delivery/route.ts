@@ -261,42 +261,54 @@ export async function POST(req: NextRequest) {
       // 6) Enviar e-mail 1x com link para criar senha
       // (somente se tiver Resend configurado)
       if (RESEND_API_KEY && RESEND_FROM_EMAIL && APP_URL) {
-        const entSnap = await entRef.get();
-        const alreadySent = Boolean(entSnap.exists && entSnap.data()?.welcomeEmailSentAt);
+  try {
+    const entSnap = await entRef.get();
+    const alreadySent = Boolean(entSnap.exists && entSnap.data()?.welcomeEmailSentAt);
 
-        if (!alreadySent) {
-          const actionCodeSettings = {
-            // após criar senha, manda de volta para o seu app
-            url: `${APP_URL}/aluno/entrar?email=${encodeURIComponent(email)}`,
-            handleCodeInApp: false,
-          };
+    if (!alreadySent) {
+      const actionCodeSettings = {
+        url: `${APP_URL}/aluno/entrar?email=${encodeURIComponent(email)}`,
+        handleCodeInApp: false,
+      };
 
-          const createPasswordUrl = await adminAuth.generatePasswordResetLink(email, actionCodeSettings);
+      let createPasswordUrl = "";
 
-          const resend = new Resend(RESEND_API_KEY);
-
-          const loginUrl = `${APP_URL}/aluno/entrar`;
-
-          await resend.emails.send({
-            from: `Anestesia Questões <${RESEND_FROM_EMAIL}>`,
-            to: email,
-            subject: "Seu acesso foi liberado — crie sua senha",
-            html: htmlEmail({
-              appName: "Anestesia Questões",
-              createPasswordUrl,
-              loginUrl,
-            }),
-          });
-
-          await entRef.set(
-            {
-              welcomeEmailSentAt: now,
-              welcomeEmailTo: email,
-            },
-            { merge: true }
-          );
-        }
+      try {
+        createPasswordUrl = await adminAuth.generatePasswordResetLink(email, actionCodeSettings);
+      } catch (err) {
+        console.error("ERROR generating reset link:", err);
+        createPasswordUrl = `${APP_URL}/aluno/entrar`;
       }
+
+      try {
+        const resend = new Resend(RESEND_API_KEY);
+
+        await resend.emails.send({
+          from: `Anestesia Questões <${RESEND_FROM_EMAIL}>`,
+          to: email,
+          subject: "Seu acesso foi liberado — crie sua senha",
+          html: htmlEmail({
+            appName: "Anestesia Questões",
+            createPasswordUrl,
+            loginUrl: `${APP_URL}/aluno/entrar`,
+          }),
+        });
+
+        await entRef.set(
+          {
+            welcomeEmailSentAt: new Date(),
+            welcomeEmailTo: email,
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error("ERROR sending email via Resend:", err);
+      }
+    }
+  } catch (err) {
+    console.error("EMAIL BLOCK ERROR:", err);
+  }
+}
 
       // também cria/atualiza doc em users/{uid} (pro portal do aluno)
       await db.collection("users").doc(uid).set(
