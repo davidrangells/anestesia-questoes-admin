@@ -125,8 +125,8 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         onClick={() => setMobileOpen((prev) => !prev)}
         className={cn(
           buttonStyles({ variant: "secondary", size: "sm" }),
-          "fixed left-3 z-50 h-11 w-11 rounded-2xl p-0 lg:hidden",
-          "top-[max(0.75rem,env(safe-area-inset-top))]"
+          "fixed left-3 z-50 h-11 w-11 rounded-2xl p-0 shadow-sm lg:hidden",
+          "top-[calc(env(safe-area-inset-top)+0.75rem)]"
         )}
       >
         <span className="flex flex-col items-center justify-center gap-1.5" aria-hidden="true">

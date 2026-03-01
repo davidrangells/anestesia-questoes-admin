@@ -21,7 +21,7 @@ export default function AdminShell({
     <div className="min-h-screen flex-1 min-w-0">
       {/* Topbar */}
       <div className="sticky top-0 z-30 border-b bg-white/80 backdrop-blur">
-        <div className="px-4 py-4 pl-16 sm:px-6 lg:px-10 lg:pl-10">
+        <div className="px-4 py-4 pl-20 sm:px-6 lg:px-10 lg:pl-10">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               {title ? (
@@ -30,7 +30,7 @@ export default function AdminShell({
                 </h1>
               ) : null}
               {subtitle ? (
-                <p className="text-sm text-slate-500 mt-0.5 truncate">{subtitle}</p>
+                <p className="mt-0.5 break-words text-sm text-slate-500">{subtitle}</p>
               ) : null}
             </div>
 
@@ -47,9 +47,9 @@ export default function AdminShell({
       </div>
 
       {/* Conteúdo */}
-      <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
+      <div className="overflow-x-hidden px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
         {/* Esse container é o “segredo” para não colar no sidebar e não esticar demais em telas grandes */}
-        <div className="w-full max-w-[1200px]">
+        <div className="w-full max-w-[1200px] min-w-0">
           {children}
         </div>
       </div>

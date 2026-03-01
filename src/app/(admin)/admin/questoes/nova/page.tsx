@@ -157,8 +157,8 @@ function RichTextEditor({
         {helper ? <div className="mt-1 text-xs text-slate-500">{helper}</div> : null}
       </div>
 
-      <div className="border-b bg-slate-50/70 px-3">
-        <div className="flex flex-wrap gap-x-1 text-sm font-medium text-slate-700">
+      <div className="overflow-x-auto border-b bg-slate-50/70 px-3">
+        <div className="flex min-w-max gap-x-1 text-sm font-medium text-slate-700">
           {["Editar", "Inserir", "Visualizar", "Formatar", "Tabela", "Ferramentas"].map((item) => (
             <button
               key={item}
@@ -171,8 +171,8 @@ function RichTextEditor({
         </div>
       </div>
 
-      <div className="border-b bg-white px-3 py-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="overflow-x-auto border-b bg-white px-3 py-3">
+        <div className="flex min-w-max items-center gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("undo")}>
             ↶
           </Button>
@@ -755,12 +755,12 @@ export default function NovaQuestaoPage() {
       }
     >
       <div className="space-y-6">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
-          <div className="space-y-6">
-            <div className="rounded-2xl border bg-white p-6">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
+          <div className="min-w-0 space-y-6">
+            <div className="min-w-0 rounded-2xl border bg-white p-6">
               <div className="text-sm font-bold text-slate-900">Enunciado</div>
-              <div className="mt-1 text-xs text-slate-500">
-                Campo principal da questão. Compatível com `prompt` e `prompt_text`.
+              <div className="mt-1 break-words text-xs text-slate-500">
+                Campo principal da questão. Compatível com prompt e prompt_text.
               </div>
 
               <textarea
@@ -811,7 +811,7 @@ export default function NovaQuestaoPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border bg-white p-6">
+            <div className="min-w-0 rounded-2xl border bg-white p-6">
               <div className="text-sm font-bold text-slate-900">Alternativas</div>
               <div className="mt-1 text-xs text-slate-500">
                 Cadastre as respostas e marque a correta. O formulário salva em estrutura aninhada e nas colunas A-D da importação.
@@ -895,7 +895,8 @@ export default function NovaQuestaoPage() {
               </div>
             </div>
 
-            <RichTextEditor
+            <div className="min-w-0">
+              <RichTextEditor
               label="Comentário / Explicação"
               helper="Campo salvo em `explanation` com HTML simples para formatação."
               placeholder="Escreva o comentário interno/pedagógico da questão..."
@@ -909,11 +910,12 @@ export default function NovaQuestaoPage() {
                   explanation: value,
                 }))
               }
-            />
+              />
+            </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="rounded-2xl border bg-white p-5">
+          <div className="min-w-0 space-y-6">
+            <div className="min-w-0 rounded-2xl border bg-white p-5">
               <div className="text-sm font-extrabold text-slate-900">Metadados</div>
 
               <div className="mt-3 space-y-3">
@@ -1020,17 +1022,17 @@ export default function NovaQuestaoPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border bg-white p-5">
+            <div className="min-w-0 rounded-2xl border bg-white p-5">
               <div className="text-sm font-extrabold text-slate-900">Tema</div>
               <div className="mt-1 text-xs text-slate-500">
                 Selecione apenas temas já cadastrados.
               </div>
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex min-w-0 gap-2">
                 <select
                   value={selectedThemeId}
                   onChange={(e) => setSelectedThemeId(e.target.value)}
-                  className="flex-1 rounded-xl border bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                  className="min-w-0 flex-1 rounded-xl border bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                 >
                   <option value="">Selecione um tema</option>
                   {availableThemes.map((theme) => (
@@ -1106,7 +1108,7 @@ export default function NovaQuestaoPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border bg-white p-5">
+            <div className="min-w-0 rounded-2xl border bg-white p-5">
               <div className="text-sm font-extrabold text-slate-900">Referência</div>
               <div className="mt-1 text-xs text-slate-500">
                 Campo bibliográfico para rastrear a origem da questão.
@@ -1124,7 +1126,7 @@ export default function NovaQuestaoPage() {
               />
             </div>
 
-            <div className="rounded-2xl border bg-white p-5">
+            <div className="min-w-0 rounded-2xl border bg-white p-5">
               <div className="text-sm font-extrabold text-slate-900">Nota interna</div>
               <div className="mt-1 text-xs text-slate-500">
                 Visível apenas internamente, não destinada ao aluno final.
@@ -1142,7 +1144,7 @@ export default function NovaQuestaoPage() {
               />
             </div>
 
-            <div className="rounded-2xl border bg-white p-5">
+            <div className="min-w-0 rounded-2xl border bg-white p-5">
               <div className="text-sm font-extrabold text-slate-900">Anexos do comentário</div>
               <div className="mt-1 text-xs text-slate-500">
                 Use links ou envie arquivos para guardar material de apoio interno.

@@ -31,6 +31,16 @@ img {
   height: auto;
 }
 
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+[contenteditable="true"] {
+  font-size: 16px;
+}
+
 @supports (min-height: 100dvh) {
   html,
   body {
