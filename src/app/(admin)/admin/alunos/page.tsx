@@ -12,7 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
-import { Button, buttonStyles } from "@/components/ui/Button";
+import { buttonStyles } from "@/components/ui/Button";
 import { db } from "@/lib/firebase";
 
 type AlunoListItem = {
@@ -137,14 +137,9 @@ export default function AlunosPage() {
             />
           </div>
 
-          <Button
-            variant="primary"
-            onClick={() =>
-              alert("Os alunos são criados automaticamente pela integração da Eduzz.")
-            }
-          >
+          <Link href="/admin/alunos/novo" className={buttonStyles({ variant: "primary" })}>
             Criar
-          </Button>
+          </Link>
         </div>
       }
     >
