@@ -1,8 +1,215 @@
-export default function AlunosPage() {
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  where,
+} from "firebase/firestore";
+import AdminShell from "@/components/AdminShell";
+import { Button, buttonStyles } from "@/components/ui/Button";
+import { db } from "@/lib/firebase";
+
+type AlunoListItem = {
+  uid: string;
+  code: string;
+  createdAt: string;
+  name: string;
+  cpf: string;
+  cellphone: string;
+  email: string;
+  active: boolean;
+};
+
+function formatDate(value: unknown) {
+  const seconds =
+    typeof value === "object" && value !== null && "seconds" in value
+      ? Number((value as { seconds?: number }).seconds ?? 0)
+      : 0;
+
+  if (!seconds) return "—";
+  return new Intl.DateTimeFormat("pt-BR").format(new Date(seconds * 1000));
+}
+
+function StatusBadge({ active }: { active: boolean }) {
   return (
-    <div className="space-y-2">
-      <h1 className="text-2xl font-extrabold text-slate-900">Alunos</h1>
-      <p className="text-slate-600">Listagem de usuários e status.</p>
-    </div>
+    <span
+      className={
+        active
+          ? "inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase text-emerald-700"
+          : "inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase text-amber-700"
+      }
+    >
+      {active ? "ativo" : "pendente"}
+    </span>
+  );
+}
+
+export default function AlunosPage() {
+  const [items, setItems] = useState<AlunoListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(
+          query(collection(db, "users"), where("role", "==", "student"), orderBy("updatedAt", "desc"))
+        );
+
+        const rows = await Promise.all(
+          snap.docs.map(async (userDoc, index) => {
+            const [profileSnap, entitlementSnap] = await Promise.all([
+              getDoc(doc(db, "users", userDoc.id, "profile", "main")),
+              getDoc(doc(db, "entitlements", userDoc.id)),
+            ]);
+
+            const userData = userDoc.data();
+            const profile = profileSnap.exists() ? profileSnap.data() : {};
+            const entitlement = entitlementSnap.exists() ? entitlementSnap.data() : {};
+
+            return {
+              uid: userDoc.id,
+              code: String(snap.size - index),
+              createdAt: formatDate(userData.updatedAt ?? userData.createdAt),
+              name:
+                String(profile?.name ?? "").trim() ||
+                String(userData.name ?? "").trim() ||
+                "Aluno sem nome",
+              cpf: String(profile?.document ?? "").trim() || "—",
+              cellphone:
+                String(profile?.phone ?? profile?.cellphone ?? "").trim() || "—",
+              email:
+                String(userData.email ?? entitlement?.email ?? "").trim() || "—",
+              active: entitlement?.active === true,
+            } satisfies AlunoListItem;
+          })
+        );
+
+        if (active) setItems(rows);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    if (!s) return items;
+
+    return items.filter((item) =>
+      [item.code, item.name, item.cpf, item.cellphone, item.email]
+        .join(" ")
+        .toLowerCase()
+        .includes(s)
+    );
+  }, [items, search]);
+
+  return (
+    <AdminShell
+      title="Alunos"
+      subtitle="Listagem dos alunos sincronizados via Eduzz e dados complementares do portal."
+      actions={
+        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
+          <div className="relative w-full md:w-[340px]">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              ⌕
+            </span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filtrar resultados..."
+              className="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+
+          <Button
+            variant="primary"
+            onClick={() =>
+              alert("Os alunos são criados automaticamente pela integração da Eduzz.")
+            }
+          >
+            Criar
+          </Button>
+        </div>
+      }
+    >
+      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-5">
+          <div className="text-2xl font-black text-slate-900">Alunos</div>
+          <div className="mt-1 text-sm text-slate-500">
+            {loading
+              ? "Carregando..."
+              : `${filtered.length} ${filtered.length === 1 ? "aluno encontrado" : "alunos encontrados"}`}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-[920px] w-full text-sm">
+            <thead className="border-b bg-slate-100/80 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+              <tr>
+                <th className="px-5 py-4 text-left">Cód.</th>
+                <th className="px-5 py-4 text-left">Criado em</th>
+                <th className="px-5 py-4 text-left">Nome</th>
+                <th className="px-5 py-4 text-left">CPF</th>
+                <th className="px-5 py-4 text-left">Celular</th>
+                <th className="px-5 py-4 text-left">Status</th>
+                <th className="px-5 py-4 text-right">Ações</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-200">
+              {!loading && filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
+                    Nenhum aluno encontrado.
+                  </td>
+                </tr>
+              ) : null}
+
+              {filtered.map((item) => (
+                <tr key={item.uid} className="hover:bg-slate-50/70">
+                  <td className="px-5 py-5 text-lg font-semibold text-slate-600">{item.code}</td>
+                  <td className="px-5 py-5 text-slate-500">{item.createdAt}</td>
+                  <td className="px-5 py-5">
+                    <div className="font-semibold text-slate-800">{item.name}</div>
+                    <div className="mt-1 text-xs text-slate-500">{item.email}</div>
+                  </td>
+                  <td className="px-5 py-5 text-slate-600">{item.cpf}</td>
+                  <td className="px-5 py-5 text-slate-600">{item.cellphone}</td>
+                  <td className="px-5 py-5">
+                    <StatusBadge active={item.active} />
+                  </td>
+                  <td className="px-5 py-5">
+                    <div className="flex justify-end gap-2">
+                      <Link
+                        href={`/admin/alunos/${item.uid}`}
+                        className={buttonStyles({ variant: "primary", size: "sm" })}
+                      >
+                        Editar
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </AdminShell>
   );
 }
