@@ -86,6 +86,9 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
             icon="🧠"
             onNavigate={handleNavigate}
           />
+          <Item href="/admin/provas" label="Provas" icon="📝" onNavigate={handleNavigate} />
+          <Item href="/admin/niveis" label="Níveis" icon="📚" onNavigate={handleNavigate} />
+          <Item href="/admin/temas" label="Temas" icon="🏷️" onNavigate={handleNavigate} />
           <Item href="/admin/midias" label="Mídias" icon="🖼️" onNavigate={handleNavigate} />
           <Item
             href="/admin/erros-reportados"
