@@ -7,6 +7,7 @@ import {
   addDoc,
   collection,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -42,6 +43,13 @@ type CatalogOption = {
   levelLabel?: string | null;
 };
 
+type MediaGalleryItem = {
+  id: string;
+  url: string;
+  label?: string | null;
+  name?: string | null;
+};
+
 type QuestionFormState = {
   prompt: string;
   explanation: string;
@@ -67,6 +75,9 @@ type RichTextEditorProps = {
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
+  onRequestImage: () => void;
+  pendingImageUrl?: string | null;
+  onPendingImageHandled: () => void;
 };
 
 function escapeHtml(value: string) {
@@ -93,6 +104,9 @@ function RichTextEditor({
   placeholder,
   value,
   onChange,
+  onRequestImage,
+  pendingImageUrl,
+  onPendingImageHandled,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [previewMode, setPreviewMode] = useState(false);
@@ -102,6 +116,18 @@ function RichTextEditor({
     if (editorRef.current.innerHTML === value) return;
     editorRef.current.innerHTML = value;
   }, [value]);
+
+  useEffect(() => {
+    if (!pendingImageUrl || !editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(
+      "insertHTML",
+      false,
+      `<img src="${escapeHtml(pendingImageUrl)}" alt="Imagem adicionada no comentário" />`
+    );
+    syncValue();
+    onPendingImageHandled();
+  }, [pendingImageUrl, onPendingImageHandled]);
 
   const syncValue = () => {
     onChange(editorRef.current?.innerHTML ?? "");
@@ -121,16 +147,6 @@ function RichTextEditor({
     runCommand(
       "insertHTML",
       `<a href="${escapeHtml(url.trim())}" target="_blank" rel="noreferrer">${escapeHtml(labelText)}</a>`
-    );
-  };
-
-  const insertImage = () => {
-    const url = window.prompt("Cole a URL da imagem");
-    if (!url?.trim()) return;
-
-    runCommand(
-      "insertHTML",
-      `<img src="${escapeHtml(url.trim())}" alt="Imagem adicionada no comentário" />`
     );
   };
 
@@ -220,7 +236,7 @@ function RichTextEditor({
           <Button type="button" variant="secondary" size="sm" onClick={insertLink}>
             🔗
           </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={insertImage}>
+          <Button type="button" variant="secondary" size="sm" onClick={onRequestImage}>
             🖼
           </Button>
           <Button
@@ -302,16 +318,49 @@ async function registerMedia(params: {
   });
 }
 
+function Modal({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-slate-900/35 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+          <div className="border-b border-slate-200 px-5 py-4">
+            <div className="text-lg font-black text-slate-900">{title}</div>
+          </div>
+          <div className="max-h-[80vh] overflow-auto p-5">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NovaQuestaoPage() {
   const router = useRouter();
+  const commentImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
-  const [themeInput, setThemeInput] = useState("");
+  const [selectedThemeId, setSelectedThemeId] = useState("");
   const [exams, setExams] = useState<CatalogOption[]>([]);
   const [levels, setLevels] = useState<CatalogOption[]>([]);
   const [themeOptions, setThemeOptions] = useState<CatalogOption[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryItems, setGalleryItems] = useState<MediaGalleryItem[]>([]);
+  const [commentImageModalOpen, setCommentImageModalOpen] = useState(false);
+  const [pendingEditorImageUrl, setPendingEditorImageUrl] = useState<string | null>(null);
 
   const [form, setForm] = useState<QuestionFormState>({
     prompt: "",
@@ -436,16 +485,6 @@ export default function NovaQuestaoPage() {
     }));
   };
 
-  const addTheme = () => {
-    const v = themeInput.trim();
-    if (!v) return;
-    setForm((p) => ({
-      ...p,
-      themes: p.themes.includes(v) ? p.themes : [...p.themes, v],
-    }));
-    setThemeInput("");
-  };
-
   const removeTheme = (t: string) => {
     setForm((p) => ({
       ...p,
@@ -471,6 +510,39 @@ export default function NovaQuestaoPage() {
         themes: [...prev.themes, theme.title],
       };
     });
+  };
+
+  const loadGalleryItems = async () => {
+    setGalleryLoading(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, "midias"), orderBy("createdAt", "desc"), limit(24))
+      );
+      const rows = snap.docs.map((item) => ({
+        id: item.id,
+        url: String(item.data().url ?? ""),
+        label: (item.data().label as string | null) ?? null,
+        name: (item.data().name as string | null) ?? null,
+      }));
+      setGalleryItems(rows.filter((item) => item.url));
+    } finally {
+      setGalleryLoading(false);
+    }
+  };
+
+  const openCommentImageModal = async () => {
+    setCommentImageModalOpen(true);
+    await loadGalleryItems();
+  };
+
+  const closeCommentImageModal = () => {
+    if (uploading === "comment-image") return;
+    setCommentImageModalOpen(false);
+  };
+
+  const insertCommentImage = (url: string) => {
+    setPendingEditorImageUrl(url);
+    setCommentImageModalOpen(false);
   };
 
   const addAttachment = (label: string, url: string) => {
@@ -561,6 +633,29 @@ export default function NovaQuestaoPage() {
         kind: "attachment",
         label: file.name,
       });
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const handleUploadCommentImage = async (file: File) => {
+    setUploading("comment-image");
+    try {
+      const { url, path } = await uploadImage(
+        file,
+        "admin_uploads/questionsBank/comment-images"
+      );
+
+      await registerMedia({
+        url,
+        path,
+        origin: "questionsBank",
+        kind: "attachment",
+        label: `Comentário - ${file.name}`,
+      });
+
+      await loadGalleryItems();
+      insertCommentImage(url);
     } finally {
       setUploading(null);
     }
@@ -794,6 +889,9 @@ export default function NovaQuestaoPage() {
               helper="Campo salvo em `explanation` com HTML simples para formatação."
               placeholder="Escreva o comentário interno/pedagógico da questão..."
               value={form.explanation}
+              onRequestImage={() => void openCommentImageModal()}
+              pendingImageUrl={pendingEditorImageUrl}
+              onPendingImageHandled={() => setPendingEditorImageUrl(null)}
               onChange={(value) =>
                 setForm((prev) => ({
                   ...prev,
@@ -854,6 +952,7 @@ export default function NovaQuestaoPage() {
                     value={form.levelId}
                     onChange={(e) => {
                       const nextLevel = levels.find((item) => item.id === e.target.value);
+                      setSelectedThemeId("");
                       setForm((prev) => ({
                         ...prev,
                         levelId: e.target.value,
@@ -913,24 +1012,35 @@ export default function NovaQuestaoPage() {
             <div className="rounded-2xl border bg-white p-5">
               <div className="text-sm font-extrabold text-slate-900">Tema</div>
               <div className="mt-1 text-xs text-slate-500">
-                Pelo menos um tema é obrigatório para salvar.
+                Selecione apenas temas já cadastrados.
               </div>
 
               <div className="mt-3 flex gap-2">
-                <input
-                  value={themeInput}
-                  onChange={(e) => setThemeInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addTheme();
-                    }
+                <select
+                  value={selectedThemeId}
+                  onChange={(e) => setSelectedThemeId(e.target.value)}
+                  className="flex-1 rounded-xl border bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                >
+                  <option value="">Selecione um tema</option>
+                  {availableThemes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.title}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!selectedThemeId}
+                  onClick={() => {
+                    const theme = availableThemes.find((item) => item.id === selectedThemeId);
+                    if (!theme) return;
+                    addThemeFromCatalog(theme);
+                    setSelectedThemeId("");
                   }}
-                  placeholder="Ex: Anestesia em Pediatria"
-                  className="flex-1 rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-                />
-                <Button type="button" variant="secondary" size="sm" onClick={addTheme}>
-                  Add
+                >
+                  Adicionar
                 </Button>
               </div>
 
@@ -1088,6 +1198,76 @@ export default function NovaQuestaoPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={commentImageModalOpen}
+        title="Adicionar imagem ao comentário"
+        onClose={closeCommentImageModal}
+      >
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => commentImageInputRef.current?.click()}
+              disabled={uploading === "comment-image"}
+            >
+              {uploading === "comment-image" ? "Enviando..." : "Selecionar do computador"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => void loadGalleryItems()}>
+              Atualizar galeria
+            </Button>
+            <input
+              ref={commentImageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  void handleUploadCommentImage(file);
+                }
+                e.currentTarget.value = "";
+              }}
+            />
+          </div>
+
+          <div>
+            <div className="mb-2 text-sm font-bold text-slate-900">Galeria de imagens</div>
+            {galleryLoading ? (
+              <div className="rounded-2xl border bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Carregando imagens...
+              </div>
+            ) : galleryItems.length === 0 ? (
+              <div className="rounded-2xl border bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Nenhuma imagem encontrada na coleção `midias`.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {galleryItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => insertCommentImage(item.url)}
+                    className="overflow-hidden rounded-2xl border text-left transition hover:border-blue-200 hover:shadow-sm"
+                  >
+                    <div className="aspect-[4/3] bg-slate-50">
+                      <img
+                        src={item.url}
+                        alt={item.label || item.name || "Imagem da galeria"}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="px-3 py-2 text-xs text-slate-600">
+                      {item.label || item.name || "Sem título"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </AdminShell>
   );
 }

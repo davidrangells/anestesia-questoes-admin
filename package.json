@@ -6,7 +6,8 @@
     "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:temas": "node scripts/seed-catalog-temas.mjs"
   },
   "dependencies": {
     "firebase": "^12.9.0",
