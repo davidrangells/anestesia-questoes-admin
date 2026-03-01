@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { Button, buttonStyles } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 
 function Item({
   href,
@@ -27,12 +30,12 @@ function Item({
     <Link
       href={href}
       onClick={onNavigate}
-      className={[
+      className={cn(
         "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
         active
           ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_12px_30px_rgba(37,99,235,0.28)]"
           : "text-slate-700 hover:bg-slate-100",
-      ].join(" ")}
+      )}
     >
       <span className="text-base">{icon}</span>
       <span className="truncate">{label}</span>
@@ -42,15 +45,21 @@ function Item({
 
 export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
     await signOut(auth);
+    setMobileOpen(false);
     router.replace("/login");
   };
 
-  return (
-    <aside className="w-[320px] shrink-0 border-r border-slate-200/70 bg-white min-h-screen sticky top-0 flex flex-col">
-      {/* Header */}
+  const handleNavigate = () => {
+    onNavigate?.();
+    setMobileOpen(false);
+  };
+
+  const sidebarContent = (
+    <>
       <div className="px-5 py-5 border-b border-slate-200/70">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-slate-200 flex items-center justify-center font-black text-blue-700">
@@ -65,48 +74,80 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         </div>
       </div>
 
-      {/* Menu */}
       <div className="px-4 py-4">
         <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
           Navegação
         </div>
         <nav className="flex flex-col gap-2">
-          <Item href="/admin" label="Dashboard" icon="🏠" onNavigate={onNavigate} />
+          <Item href="/admin" label="Dashboard" icon="🏠" onNavigate={handleNavigate} />
           <Item
             href="/admin/questoes"
             label="Banco de Questões"
             icon="🧠"
-            onNavigate={onNavigate}
+            onNavigate={handleNavigate}
           />
-          <Item href="/admin/midias" label="Mídias" icon="🖼️" onNavigate={onNavigate} />
+          <Item href="/admin/midias" label="Mídias" icon="🖼️" onNavigate={handleNavigate} />
           <Item
             href="/admin/erros-reportados"
             label="Erros reportados"
             icon="🧯"
-            onNavigate={onNavigate}
+            onNavigate={handleNavigate}
           />
-          <Item href="/admin/alunos" label="Alunos" icon="👤" onNavigate={onNavigate} />
+          <Item href="/admin/alunos" label="Alunos" icon="👤" onNavigate={handleNavigate} />
           <Item
             href="/admin/assinaturas"
             label="Assinaturas"
             icon="💳"
-            onNavigate={onNavigate}
+            onNavigate={handleNavigate}
           />
         </nav>
       </div>
 
-      {/* Footer */}
       <div className="mt-auto p-4 border-t border-slate-200/70">
-        <button
-          onClick={handleLogout}
-          className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition shadow-[0_10px_25px_rgba(2,6,23,0.20)]"
-        >
+        <Button onClick={handleLogout} variant="primary" block>
           Sair
-        </button>
+        </Button>
         <div className="mt-3 text-[11px] text-slate-400">
           Versão Admin • ambiente local
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
+        onClick={() => setMobileOpen((prev) => !prev)}
+        className={cn(
+          buttonStyles({ variant: "secondary", size: "sm" }),
+          "fixed left-4 top-4 z-50 lg:hidden"
+        )}
+      >
+        {mobileOpen ? "Fechar" : "Menu"}
+      </button>
+
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-sm transition lg:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={() => setMobileOpen(false)}
+      />
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-[88vw] max-w-[320px] flex-col border-r border-slate-200/70 bg-white shadow-2xl transition-transform lg:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {sidebarContent}
+      </aside>
+
+      <aside className="hidden w-[320px] shrink-0 border-r border-slate-200/70 bg-white min-h-screen sticky top-0 lg:flex lg:flex-col">
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

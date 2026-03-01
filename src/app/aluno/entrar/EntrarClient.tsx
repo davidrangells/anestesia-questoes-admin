@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sendSignInLinkToEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { Button } from "@/components/ui/Button";
 
 function mapErroToMessage(code: string) {
   switch (code) {
@@ -56,14 +57,14 @@ export default function EntrarClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-3xl border bg-white shadow-sm">
-        <div className="p-6 border-b">
+    <div className="flex min-h-screen items-center justify-center px-4 py-6 sm:px-6">
+      <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+        <div className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white px-5 py-5 sm:px-6">
           <div className="text-xl font-black text-slate-900">Anestesia Questões</div>
-          <div className="text-sm text-slate-500">Acesso do Aluno</div>
+          <div className="mt-1 text-sm text-slate-500">Acesso do Aluno</div>
         </div>
 
-        <form onSubmit={onSendLink} className="p-6 space-y-4">
+        <form onSubmit={onSendLink} className="space-y-4 px-5 py-5 sm:px-6 sm:py-6">
           {erroMsg ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {erroMsg}
@@ -77,17 +78,13 @@ export default function EntrarClient() {
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               placeholder="seuemail@..."
-              className="w-full rounded-2xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-200"
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-          >
+          <Button type="submit" disabled={loading} variant="primary" block>
             {loading ? "Enviando..." : "Enviar link de acesso"}
-          </button>
+          </Button>
 
           <div className="text-xs text-slate-500">
             Você vai receber um e-mail com um link para entrar.

@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+  box-sizing: border-box;
+}
+
 html, body {
-  height: 100%;
+  min-height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: #f8fafc;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  color: #0f172a;
+  background:
+    radial-gradient(circle at top, rgba(191, 219, 254, 0.35), transparent 34%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+@supports (min-height: 100dvh) {
+  html,
+  body {
+    min-height: 100dvh;
+  }
 }

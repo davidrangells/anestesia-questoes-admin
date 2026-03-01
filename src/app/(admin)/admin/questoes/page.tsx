@@ -22,6 +22,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Button, buttonStyles } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 
 type Option = { id: string; text?: string; imageUrl?: string | null };
 
@@ -52,10 +54,6 @@ type QBQuestion = {
 
 const PAGE_SIZE = 20;
 
-function classNames(...xs: Array<string | false | undefined | null>) {
-  return xs.filter(Boolean).join(" ");
-}
-
 function Badge({
   children,
   tone,
@@ -83,11 +81,11 @@ function Badge({
     <span
       onClick={onClick}
       title={title}
-      className={[
+      className={cn(
         "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold select-none",
         cls,
         clickable ? "cursor-pointer hover:opacity-90" : "",
-      ].join(" ")}
+      )}
     >
       {children}
     </span>
@@ -117,12 +115,9 @@ function Modal({
               <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
               <div className="text-xs text-slate-500">Clique fora para fechar</div>
             </div>
-            <button
-              onClick={onClose}
-              className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
-            >
+            <Button onClick={onClose} variant="secondary" size="sm">
               Fechar
-            </button>
+            </Button>
           </div>
 
           <div className="p-5 max-h-[75vh] overflow-auto">{children}</div>
@@ -377,15 +372,12 @@ export default function BancoQuestoesPage() {
       subtitle="Gerencie questões do questionsBank (criar, editar, ativar, duplicar e excluir)."
       actions={
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchFirst}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
+          <Button onClick={fetchFirst} variant="secondary" size="sm">
             Atualizar
-          </button>
+          </Button>
           <Link
             href="/admin/questoes/nova"
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            className={buttonStyles({ variant: "primary", size: "sm" })}
           >
             Nova questão
           </Link>
@@ -441,20 +433,22 @@ export default function BancoQuestoesPage() {
           </div>
 
           <div className="lg:col-span-1 flex gap-2">
-            <button
+            <Button
               onClick={fetchPrev}
               disabled={loading || cursorStack.length === 0}
-              className="w-full rounded-xl border bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"
+              variant="secondary"
+              block
             >
               Anterior
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={fetchNext}
               disabled={loading || !lastDoc}
-              className="w-full rounded-xl border bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"
+              variant="secondary"
+              block
             >
               Próxima
-            </button>
+            </Button>
           </div>
         </div>
 

@@ -15,6 +15,8 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
+import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 
 type Option = {
   id: "A" | "B" | "C" | "D" | "E";
@@ -34,10 +36,6 @@ type QuestionFormState = {
   options: Option[];
   correctOptionId: Option["id"];
 };
-
-function classNames(...xs: Array<string | false | undefined | null>) {
-  return xs.filter(Boolean).join(" ");
-}
 
 function safeExt(name: string) {
   const ext = (name.split(".").pop() || "jpg").toLowerCase();
@@ -207,8 +205,9 @@ export default function NovaQuestaoPage() {
       });
 
       router.push("/admin/questoes");
-    } catch (e: any) {
-      alert(e?.message || "Erro ao salvar.");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      alert(error?.message || "Erro ao salvar.");
     } finally {
       setSaving(false);
     }
@@ -220,24 +219,12 @@ export default function NovaQuestaoPage() {
       subtitle="Criar nova questão no questionsBank"
       actions={
         <div className="flex gap-2">
-          <button
-            onClick={() => router.push("/admin/questoes")}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
-          >
+          <Button onClick={() => router.push("/admin/questoes")} variant="secondary" size="sm">
             Voltar
-          </button>
-          <button
-            onClick={onSave}
-            disabled={!canSave}
-            className={classNames(
-              "rounded-xl px-4 py-2 text-sm font-semibold text-white",
-              canSave
-                ? "bg-slate-900 hover:bg-slate-800"
-                : "bg-slate-300 cursor-not-allowed"
-            )}
-          >
+          </Button>
+          <Button onClick={onSave} disabled={!canSave} variant="primary" size="sm">
             {saving ? "Salvando..." : "Salvar"}
-          </button>
+          </Button>
         </div>
       }
     >
@@ -270,7 +257,7 @@ export default function NovaQuestaoPage() {
               className="w-full rounded-xl border px-4 py-3 text-sm"
             />
 
-            <label className="mt-3 inline-flex cursor-pointer rounded-xl border bg-white px-4 py-3 text-sm font-semibold hover:bg-slate-50">
+            <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
               {uploading === "prompt"
                 ? "Enviando..."
                 : "Enviar imagem"}
@@ -325,7 +312,7 @@ export default function NovaQuestaoPage() {
                           correctOptionId: opt.id,
                         }))
                       }
-                      className={classNames(
+                      className={cn(
                         "rounded-full px-3 py-1 text-xs font-bold",
                         isCorrect
                           ? "bg-emerald-600 text-white"
@@ -360,7 +347,7 @@ export default function NovaQuestaoPage() {
                       className="rounded-xl border px-4 py-3 text-sm"
                     />
 
-                    <label className="inline-flex cursor-pointer rounded-xl border bg-white px-4 py-3 text-sm font-semibold hover:bg-slate-50">
+                    <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                       {uploading === opt.id
                         ? "Enviando..."
                         : "Enviar imagem"}

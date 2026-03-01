@@ -5,6 +5,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
 
 export default function AlunoAppPage() {
   const router = useRouter();
@@ -41,22 +42,23 @@ export default function AlunoAppPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white p-6">
+    <div className="min-h-screen px-4 py-5 sm:px-6">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <div className="text-xl font-black text-slate-900">Área do Aluno</div>
-            <div className="text-sm text-slate-500">{email}</div>
+            <div className="truncate text-sm text-slate-500">{email}</div>
           </div>
-          <button
+          <Button
             onClick={async () => {
               await signOut(auth);
               router.replace("/aluno/entrar");
             }}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+            variant="secondary"
+            size="sm"
           >
             Sair
-          </button>
+          </Button>
         </div>
 
         <div className="mt-6 rounded-2xl border bg-slate-50 p-5 text-sm text-slate-700">

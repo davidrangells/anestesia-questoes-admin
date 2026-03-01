@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Button, buttonStyles } from "@/components/ui/Button";
 
 type ChartMode = "erros" | "questoes";
 
@@ -26,8 +27,8 @@ export default function AdminDashboardPage() {
     <div className="min-h-screen">
       {/* Top header */}
       <div className="sticky top-0 z-10 border-b border-slate-200/70 bg-slate-50/70 backdrop-blur">
-        <div className="mx-auto max-w-[1200px] px-6 py-4">
-          <div className="flex items-center justify-between gap-4">
+        <div className="mx-auto max-w-[1200px] px-4 py-4 sm:px-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-xs text-slate-500">
                 Painel Administrativo <span className="mx-1">•</span> Anestesia Questões
@@ -36,7 +37,7 @@ export default function AdminDashboardPage() {
               <div className="text-sm text-slate-500">Visão geral do sistema</div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <SearchStub />
 
               <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
@@ -49,16 +50,17 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <button
+              <Button
                 onClick={() => alert("Depois vamos ligar no Firestore :)")}
-                className="rounded-2xl px-4 py-2 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 transition"
+                variant="secondary"
+                size="sm"
               >
                 Atualizar
-              </button>
+              </Button>
 
               <Link
                 href="/admin/questoes/nova"
-                className="rounded-2xl px-4 py-2 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 transition"
+                className={buttonStyles({ variant: "primary", size: "sm" })}
               >
                 Nova questão
               </Link>
@@ -68,7 +70,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Body */}
-      <div className="mx-auto max-w-[1200px] px-6 py-8">
+      <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
         {/* Hero card */}
         <div className="rounded-[32px] border border-slate-200 bg-white shadow-[0_10px_40px_rgba(15,23,42,0.06)] overflow-hidden">
           {/* subtle gradient */}
