@@ -336,8 +336,11 @@ function Modal({
       <div className="absolute inset-0 bg-slate-900/35 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
-          <div className="border-b border-slate-200 px-5 py-4">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <div className="text-lg font-black text-slate-900">{title}</div>
+            <Button type="button" variant="secondary" size="sm" onClick={onClose}>
+              Fechar
+            </Button>
           </div>
           <div className="max-h-[80vh] overflow-auto p-5">{children}</div>
         </div>
@@ -497,9 +500,17 @@ export default function NovaQuestaoPage() {
   };
 
   const availableThemes = useMemo(() => {
-    if (!form.levelId) return [];
-    return themeOptions.filter((item) => item.levelId === form.levelId);
-  }, [form.levelId, themeOptions]);
+    if (!themeOptions.length) return [];
+    if (!form.levelId) return themeOptions;
+
+    const exactMatches = themeOptions.filter((item) => item.levelId === form.levelId);
+    if (exactMatches.length) return exactMatches;
+
+    const labelMatches = themeOptions.filter(
+      (item) => item.levelLabel === form.level || !item.levelId
+    );
+    return labelMatches;
+  }, [form.level, form.levelId, themeOptions]);
 
   const addThemeFromCatalog = (theme: CatalogOption) => {
     setForm((prev) => {

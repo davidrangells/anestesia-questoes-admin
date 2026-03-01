@@ -125,10 +125,30 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         onClick={() => setMobileOpen((prev) => !prev)}
         className={cn(
           buttonStyles({ variant: "secondary", size: "sm" }),
-          "fixed left-4 top-4 z-50 lg:hidden"
+          "fixed left-3 z-50 h-11 w-11 rounded-2xl p-0 lg:hidden",
+          "top-[max(0.75rem,env(safe-area-inset-top))]"
         )}
       >
-        {mobileOpen ? "Fechar" : "Menu"}
+        <span className="flex flex-col items-center justify-center gap-1.5" aria-hidden="true">
+          <span
+            className={cn(
+              "block h-0.5 w-5 rounded-full bg-current transition",
+              mobileOpen && "translate-y-2 rotate-45"
+            )}
+          />
+          <span
+            className={cn(
+              "block h-0.5 w-5 rounded-full bg-current transition",
+              mobileOpen && "opacity-0"
+            )}
+          />
+          <span
+            className={cn(
+              "block h-0.5 w-5 rounded-full bg-current transition",
+              mobileOpen && "-translate-y-2 -rotate-45"
+            )}
+          />
+        </span>
       </button>
 
       <div
