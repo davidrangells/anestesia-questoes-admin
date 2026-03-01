@@ -158,7 +158,7 @@ function RichTextEditor({
       </div>
 
       <div className="overflow-x-auto border-b bg-slate-50/70 px-3">
-        <div className="flex min-w-max gap-x-1 text-sm font-medium text-slate-700">
+        <div className="flex flex-wrap gap-x-1 gap-y-1 text-sm font-medium text-slate-700">
           {["Editar", "Inserir", "Visualizar", "Formatar", "Tabela", "Ferramentas"].map((item) => (
             <button
               key={item}
@@ -172,7 +172,7 @@ function RichTextEditor({
       </div>
 
       <div className="overflow-x-auto border-b bg-white px-3 py-3">
-        <div className="flex min-w-max items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("undo")}>
             ↶
           </Button>

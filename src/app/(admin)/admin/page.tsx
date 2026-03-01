@@ -24,17 +24,17 @@ export default function AdminDashboardPage() {
   }, [chartMode]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-hidden">
       {/* Top header */}
       <div className="sticky top-0 z-10 border-b border-slate-200/70 bg-slate-50/70 backdrop-blur">
-        <div className="mx-auto max-w-[1200px] px-4 py-4 sm:px-6">
+        <div className="mx-auto max-w-[1200px] px-4 py-4 pl-24 sm:px-6 sm:pl-24 lg:pl-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-xs text-slate-500">
+            <div className="min-w-0">
+              <div className="break-words text-xs text-slate-500">
                 Painel Administrativo <span className="mx-1">•</span> Anestesia Questões
               </div>
-              <div className="text-2xl font-black text-slate-900">Dashboard</div>
-              <div className="text-sm text-slate-500">Visão geral do sistema</div>
+              <div className="break-words text-2xl font-black text-slate-900">Dashboard</div>
+              <div className="break-words text-sm text-slate-500">Visão geral do sistema</div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -74,8 +74,8 @@ export default function AdminDashboardPage() {
         {/* Hero card */}
         <div className="rounded-[32px] border border-slate-200 bg-white shadow-[0_10px_40px_rgba(15,23,42,0.06)] overflow-hidden">
           {/* subtle gradient */}
-          <div className="bg-gradient-to-b from-blue-50/60 via-white to-white px-6 py-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="bg-gradient-to-b from-blue-50/60 via-white to-white px-4 py-5 sm:px-6 sm:py-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <div className="text-lg font-black text-slate-900">Visão geral</div>
                 <div className="text-sm text-slate-500">
