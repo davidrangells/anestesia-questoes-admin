@@ -564,7 +564,7 @@ export default function BancoQuestoesPage() {
                         <button
                           onClick={() => toggleActive(q)}
                           disabled={togglingId === q.id}
-                          className={classNames(
+                          className={cn(
                             "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-extrabold transition",
                             isActive
                               ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100"
@@ -594,7 +594,7 @@ export default function BancoQuestoesPage() {
                           <button
                             onClick={() => duplicateQuestion(q)}
                             disabled={duplicatingId === q.id || deletingId === q.id}
-                            className={classNames(
+                            className={cn(
                               "inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50",
                               duplicatingId === q.id ? "opacity-60 cursor-wait" : ""
                             )}
@@ -606,7 +606,7 @@ export default function BancoQuestoesPage() {
                           <button
                             onClick={() => deleteQuestion(q)}
                             disabled={deletingId === q.id || duplicatingId === q.id}
-                            className={classNames(
+                            className={cn(
                               "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold",
                               "bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100",
                               deletingId === q.id ? "opacity-60 cursor-wait" : ""
