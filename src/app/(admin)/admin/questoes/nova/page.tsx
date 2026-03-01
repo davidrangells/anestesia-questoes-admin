@@ -6,6 +6,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
+  getDocs,
+  orderBy,
+  query,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -30,13 +33,25 @@ type Attachment = {
   url: string;
 };
 
+type CatalogOption = {
+  id: string;
+  title: string;
+  code: string;
+  status: "ativo" | "inativo";
+  levelId?: string | null;
+  levelLabel?: string | null;
+};
+
 type QuestionFormState = {
   prompt: string;
   explanation: string;
+  examId: string;
   examType: string;
+  levelId: string;
   level: "R1" | "R2" | "R3";
   examYear: string;
   themes: string[];
+  themeIds: string[];
   isActive: boolean;
   imageUrl: string;
   reference: string;
@@ -53,9 +68,6 @@ type RichTextEditorProps = {
   value: string;
   onChange: (value: string) => void;
 };
-
-const EXAM_OPTIONS = ["TSA", "TEA", "ME"] as const;
-const LEVEL_OPTIONS = ["R1", "R2", "R3"] as const;
 
 function escapeHtml(value: string) {
   return value
@@ -83,6 +95,7 @@ function RichTextEditor({
   onChange,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const [previewMode, setPreviewMode] = useState(false);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -122,64 +135,130 @@ function RichTextEditor({
   };
 
   return (
-    <div className="rounded-2xl border bg-white p-5">
-      <div className="text-sm font-extrabold text-slate-900">{label}</div>
-      {helper ? <div className="mt-1 text-xs text-slate-500">{helper}</div> : null}
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("bold")}>
-          Negrito
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("italic")}>
-          Itálico
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => runCommand("insertUnorderedList")}
-        >
-          Lista
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyLeft")}>
-          Esquerda
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => runCommand("justifyCenter")}
-        >
-          Centro
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyRight")}>
-          Direita
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyFull")}>
-          Justificar
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={insertLink}>
-          Link
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={insertImage}>
-          Imagem
-        </Button>
+    <div className="overflow-hidden rounded-2xl border bg-white">
+      <div className="border-b px-5 py-4">
+        <div className="text-sm font-extrabold text-slate-900">{label}</div>
+        {helper ? <div className="mt-1 text-xs text-slate-500">{helper}</div> : null}
       </div>
 
-      <div className="relative mt-3">
-        {!stripHtml(value) ? (
-          <div className="pointer-events-none absolute left-4 top-4 text-sm text-slate-400">
-            {placeholder || "Digite aqui..."}
+      <div className="border-b bg-slate-50/70 px-3">
+        <div className="flex flex-wrap gap-x-1 text-sm font-medium text-slate-700">
+          {["Editar", "Inserir", "Visualizar", "Formatar", "Tabela", "Ferramentas"].map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="rounded-xl px-3 py-3 transition hover:bg-white hover:text-slate-900"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-b bg-white px-3 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("undo")}>
+            ↶
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("redo")}>
+            ↷
+          </Button>
+
+          <select
+            defaultValue="P"
+            onChange={(e) => runCommand("formatBlock", e.target.value)}
+            className="min-h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+          >
+            <option value="P">Parágrafo</option>
+            <option value="H2">Título</option>
+            <option value="H3">Subtítulo</option>
+            <option value="BLOCKQUOTE">Citação</option>
+          </select>
+
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("bold")}>
+            B
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("italic")}>
+            I
+          </Button>
+
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyLeft")}>
+            ⬅
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyCenter")}>
+            ☰
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyRight")}>
+            ➡
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyFull")}>
+            ≣
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => runCommand("insertUnorderedList")}
+          >
+            • Lista
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => runCommand("insertOrderedList")}
+          >
+            1. Lista
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("outdent")}>
+            ⟵
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("indent")}>
+            ⟶
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={insertLink}>
+            🔗
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={insertImage}>
+            🖼
+          </Button>
+          <Button
+            type="button"
+            variant={previewMode ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setPreviewMode((prev) => !prev)}
+          >
+            ▶
+          </Button>
+        </div>
+      </div>
+
+      <div className="p-5">
+        {previewMode ? (
+          <div
+            className="min-h-[220px] rounded-xl border bg-slate-50 p-4 text-sm [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-white [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
+            dangerouslySetInnerHTML={{
+              __html: value || `<p class="text-slate-400">${escapeHtml(placeholder || "Sem conteúdo.")}</p>`,
+            }}
+          />
+        ) : (
+          <div className="relative">
+            {!stripHtml(value) ? (
+              <div className="pointer-events-none absolute left-4 top-4 text-sm text-slate-400">
+                {placeholder || "Digite aqui..."}
+              </div>
+            ) : null}
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={syncValue}
+              onBlur={syncValue}
+              className="min-h-[220px] rounded-xl border p-4 text-sm outline-none focus-within:ring-2 focus-within:ring-blue-200 [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-slate-50 [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
+            />
           </div>
-        ) : null}
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={syncValue}
-          onBlur={syncValue}
-          className="min-h-[180px] rounded-xl border p-4 text-sm outline-none focus-within:ring-2 focus-within:ring-blue-200 [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-slate-50 [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
-        />
+        )}
       </div>
     </div>
   );
@@ -229,14 +308,21 @@ export default function NovaQuestaoPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const [themeInput, setThemeInput] = useState("");
+  const [exams, setExams] = useState<CatalogOption[]>([]);
+  const [levels, setLevels] = useState<CatalogOption[]>([]);
+  const [themeOptions, setThemeOptions] = useState<CatalogOption[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
 
   const [form, setForm] = useState<QuestionFormState>({
     prompt: "",
     explanation: "",
+    examId: "",
     examType: "TSA",
+    levelId: "",
     level: "R1",
     examYear: "",
     themes: [],
+    themeIds: [],
     isActive: true,
     imageUrl: "",
     reference: "",
@@ -251,11 +337,94 @@ export default function NovaQuestaoPage() {
     correctOptionId: "A",
   });
 
+  useEffect(() => {
+    let active = true;
+
+    const loadCatalogs = async () => {
+      setCatalogLoading(true);
+      try {
+        const [examSnap, levelSnap, themeSnap] = await Promise.all([
+          getDocs(query(collection(db, "catalog_provas"), orderBy("title", "asc"))),
+          getDocs(query(collection(db, "catalog_niveis"), orderBy("title", "asc"))),
+          getDocs(query(collection(db, "catalog_temas"), orderBy("title", "asc"))),
+        ]);
+
+        if (!active) return;
+
+        const nextExams = examSnap.docs
+          .map((item) => ({
+            id: item.id,
+            title: String(item.data().title ?? ""),
+            code: String(item.data().code ?? ""),
+            status: (item.data().status as CatalogOption["status"]) ?? "ativo",
+          }))
+          .filter((item) => item.status === "ativo");
+
+        const nextLevels = levelSnap.docs
+          .map((item) => ({
+            id: item.id,
+            title: String(item.data().title ?? ""),
+            code: String(item.data().code ?? ""),
+            status: (item.data().status as CatalogOption["status"]) ?? "ativo",
+          }))
+          .filter((item) => item.status === "ativo");
+
+        const nextThemes = themeSnap.docs
+          .map((item) => ({
+            id: item.id,
+            title: String(item.data().title ?? ""),
+            code: String(item.data().code ?? ""),
+            status: (item.data().status as CatalogOption["status"]) ?? "ativo",
+            levelId: (item.data().levelId as string | null) ?? null,
+            levelLabel: (item.data().levelLabel as string | null) ?? null,
+          }))
+          .filter((item) => item.status === "ativo");
+
+        setExams(nextExams);
+        setLevels(nextLevels);
+        setThemeOptions(nextThemes);
+
+        setForm((prev) => {
+          const exam = nextExams.find((item) => item.id === prev.examId) ?? nextExams[0];
+          const level = nextLevels.find((item) => item.id === prev.levelId) ?? nextLevels[0];
+          const allowedThemes = nextThemes.filter(
+            (item) => !level?.id || item.levelId === level.id
+          );
+          const nextThemeIds = prev.themeIds.filter((id) =>
+            allowedThemes.some((item) => item.id === id)
+          );
+
+          return {
+            ...prev,
+            examId: exam?.id ?? "",
+            examType: exam?.title || prev.examType,
+            levelId: level?.id ?? "",
+            level: (level?.title as QuestionFormState["level"]) || prev.level,
+            themeIds: nextThemeIds,
+            themes: nextThemeIds
+              .map((id) => allowedThemes.find((item) => item.id === id)?.title || "")
+              .filter(Boolean),
+          };
+        });
+      } finally {
+        if (active) setCatalogLoading(false);
+      }
+    };
+
+    void loadCatalogs();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const canSave = useMemo(() => {
     const hasPrompt = form.prompt.trim().length > 0;
     const hasOptions = form.options.every((o) => o.text.trim().length > 0);
     const hasTheme = form.themes.length > 0;
-    return hasPrompt && hasOptions && hasTheme && !saving;
+    const hasExam = form.examId.trim().length > 0;
+    const hasLevel = form.levelId.trim().length > 0;
+    return hasPrompt && hasOptions && hasTheme && hasExam && hasLevel && !saving;
   }, [form, saving]);
 
   const setOption = (id: Option["id"], patch: Partial<Option>) => {
@@ -281,7 +450,27 @@ export default function NovaQuestaoPage() {
     setForm((p) => ({
       ...p,
       themes: p.themes.filter((x) => x !== t),
+      themeIds: p.themeIds.filter((id) => {
+        const selected = themeOptions.find((item) => item.id === id);
+        return selected?.title !== t;
+      }),
     }));
+  };
+
+  const availableThemes = useMemo(() => {
+    if (!form.levelId) return [];
+    return themeOptions.filter((item) => item.levelId === form.levelId);
+  }, [form.levelId, themeOptions]);
+
+  const addThemeFromCatalog = (theme: CatalogOption) => {
+    setForm((prev) => {
+      if (prev.themeIds.includes(theme.id)) return prev;
+      return {
+        ...prev,
+        themeIds: [...prev.themeIds, theme.id],
+        themes: [...prev.themes, theme.title],
+      };
+    });
   };
 
   const addAttachment = (label: string, url: string) => {
@@ -403,8 +592,10 @@ export default function NovaQuestaoPage() {
         prompt_text: normalizedPrompt,
         explanation: normalizedExplanation,
         explanationFormat: "html",
+        examId: form.examId || null,
         examType: form.examType,
         prova_tipo: form.examType,
+        levelId: form.levelId || null,
         examYear: proofYear,
         prova_ano: proofYear,
         examSource: proofLabel,
@@ -412,6 +603,7 @@ export default function NovaQuestaoPage() {
         level: form.level,
         nivel: form.level,
         themes: form.themes,
+        themeIds: form.themeIds,
         isActive: form.isActive,
         status: form.isActive ? "ativo" : "inativo",
         imageUrl: form.imageUrl || null,
@@ -617,20 +809,25 @@ export default function NovaQuestaoPage() {
 
               <div className="mt-3 space-y-3">
                 <div>
-                  <div className="text-xs font-semibold text-slate-600 mb-1">Prova</div>
-                  <select
-                    value={form.examType}
-                    onChange={(e) =>
+              <div className="text-xs font-semibold text-slate-600 mb-1">Prova</div>
+              <select
+                    value={form.examId}
+                    onChange={(e) => {
+                      const nextExam = exams.find((item) => item.id === e.target.value);
                       setForm((prev) => ({
                         ...prev,
-                        examType: e.target.value,
-                      }))
-                    }
+                        examId: e.target.value,
+                        examType: nextExam?.title || prev.examType,
+                      }));
+                    }}
                     className="w-full rounded-xl border px-4 py-3 text-sm bg-white"
                   >
-                    {EXAM_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {catalogLoading && exams.length === 0 ? (
+                      <option value="">Carregando...</option>
+                    ) : null}
+                    {exams.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.title}
                       </option>
                     ))}
                   </select>
@@ -651,21 +848,28 @@ export default function NovaQuestaoPage() {
                   />
                 </div>
 
-                <div>
+              <div>
                   <div className="text-xs font-semibold text-slate-600 mb-1">Nível</div>
                   <select
-                    value={form.level}
-                    onChange={(e) =>
+                    value={form.levelId}
+                    onChange={(e) => {
+                      const nextLevel = levels.find((item) => item.id === e.target.value);
                       setForm((prev) => ({
                         ...prev,
-                        level: e.target.value as QuestionFormState["level"],
-                      }))
-                    }
+                        levelId: e.target.value,
+                        level: (nextLevel?.title as QuestionFormState["level"]) || prev.level,
+                        themeIds: [],
+                        themes: [],
+                      }));
+                    }}
                     className="w-full rounded-xl border px-4 py-3 text-sm bg-white"
                   >
-                    {LEVEL_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {catalogLoading && levels.length === 0 ? (
+                      <option value="">Carregando...</option>
+                    ) : null}
+                    {levels.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.title}
                       </option>
                     ))}
                   </select>
@@ -728,6 +932,38 @@ export default function NovaQuestaoPage() {
                 <Button type="button" variant="secondary" size="sm" onClick={addTheme}>
                   Add
                 </Button>
+              </div>
+
+              <div className="mt-3">
+                <div className="mb-2 text-xs font-semibold text-slate-600">Temas cadastrados para o nível selecionado</div>
+                <div className="flex flex-wrap gap-2">
+                  {availableThemes.length ? (
+                    availableThemes.map((theme) => {
+                      const selected = form.themeIds.includes(theme.id);
+                      return (
+                        <button
+                          key={theme.id}
+                          type="button"
+                          onClick={() =>
+                            selected ? removeTheme(theme.title) : addThemeFromCatalog(theme)
+                          }
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                            selected
+                              ? "border-blue-200 bg-blue-50 text-blue-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          {theme.title}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="text-xs text-slate-500">
+                      Nenhum tema ativo para este nível.
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
