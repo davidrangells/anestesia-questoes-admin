@@ -103,6 +103,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
             icon="💳"
             onNavigate={handleNavigate}
           />
+          <Item href="/admin/planos" label="Planos" icon="📦" onNavigate={handleNavigate} />
         </nav>
       </div>
 

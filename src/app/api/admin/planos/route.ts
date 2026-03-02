@@ -1,0 +1,101 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+import { NextRequest, NextResponse } from "next/server";
+import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+
+async function requireAdmin(req: NextRequest) {
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+
+  if (!token) {
+    return { error: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  try {
+    const decoded = await adminAuth.verifyIdToken(token);
+    const userSnap = await adminDb.collection("users").doc(decoded.uid).get();
+    const role = userSnap.exists ? userSnap.data()?.role : null;
+
+    if (role !== "admin") {
+      return { error: NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 }) };
+    }
+
+    return { adminUid: decoded.uid };
+  } catch {
+    return { error: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }) };
+  }
+}
+
+function pickString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function pickNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const normalized = value.replace(",", ".").trim();
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function sanitizeBody(body: unknown) {
+  const payload = (body ?? {}) as Record<string, unknown>;
+  return {
+    code: pickString(payload.code),
+    title: pickString(payload.title),
+    productId: pickString(payload.productId),
+    status: pickString(payload.status) === "inativo" ? "inativo" : "ativo",
+    price: pickNumber(payload.price),
+  };
+}
+
+export async function GET(req: NextRequest) {
+  const authCheck = await requireAdmin(req);
+  if ("error" in authCheck) return authCheck.error;
+
+  try {
+    const snap = await adminDb.collection("catalog_planos").orderBy("createdAt", "desc").get();
+    const items = snap.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    }));
+    return NextResponse.json({ ok: true, items }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao listar planos.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const authCheck = await requireAdmin(req);
+  if ("error" in authCheck) return authCheck.error;
+
+  try {
+    const payload = sanitizeBody(await req.json());
+    if (!payload.code || !payload.title) {
+      return NextResponse.json(
+        { ok: false, error: "Código e título são obrigatórios." },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date();
+    const ref = await adminDb.collection("catalog_planos").add({
+      code: payload.code,
+      title: payload.title,
+      productId: payload.productId || null,
+      status: payload.status,
+      price: payload.price,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return NextResponse.json({ ok: true, id: ref.id }, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao criar plano.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
