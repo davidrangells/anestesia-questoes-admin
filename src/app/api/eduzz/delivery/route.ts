@@ -107,6 +107,54 @@ function toDateOrNull(v: unknown): Date | null {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
+async function resolvePlanMatch(params: {
+  db: FirebaseFirestore.Firestore;
+  productId: string | null;
+  productTitle: string | null;
+}) {
+  const { db, productId, productTitle } = params;
+
+  if (productId) {
+    const byProductId = await db
+      .collection("catalog_planos")
+      .where("productId", "==", productId)
+      .limit(1)
+      .get();
+
+    if (!byProductId.empty) {
+      const doc = byProductId.docs[0];
+      return {
+        planId: doc.id,
+        planTitle: String(doc.data()?.title ?? "").trim() || productTitle || null,
+        matchedBy: "productId" as const,
+      };
+    }
+  }
+
+  if (productTitle) {
+    const byTitle = await db
+      .collection("catalog_planos")
+      .where("title", "==", productTitle)
+      .limit(1)
+      .get();
+
+    if (!byTitle.empty) {
+      const doc = byTitle.docs[0];
+      return {
+        planId: doc.id,
+        planTitle: String(doc.data()?.title ?? "").trim() || productTitle,
+        matchedBy: "title" as const,
+      };
+    }
+  }
+
+  return {
+    planId: null,
+    planTitle: productTitle,
+    matchedBy: null,
+  };
+}
+
 function htmlEmail(params: { appName: string; createPasswordUrl: string; loginUrl: string }) {
   const { appName, createPasswordUrl, loginUrl } = params;
   return `
@@ -214,19 +262,37 @@ export async function POST(req: NextRequest) {
     // Plano/produto (vários formatos)
     const productFromItems =
       Array.isArray((data as any)?.items) && (data as any)?.items?.length ? (data as any)?.items?.[0] : null;
+    const productIdFromItemDiscount =
+      Array.isArray((data as any)?.items) && (data as any)?.items?.length
+        ? ((data as any).items as Array<any>)
+            .map((item) =>
+              pickFirstString(
+                item?.price?.discount?.productId,
+                item?.price?.discount?.productID,
+                item?.discount?.productId
+              )
+            )
+            .find(Boolean) || null
+        : null;
 
     const productId =
       pickFirstString(
         (data as any)?.product?.id,
         (data as any)?.product_id,
+        (data as any)?.offer?.id,
+        (data as any)?.offer_id,
         (data as any)?.edz_cnt_cod,
-        productFromItems?.productId
+        productFromItems?.productId,
+        productFromItems?.id,
+        productIdFromItemDiscount
       ) || null;
 
     const productTitle =
       pickFirstString(
         (data as any)?.product?.title,
         (data as any)?.product_title,
+        (data as any)?.offer?.title,
+        (data as any)?.offer_title,
         (data as any)?.edz_cnt_titulo,
         productFromItems?.name
       ) || null;
@@ -288,6 +354,11 @@ export async function POST(req: NextRequest) {
 
     const entRef = db.collection("entitlements").doc(uid);
     const now = new Date();
+    const planMatch = await resolvePlanMatch({
+      db,
+      productId,
+      productTitle,
+    });
 
     if (action === "activate") {
       // ✅ ENTITLEMENT com vencimento + plano/valor
@@ -298,8 +369,10 @@ export async function POST(req: NextRequest) {
           active: true,
           pending: false,
           source: "eduzz",
+          planId: planMatch.planId,
           productId,
-          productTitle,
+          productTitle: planMatch.planTitle,
+          planMatchedBy: planMatch.matchedBy,
           invoiceId,
           invoiceStatus,
           amountPaid,
@@ -395,8 +468,10 @@ export async function POST(req: NextRequest) {
         active: false,
         pending: false,
         source: "eduzz",
+        planId: planMatch.planId,
         productId,
-        productTitle,
+        productTitle: planMatch.planTitle,
+        planMatchedBy: planMatch.matchedBy,
         invoiceId,
         invoiceStatus,
         amountPaid,
