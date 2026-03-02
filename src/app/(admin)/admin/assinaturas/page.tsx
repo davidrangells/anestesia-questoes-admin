@@ -334,6 +334,12 @@ export default function AssinaturasPage() {
                   <td className="px-5 py-5">
                     <div className="flex justify-end gap-2">
                       <Link
+                        href={`/admin/assinaturas/${item.uid}/fatura`}
+                        className={buttonStyles({ variant: "secondary", size: "sm" })}
+                      >
+                        Gerenciar
+                      </Link>
+                      <Link
                         href={`/admin/assinaturas/${item.uid}`}
                         className={buttonStyles({ variant: "primary", size: "sm" })}
                       >

@@ -309,6 +309,12 @@ export async function POST(req: NextRequest) {
       (typeof (data as any)?.price?.paid?.value === "number" ? (data as any)?.price?.paid?.value : null) ??
       (typeof (data as any)?.price?.value === "number" ? (data as any)?.price?.value : null) ??
       null;
+    const paymentMethod =
+      pickFirstString(
+        (data as any)?.paymentMethod,
+        (data as any)?.payment?.method,
+        (data as any)?.invoice?.paymentMethod
+      ) || null;
 
     // Vencimento (até data X) – vem muito como contract.dueDate ou dueDate
     const dueDateRaw = (data as any)?.dueDate || (data as any)?.contract?.dueDate || null;
@@ -377,6 +383,7 @@ export async function POST(req: NextRequest) {
           invoiceId,
           invoiceStatus,
           amountPaid,
+          paymentMethod,
           currency,
           paidAt: paidAt ?? null,
           validUntil: validUntil ?? null, // ✅ vencimento até
@@ -476,6 +483,7 @@ export async function POST(req: NextRequest) {
         invoiceId,
         invoiceStatus,
         amountPaid,
+        paymentMethod,
         currency,
         paidAt: paidAt ?? null,
         validUntil: validUntil ?? null,
