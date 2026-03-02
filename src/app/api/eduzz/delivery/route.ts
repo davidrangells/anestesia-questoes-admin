@@ -323,15 +323,33 @@ export async function POST(req: NextRequest) {
     const validUntil = toDateOrNull(dueDateRaw); // ✅ nosso "vencimento até"
     const paidAt = toDateOrNull(paidAtRaw);
 
-    // Perfil do aluno: prioriza student quando houver, depois buyer/customer
-    const student =
-      (data as any)?.student || (data as any)?.buyer || (data as any)?.customer || (data as any)?.client || {};
-    const address = student?.address || (data as any)?.address || {};
+    // Perfil do aluno: prioriza student para identidade, mas usa fallback de endereço do buyer/customer
+    const studentProfile = (data as any)?.student || {};
+    const buyerProfile = (data as any)?.buyer || {};
+    const customerProfile = (data as any)?.customer || (data as any)?.client || {};
+    const profileSource =
+      Object.keys(studentProfile).length > 0
+        ? studentProfile
+        : Object.keys(buyerProfile).length > 0
+          ? buyerProfile
+          : customerProfile;
+    const address =
+      profileSource?.address ||
+      buyerProfile?.address ||
+      customerProfile?.address ||
+      (data as any)?.address ||
+      {};
 
     const profilePayload = {
-      name: pickFirstString(student?.name, (data as any)?.name) || null,
-      phone: pickFirstString(student?.phone, student?.cellphone, student?.phone2) || null,
-      document: pickFirstString(student?.document) || null,
+      name: pickFirstString(profileSource?.name, (data as any)?.name) || null,
+      phone: pickFirstString(
+        profileSource?.phone,
+        profileSource?.cellphone,
+        profileSource?.phone2,
+        buyerProfile?.phone,
+        buyerProfile?.cellphone
+      ) || null,
+      document: pickFirstString(profileSource?.document, buyerProfile?.document) || null,
       address: {
         street: pickFirstString(address?.street) || null,
         number: pickFirstString(address?.number) || null,
