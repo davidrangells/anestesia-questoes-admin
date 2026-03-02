@@ -233,10 +233,10 @@ export async function POST(req: NextRequest) {
 
     // --------- EXTRAÇÕES (email, plano, valor, vencimento, perfil) ---------
     const email = normalizeEmail(
-      (data as any)?.customer?.email ??
+      (data as any)?.student?.email ??
+        (data as any)?.customer?.email ??
         (data as any)?.buyer?.email ??
         (data as any)?.client?.email ??
-        (data as any)?.student?.email ?? // alguns payloads usam student
         (data as any)?.email ??
         (data as any)?.edz_cli_email
     );
@@ -317,14 +317,15 @@ export async function POST(req: NextRequest) {
     const validUntil = toDateOrNull(dueDateRaw); // ✅ nosso "vencimento até"
     const paidAt = toDateOrNull(paidAtRaw);
 
-    // Perfil do aluno (buyer/student + address)
-    const buyer = (data as any)?.buyer || (data as any)?.student || (data as any)?.customer || {};
-    const address = buyer?.address || (data as any)?.address || {};
+    // Perfil do aluno: prioriza student quando houver, depois buyer/customer
+    const student =
+      (data as any)?.student || (data as any)?.buyer || (data as any)?.customer || (data as any)?.client || {};
+    const address = student?.address || (data as any)?.address || {};
 
     const profilePayload = {
-      name: pickFirstString(buyer?.name, (data as any)?.name) || null,
-      phone: pickFirstString(buyer?.phone, buyer?.cellphone, buyer?.phone2) || null,
-      document: pickFirstString(buyer?.document) || null,
+      name: pickFirstString(student?.name, (data as any)?.name) || null,
+      phone: pickFirstString(student?.phone, student?.cellphone, student?.phone2) || null,
+      document: pickFirstString(student?.document) || null,
       address: {
         street: pickFirstString(address?.street) || null,
         number: pickFirstString(address?.number) || null,
