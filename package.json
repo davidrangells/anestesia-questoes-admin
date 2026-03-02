@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed:temas": "node scripts/seed-catalog-temas.mjs"
+    "seed:temas": "node scripts/seed-catalog-temas.mjs",
+    "seed:planos": "node scripts/seed-catalog-planos.mjs"
   },
   "dependencies": {
     "firebase": "^12.9.0",
