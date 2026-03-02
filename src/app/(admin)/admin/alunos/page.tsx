@@ -7,7 +7,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -54,18 +53,18 @@ export default function AlunosPage() {
   const [items, setItems] = useState<AlunoListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       setLoading(true);
+      setErrorMsg(null);
       try {
-        const snap = await getDocs(
-          query(collection(db, "users"), where("role", "==", "student"), orderBy("updatedAt", "desc"))
-        );
+        const snap = await getDocs(query(collection(db, "users"), where("role", "==", "student")));
 
-        const rows = await Promise.all(
+        const rawRows = await Promise.all(
           snap.docs.map(async (userDoc, index) => {
             const [profileSnap, entitlementSnap] = await Promise.all([
               getDoc(doc(db, "users", userDoc.id, "profile", "main")),
@@ -75,6 +74,16 @@ export default function AlunosPage() {
             const userData = userDoc.data();
             const profile = profileSnap.exists() ? profileSnap.data() : {};
             const entitlement = entitlementSnap.exists() ? entitlementSnap.data() : {};
+            const sortSeconds =
+              typeof userData.updatedAt === "object" &&
+              userData.updatedAt !== null &&
+              "seconds" in userData.updatedAt
+                ? Number((userData.updatedAt as { seconds?: number }).seconds ?? 0)
+                : typeof userData.createdAt === "object" &&
+                    userData.createdAt !== null &&
+                    "seconds" in userData.createdAt
+                  ? Number((userData.createdAt as { seconds?: number }).seconds ?? 0)
+                  : 0;
 
             return {
               uid: userDoc.id,
@@ -90,11 +99,29 @@ export default function AlunosPage() {
               email:
                 String(userData.email ?? entitlement?.email ?? "").trim() || "—",
               active: entitlement?.active === true,
-            } satisfies AlunoListItem;
+              sortSeconds,
+            };
           })
         );
 
+        const rows = rawRows
+          .sort((a, b) => b.sortSeconds - a.sortSeconds)
+          .map((item, index) => ({
+            uid: item.uid,
+            code: String(rawRows.length - index),
+            createdAt: item.createdAt,
+            name: item.name,
+            cpf: item.cpf,
+            cellphone: item.cellphone,
+            email: item.email,
+            active: item.active,
+          })) satisfies AlunoListItem[];
+
         if (active) setItems(rows);
+      } catch (error) {
+        if (active) {
+          setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os alunos.");
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -151,6 +178,11 @@ export default function AlunosPage() {
               ? "Carregando..."
               : `${filtered.length} ${filtered.length === 1 ? "aluno encontrado" : "alunos encontrados"}`}
           </div>
+          {errorMsg ? (
+            <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {errorMsg}
+            </div>
+          ) : null}
         </div>
 
         <div className="overflow-x-auto">

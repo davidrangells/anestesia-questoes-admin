@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, getDoc, getDocs, orderBy, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { auth, db } from "@/lib/firebase";
@@ -22,6 +22,10 @@ type AssinaturaItem = {
   invoiceStatus: string;
   amountPaid: number | null;
   validUntilRaw: string;
+};
+
+type AssinaturaItemWithSort = AssinaturaItem & {
+  sortSeconds: number;
 };
 
 function formatDate(value: unknown) {
@@ -92,11 +96,9 @@ export default function AssinaturasPage() {
       setLoading(true);
       setErrorMsg(null);
       try {
-        const snap = await getDocs(
-          query(collection(db, "users"), where("role", "==", "student"), orderBy("updatedAt", "desc"))
-        );
+        const snap = await getDocs(query(collection(db, "users"), where("role", "==", "student")));
 
-        const rows = await Promise.all(
+        const rawRows: AssinaturaItemWithSort[] = await Promise.all(
           snap.docs.map(async (userDoc) => {
             const [profileSnap, entSnap] = await Promise.all([
               getDoc(doc(db, "users", userDoc.id, "profile", "main")),
@@ -141,9 +143,23 @@ export default function AssinaturasPage() {
                   ? ent.amountPaid
                   : null,
               validUntilRaw: toDateInput(ent?.validUntil ?? null),
-            } satisfies AssinaturaItem;
+              sortSeconds:
+                typeof userData.updatedAt === "object" &&
+                userData.updatedAt !== null &&
+                "seconds" in userData.updatedAt
+                  ? Number((userData.updatedAt as { seconds?: number }).seconds ?? 0)
+                  : typeof userData.createdAt === "object" &&
+                      userData.createdAt !== null &&
+                      "seconds" in userData.createdAt
+                    ? Number((userData.createdAt as { seconds?: number }).seconds ?? 0)
+                    : 0,
+            } satisfies AssinaturaItemWithSort;
           })
         );
+
+        const rows = rawRows
+          .sort((a, b) => b.sortSeconds - a.sortSeconds)
+          .map(({ sortSeconds: _sortSeconds, ...item }) => item) satisfies AssinaturaItem[];
 
         if (active) setItems(rows);
       } catch (error) {
