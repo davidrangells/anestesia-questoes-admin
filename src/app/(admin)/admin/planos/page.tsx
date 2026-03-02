@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase";
 type Plano = {
   id: string;
   code?: string | null;
+  createdAt?: unknown;
   title?: string | null;
   productId?: string | null;
   description?: string | null;
@@ -368,70 +369,72 @@ export default function PlanosPage() {
           ) : null}
         </div>
 
-        <div className="divide-y divide-slate-200">
-          {!loading && filtered.length === 0 ? (
-            <div className="px-5 py-10 text-center text-sm text-slate-500">Nenhum plano encontrado.</div>
-          ) : null}
+        <div className="overflow-x-auto">
+          <table className="min-w-[980px] w-full text-sm">
+            <thead className="border-b bg-slate-100/80 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+              <tr>
+                <th className="px-5 py-4 text-left">Cód.</th>
+                <th className="px-5 py-4 text-left">Criado em</th>
+                <th className="px-5 py-4 text-left">Título</th>
+                <th className="px-5 py-4 text-left">Status</th>
+                <th className="px-5 py-4 text-right">Ações</th>
+              </tr>
+            </thead>
 
-          {filtered.map((item) => (
-            <div key={item.id} className="grid gap-4 px-5 py-5 md:grid-cols-[minmax(0,2.2fr)_160px_160px_220px] md:items-center">
-              <div className="min-w-0">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xs font-bold uppercase text-slate-500">
-                    {item.source === "eduzz" ? "E" : "M"}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-2xl font-bold text-slate-900">{item.title || "—"}</div>
-                    <div className="mt-1 text-sm text-slate-500">
-                      {item.productId || "Sem ID de produto"} {item.code ? `· cód. ${item.code}` : ""}
+            <tbody className="divide-y divide-slate-200">
+              {!loading && filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-500">
+                    Nenhum plano encontrado.
+                  </td>
+                </tr>
+              ) : null}
+
+              {filtered.map((item) => (
+                <tr key={item.id} className="hover:bg-slate-50/70">
+                  <td className="px-5 py-5 text-lg font-semibold text-slate-600">{item.code || "—"}</td>
+                  <td className="px-5 py-5 text-slate-500">{formatDate(item.createdAt)}</td>
+                  <td className="px-5 py-5">
+                    <div className="font-semibold text-slate-800">{item.title || "—"}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {item.productId || "Sem ID Eduzz"}
+                      {item.price != null ? ` · ${formatCurrency(item.price, item.currency || "BRL")}` : ""}
                     </div>
-                    {item.description ? (
-                      <div className="mt-2 line-clamp-2 text-sm text-slate-500">{item.description}</div>
-                    ) : null}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <StatusBadge status={item.status} source={item.source} />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {item.source === "eduzz" ? (
+                        <span className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-bold uppercase text-violet-700">
+                          Sincronizado
+                        </span>
+                      ) : null}
                       {item.moderation ? (
-                        <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-bold uppercase text-sky-700">
+                        <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase text-sky-700">
                           {item.moderation}
                         </span>
                       ) : null}
                       {item.paymentType ? (
-                        <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase text-slate-600">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase text-slate-600">
                           {item.paymentType}
                         </span>
                       ) : null}
                     </div>
-                    {item.lastSyncedAt ? (
-                      <div className="mt-2 text-xs text-slate-400">
-                        Última sincronização: {formatDate(item.lastSyncedAt)}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status</div>
-                <div className="text-lg font-semibold text-slate-800 capitalize">{item.status || "ativo"}</div>
-              </div>
-
-              <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Preço</div>
-                <div className="text-xl font-semibold text-emerald-600">
-                  {formatCurrency(item.price, item.currency || "BRL")}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap justify-start gap-2 md:justify-end">
-                <Button variant="primary" size="sm" onClick={() => openEdit(item)}>
-                  Editar
-                </Button>
-                <Button variant="danger" size="sm" onClick={() => void remove(item)}>
-                  Excluir
-                </Button>
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className="px-5 py-5">
+                    <StatusBadge status={item.status} source={item.source} />
+                  </td>
+                  <td className="px-5 py-5">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="primary" size="sm" onClick={() => openEdit(item)}>
+                        Editar
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => void remove(item)}>
+                        Excluir
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

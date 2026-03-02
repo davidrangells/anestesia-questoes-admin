@@ -58,6 +58,63 @@ const ESTADOS = [
   "Tocantins",
 ];
 
+const ESTADO_POR_UF: Record<string, string> = {
+  AC: "Acre",
+  AL: "Alagoas",
+  AP: "Amapá",
+  AM: "Amazonas",
+  BA: "Bahia",
+  CE: "Ceará",
+  DF: "Distrito Federal",
+  ES: "Espírito Santo",
+  GO: "Goiás",
+  MA: "Maranhão",
+  MT: "Mato Grosso",
+  MS: "Mato Grosso do Sul",
+  MG: "Minas Gerais",
+  PA: "Pará",
+  PB: "Paraíba",
+  PR: "Paraná",
+  PE: "Pernambuco",
+  PI: "Piauí",
+  RJ: "Rio de Janeiro",
+  RN: "Rio Grande do Norte",
+  RS: "Rio Grande do Sul",
+  RO: "Rondônia",
+  RR: "Roraima",
+  SC: "Santa Catarina",
+  SP: "São Paulo",
+  SE: "Sergipe",
+  TO: "Tocantins",
+};
+
+const ESTADO_NORMALIZADO_MAP = new Map(
+  ESTADOS.map((estado) => [
+    estado
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase(),
+    estado,
+  ])
+);
+
+function normalizeEstado(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  const upper = raw.toUpperCase();
+  if (ESTADO_POR_UF[upper]) {
+    return ESTADO_POR_UF[upper];
+  }
+
+  const normalized = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return ESTADO_NORMALIZADO_MAP.get(normalized) || raw;
+}
+
 function Field({
   label,
   value,
@@ -183,7 +240,7 @@ export default function EditarAlunoPage() {
               complement: String(address.complement ?? profile.complement ?? ""),
               zipCode: String(address.zipCode ?? profile.zipCode ?? ""),
               city: String(address.city ?? profile.city ?? ""),
-              state: String(address.state ?? profile.state ?? ""),
+              state: normalizeEstado(address.state ?? profile.state ?? ""),
             },
           },
         });

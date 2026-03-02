@@ -107,6 +107,106 @@ function toDateOrNull(v: unknown): Date | null {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
+const STATE_NAME_BY_UF: Record<string, string> = {
+  AC: "Acre",
+  AL: "Alagoas",
+  AP: "Amapá",
+  AM: "Amazonas",
+  BA: "Bahia",
+  CE: "Ceará",
+  DF: "Distrito Federal",
+  ES: "Espírito Santo",
+  GO: "Goiás",
+  MA: "Maranhão",
+  MT: "Mato Grosso",
+  MS: "Mato Grosso do Sul",
+  MG: "Minas Gerais",
+  PA: "Pará",
+  PB: "Paraíba",
+  PR: "Paraná",
+  PE: "Pernambuco",
+  PI: "Piauí",
+  RJ: "Rio de Janeiro",
+  RN: "Rio Grande do Norte",
+  RS: "Rio Grande do Sul",
+  RO: "Rondônia",
+  RR: "Roraima",
+  SC: "Santa Catarina",
+  SP: "São Paulo",
+  SE: "Sergipe",
+  TO: "Tocantins",
+};
+
+const STATE_NAME_BY_NORMALIZED: Record<string, string> = Object.fromEntries(
+  Object.values(STATE_NAME_BY_UF).map((name) => [
+    name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase(),
+    name,
+  ])
+);
+
+function normalizeStateName(value: unknown): string | null {
+  const raw = pickFirstString(value);
+  if (!raw) return null;
+
+  const upper = raw.toUpperCase();
+  if (STATE_NAME_BY_UF[upper]) {
+    return STATE_NAME_BY_UF[upper];
+  }
+
+  const normalized = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return STATE_NAME_BY_NORMALIZED[normalized] || raw;
+}
+
+function resolveAddressSource(...sources: Array<Record<string, unknown> | null | undefined>) {
+  for (const source of sources) {
+    if (!source || typeof source !== "object") continue;
+
+    const nested = source.address;
+    if (nested && typeof nested === "object") {
+      const nestedAddress = nested as Record<string, unknown>;
+      const hasNestedValue = [
+        nestedAddress.street,
+        nestedAddress.number,
+        nestedAddress.neighborhood,
+        nestedAddress.complement,
+        nestedAddress.city,
+        nestedAddress.state,
+        nestedAddress.zipCode,
+        nestedAddress.country,
+      ].some((value) => pickFirstString(value));
+
+      if (hasNestedValue) {
+        return nestedAddress;
+      }
+    }
+
+    const flatSource = source as Record<string, unknown>;
+    const hasFlatValue = [
+      flatSource.street,
+      flatSource.number,
+      flatSource.neighborhood,
+      flatSource.complement,
+      flatSource.city,
+      flatSource.state,
+      flatSource.zipCode,
+      flatSource.country,
+    ].some((value) => pickFirstString(value));
+
+    if (hasFlatValue) {
+      return flatSource;
+    }
+  }
+
+  return {};
+}
+
 async function resolvePlanMatch(params: {
   db: FirebaseFirestore.Firestore;
   productId: string | null;
@@ -333,12 +433,12 @@ export async function POST(req: NextRequest) {
         : Object.keys(buyerProfile).length > 0
           ? buyerProfile
           : customerProfile;
-    const address =
-      profileSource?.address ||
-      buyerProfile?.address ||
-      customerProfile?.address ||
-      (data as any)?.address ||
-      {};
+    const address = resolveAddressSource(
+      profileSource,
+      buyerProfile,
+      customerProfile,
+      (data as any)?.address as Record<string, unknown> | undefined
+    );
 
     const profilePayload = {
       name: pickFirstString(profileSource?.name, (data as any)?.name) || null,
@@ -356,7 +456,7 @@ export async function POST(req: NextRequest) {
         complement: pickFirstString(address?.complement) || null,
         neighborhood: pickFirstString(address?.neighborhood) || null,
         city: pickFirstString(address?.city) || null,
-        state: pickFirstString(address?.state) || null,
+        state: normalizeStateName(address?.state),
         zipCode: pickFirstString(address?.zipCode) || null,
         country: pickFirstString(address?.country) || null,
       },
