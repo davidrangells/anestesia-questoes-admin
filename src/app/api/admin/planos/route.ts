@@ -47,6 +47,11 @@ function sanitizeBody(body: unknown) {
     code: pickString(payload.code),
     title: pickString(payload.title),
     productId: pickString(payload.productId),
+    description: pickString(payload.description),
+    imageUrl: pickString(payload.imageUrl),
+    moderation: pickString(payload.moderation),
+    paymentType: pickString(payload.paymentType),
+    source: pickString(payload.source) === "eduzz" ? "eduzz" : "manual",
     status: pickString(payload.status) === "inativo" ? "inativo" : "ativo",
     price: pickNumber(payload.price),
   };
@@ -87,10 +92,16 @@ export async function POST(req: NextRequest) {
       code: payload.code,
       title: payload.title,
       productId: payload.productId || null,
+      description: payload.description || null,
+      imageUrl: payload.imageUrl || null,
+      moderation: payload.moderation || null,
+      paymentType: payload.paymentType || null,
+      source: payload.source,
       status: payload.status,
       price: payload.price,
       createdAt: now,
       updatedAt: now,
+      lastSyncedAt: payload.source === "eduzz" ? now : null,
     });
 
     return NextResponse.json({ ok: true, id: ref.id }, { status: 201 });
