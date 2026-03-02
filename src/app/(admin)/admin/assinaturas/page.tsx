@@ -57,7 +57,7 @@ function StatusBadge({ status }: { status: AssinaturaItem["status"] }) {
       : "bg-slate-100 text-slate-600";
 
   return (
-    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase ${cls}`}>
+    <span className={`inline-flex rounded-full px-3 py-0.5 text-xs font-bold uppercase ${cls}`}>
       {status}
     </span>
   );
@@ -75,7 +75,7 @@ function PlanoBadge({ origem }: { origem: AssinaturaItem["planoOrigem"] }) {
 
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${item.className}`}
+      className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase ${item.className}`}
     >
       {item.label}
     </span>
@@ -275,13 +275,13 @@ export default function AssinaturasPage() {
           <table className="min-w-[1180px] w-full text-sm">
             <thead className="border-b bg-slate-100/80 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
               <tr>
-                <th className="px-5 py-4 text-left">Aluno</th>
-                <th className="px-5 py-4 text-left">Origem</th>
-                <th className="px-5 py-4 text-left">Plano</th>
-                <th className="px-5 py-4 text-left">Validade</th>
-                <th className="px-5 py-4 text-left">Status</th>
-                <th className="px-5 py-4 text-left">Ação rápida</th>
-                <th className="px-5 py-4 text-right">Ações</th>
+                <th className="px-5 py-3 text-left">Aluno</th>
+                <th className="px-5 py-3 text-left">Origem</th>
+                <th className="px-5 py-3 text-left">Plano</th>
+                <th className="px-5 py-3 text-left">Validade</th>
+                <th className="px-5 py-3 text-left">Status</th>
+                <th className="px-5 py-3 text-left">Ação rápida</th>
+                <th className="px-5 py-3 text-right">Ações</th>
               </tr>
             </thead>
 
@@ -296,22 +296,22 @@ export default function AssinaturasPage() {
 
               {filtered.map((item) => (
                 <tr key={item.uid} className="hover:bg-slate-50/70">
-                  <td className="px-5 py-5">
+                  <td className="px-5 py-4">
                     <div className="font-semibold text-slate-800">{item.aluno}</div>
                     <div className="mt-1 text-xs text-slate-500">{item.email}</div>
                   </td>
-                  <td className="px-5 py-5 text-slate-600 uppercase">{item.origem}</td>
-                  <td className="px-5 py-5 text-slate-600">
+                  <td className="px-5 py-4 text-slate-600 uppercase">{item.origem}</td>
+                  <td className="px-5 py-4 text-slate-600">
                     <div className="font-semibold text-slate-700">{item.plano}</div>
                     <div className="mt-2">
                       <PlanoBadge origem={item.planoOrigem} />
                     </div>
                   </td>
-                  <td className="px-5 py-5 text-slate-600">{item.validade}</td>
-                  <td className="px-5 py-5">
+                  <td className="px-5 py-4 text-slate-600">{item.validade}</td>
+                  <td className="px-5 py-4">
                     <StatusBadge status={item.status} />
                   </td>
-                  <td className="px-5 py-5">
+                  <td className="px-5 py-4">
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -331,7 +331,7 @@ export default function AssinaturasPage() {
                       </Button>
                     </div>
                   </td>
-                  <td className="px-5 py-5">
+                  <td className="px-5 py-4">
                     <div className="flex justify-end gap-2">
                       <Link
                         href={`/admin/assinaturas/${item.uid}/fatura`}
