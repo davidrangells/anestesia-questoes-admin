@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
-import { Button, buttonStyles } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { auth, db } from "@/lib/firebase";
 
 type AssinaturaItem = {
@@ -63,23 +63,11 @@ function StatusBadge({ status }: { status: AssinaturaItem["status"] }) {
   );
 }
 
-function PlanoBadge({ origem }: { origem: AssinaturaItem["planoOrigem"] }) {
-  const config = {
-    catalogo: { label: "Catálogo", className: "bg-blue-100 text-blue-700" },
-    eduzz: { label: "Eduzz", className: "bg-violet-100 text-violet-700" },
-    manual: { label: "Manual", className: "bg-slate-100 text-slate-700" },
-    "sem-plano": { label: "Sem plano", className: "bg-slate-100 text-slate-500" },
-  } as const;
-
-  const item = config[origem];
-
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase ${item.className}`}
-    >
-      {item.label}
-    </span>
-  );
+function planoOrigemLabel(origem: AssinaturaItem["planoOrigem"]) {
+  if (origem === "catalogo") return "Catálogo";
+  if (origem === "eduzz") return "Eduzz";
+  if (origem === "manual") return "Manual";
+  return "Sem plano";
 }
 
 export default function AssinaturasPage() {
@@ -297,14 +285,16 @@ export default function AssinaturasPage() {
               {filtered.map((item) => (
                 <tr key={item.uid} className="hover:bg-slate-50/70">
                   <td className="px-5 py-4">
-                    <div className="font-semibold text-slate-800">{item.aluno}</div>
-                    <div className="mt-1 text-xs text-slate-500">{item.email}</div>
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="font-semibold text-slate-800">{item.aluno}</span>
+                      <span className="text-xs text-slate-500">{item.email}</span>
+                    </div>
                   </td>
                   <td className="px-5 py-4 text-slate-600 uppercase">{item.origem}</td>
                   <td className="px-5 py-4 text-slate-600">
                     <div className="font-semibold text-slate-700">{item.plano}</div>
-                    <div className="mt-2">
-                      <PlanoBadge origem={item.planoOrigem} />
+                    <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      {planoOrigemLabel(item.planoOrigem)}
                     </div>
                   </td>
                   <td className="px-5 py-4 text-slate-600">{item.validade}</td>
@@ -315,6 +305,7 @@ export default function AssinaturasPage() {
                     <div className="flex gap-2">
                       <Button
                         size="sm"
+                        className="min-h-8 rounded-lg px-2.5 py-1 text-xs"
                         variant={item.status === "ativo" ? "primary" : "secondary"}
                         disabled={updatingUid === item.uid}
                         onClick={() => quickUpdateStatus(item, "ativo")}
@@ -323,6 +314,7 @@ export default function AssinaturasPage() {
                       </Button>
                       <Button
                         size="sm"
+                        className="min-h-8 rounded-lg px-2.5 py-1 text-xs"
                         variant={item.status === "pendente" ? "primary" : "secondary"}
                         disabled={updatingUid === item.uid}
                         onClick={() => quickUpdateStatus(item, "pendente")}
@@ -335,13 +327,13 @@ export default function AssinaturasPage() {
                     <div className="flex justify-end gap-2">
                       <Link
                         href={`/admin/assinaturas/${item.uid}/fatura`}
-                        className={buttonStyles({ variant: "secondary", size: "sm" })}
+                        className="inline-flex min-h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                       >
                         Gerenciar
                       </Link>
                       <Link
                         href={`/admin/assinaturas/${item.uid}`}
-                        className={buttonStyles({ variant: "primary", size: "sm" })}
+                        className="inline-flex min-h-8 items-center justify-center rounded-lg border border-slate-900 bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white transition hover:border-slate-800 hover:bg-slate-800"
                       >
                         Editar
                       </Link>
