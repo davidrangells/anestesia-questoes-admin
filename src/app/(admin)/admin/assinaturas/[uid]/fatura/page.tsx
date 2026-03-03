@@ -202,7 +202,7 @@ export default function FaturaPage() {
         }),
       });
 
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as { ok: boolean; error?: string; message?: string };
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Não foi possível atualizar a fatura.");
       }
@@ -210,8 +210,8 @@ export default function FaturaPage() {
       setCommentDraft("");
       setSuccessMsg(
         mode === "generate_invoice"
-          ? "Nota fiscal registrada com sucesso."
-          : "Status da fatura atualizado com sucesso."
+          ? data.message || "Nota fiscal gerada com sucesso."
+          : "Dados salvos com sucesso."
       );
       await load();
     } catch (error) {
@@ -236,7 +236,7 @@ export default function FaturaPage() {
             disabled={saving}
             onClick={() => void runAction("generate_invoice")}
           >
-            Gerar nota fiscal
+            Gerar nota no Bling
           </Button>
           <Button
             variant="primary"

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
+import { generateBlingServiceInvoice } from "@/lib/bling";
 
 function pickString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -97,8 +98,22 @@ export async function PATCH(
 
     const entRef = adminDb.collection("entitlements").doc(uid);
     const billingRef = adminDb.collection("billing_records").doc(uid);
+    const userRef = adminDb.collection("users").doc(uid);
+    const profileRef = adminDb.collection("users").doc(uid).collection("profile").doc("main");
 
-    const [entSnap, billingSnap] = await Promise.all([entRef.get(), billingRef.get()]);
+    const [userSnap, profileSnap, entSnap, billingSnap] = await Promise.all([
+      userRef.get(),
+      profileRef.get(),
+      entRef.get(),
+      billingRef.get(),
+    ]);
+
+    if (!userSnap.exists) {
+      return NextResponse.json({ ok: false, error: "Aluno não encontrado." }, { status: 404 });
+    }
+
+    const user = userSnap.data() ?? {};
+    const profile = profileSnap.exists ? profileSnap.data() ?? {} : {};
     const entitlement = entSnap.exists ? entSnap.data() ?? {} : {};
     const billing = billingSnap.exists ? billingSnap.data() ?? {} : {};
     const invoices = ensureArray<Record<string, unknown>>(billing.invoices);
@@ -106,14 +121,29 @@ export async function PATCH(
     const now = new Date();
 
     if (mode === "generate_invoice") {
-      const invoiceNumber = `NFSe-${String(invoices.length + 1).padStart(3, "0")}`;
+      const result = await generateBlingServiceInvoice({
+        uid,
+        user,
+        profile,
+        entitlement,
+        invoiceCode:
+          pickString(entitlement.invoiceId) ||
+          pickString(entitlement.lastEventId) ||
+          uid,
+      });
+
       const invoice = {
-        id: `nf_${Date.now().toString(36)}`,
+        id: result.providerId || `nf_${Date.now().toString(36)}`,
         createdAt: now,
-        service: pickString(entitlement.productTitle) || "Assinatura",
-        invoiceNumber,
-        total: pickNumber(entitlement.amountPaid),
-        status: "emitida",
+        service: result.service,
+        invoiceNumber: result.invoiceNumber || `NFSe-${String(invoices.length + 1).padStart(3, "0")}`,
+        total: result.total ?? pickNumber(entitlement.amountPaid),
+        status: result.status || "emitida",
+        provider: result.provider,
+        providerId: result.providerId,
+        link: result.link,
+        requestPayload: result.requestPayload,
+        rawResponse: result.rawResponse,
       };
 
       await billingRef.set(
@@ -125,8 +155,10 @@ export async function PATCH(
             {
               id: `mv_${Date.now().toString(36)}`,
               createdAt: now,
-              status: "nota_fiscal_emitida",
-              comment: comment || `Nota fiscal ${invoiceNumber} gerada manualmente.`,
+              status: "nota_fiscal_emitida_bling",
+              comment:
+                comment ||
+                `Nota fiscal ${String(invoice.invoiceNumber)} gerada manualmente no Bling.`,
             },
           ],
           updatedAt: now,
@@ -134,7 +166,14 @@ export async function PATCH(
         { merge: true }
       );
 
-      return NextResponse.json({ ok: true }, { status: 200 });
+      return NextResponse.json(
+        {
+          ok: true,
+          message: `Nota fiscal ${String(invoice.invoiceNumber)} gerada no Bling com sucesso.`,
+          invoice,
+        },
+        { status: 200 }
+      );
     }
 
     if (mode === "change_status") {

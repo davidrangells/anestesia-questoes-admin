@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AdminShell from "@/components/AdminShell";
+import BlingSettingsCard from "@/components/admin/BlingSettingsCard";
 
 function ConfigItem({
   label,
@@ -45,51 +46,61 @@ export default function ConfiguracoesPage() {
       process.env.EDUZZ_PERSONAL_TOKEN ||
       process.env.EDUZZ_API_TOKEN
   );
+  const hasBlingClient = Boolean(
+    process.env.BLING_CLIENT_ID && process.env.BLING_CLIENT_SECRET
+  );
 
   return (
     <AdminShell
       title="Configurações"
-      subtitle="Visão rápida do ambiente, integrações e atalhos de manutenção do gestor."
+      subtitle="Integrações, parâmetros fiscais e atalhos de manutenção do gestor."
     >
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-5">
-            <div className="text-2xl font-black text-slate-900">Ambiente</div>
+      <div className="space-y-6">
+        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-5">
+              <div className="text-2xl font-black text-slate-900">Ambiente</div>
+            </div>
+
+            <div className="grid gap-4 p-5">
+              <ConfigItem label="Ambiente atual" value={environment} />
+              <ConfigItem label="Projeto Firebase" value={projectId} />
+              <ConfigItem
+                label="Integração Eduzz"
+                value={hasEduzz ? "Token configurado" : "Token pendente"}
+              />
+              <ConfigItem
+                label="Bling OAuth (client)"
+                value={hasBlingClient ? "Client ID/Secret configurados" : "Client ID/Secret pendentes"}
+              />
+            </div>
           </div>
 
-          <div className="grid gap-4 p-5">
-            <ConfigItem label="Ambiente atual" value={environment} />
-            <ConfigItem label="Projeto Firebase" value={projectId} />
-            <ConfigItem
-              label="Integração Eduzz"
-              value={hasEduzz ? "Token configurado" : "Token pendente"}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Shortcut
+              href="/admin/administradores"
+              title="Administradores"
+              desc="Controle de acessos ao dashboard."
             />
-            <ConfigItem label="Versão do painel" value="Admin consolidado 2026" />
+            <Shortcut
+              href="/admin/pagamento"
+              title="Pagamento"
+              desc="Estado financeiro e integrações."
+            />
+            <Shortcut
+              href="/admin/faturas"
+              title="Faturas"
+              desc="Acompanhe cobranças e emita notas manualmente."
+            />
+            <Shortcut
+              href="/admin/importador"
+              title="Importador / Exportador"
+              desc="Backup e atualização do banco de questões."
+            />
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Shortcut
-            href="/admin/administradores"
-            title="Administradores"
-            desc="Controle de acessos ao dashboard."
-          />
-          <Shortcut
-            href="/admin/pagamento"
-            title="Pagamento"
-            desc="Estado financeiro e integração com Eduzz."
-          />
-          <Shortcut
-            href="/admin/midias"
-            title="Galeria de mídias"
-            desc="Revise arquivos e URLs cadastradas."
-          />
-          <Shortcut
-            href="/admin/importador"
-            title="Importador / Exportador"
-            desc="Backup e atualização do banco de questões."
-          />
-        </div>
+        <BlingSettingsCard />
       </div>
     </AdminShell>
   );
