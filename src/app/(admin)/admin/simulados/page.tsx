@@ -180,21 +180,21 @@ export default function SimuladosPage() {
 
               {filtered.map((item) => (
                 <tr key={item.sessionId} className="hover:bg-slate-50/70">
-                  <td className="px-5 py-5 text-slate-600">
+                  <td className="px-5 py-4 text-slate-600">
                     <div>{item.createdAt}</div>
                     <div className="mt-1 text-xs text-slate-400">Encerrado: {item.endedAt}</div>
                   </td>
-                  <td className="px-5 py-5 font-semibold text-slate-800">{item.aluno}</td>
-                  <td className="px-5 py-5 text-slate-600">{item.totalQuestions}</td>
-                  <td className="px-5 py-5">
+                  <td className="px-5 py-4 font-semibold text-slate-800">{item.aluno}</td>
+                  <td className="px-5 py-4 text-slate-600">{item.totalQuestions}</td>
+                  <td className="px-5 py-4">
                     <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
                       {item.nota.toFixed(1)}%
                     </span>
                   </td>
-                  <td className="px-5 py-5">
+                  <td className="px-5 py-4">
                     <StatusBadge status={item.status} />
                   </td>
-                  <td className="px-5 py-5">
+                  <td className="px-5 py-4">
                     <div className="flex justify-end gap-2">
                       <Link
                         href={`/admin/simulados/${item.uid}/${item.sessionId}`}

@@ -151,14 +151,19 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
               icon="📥"
               onNavigate={handleNavigate}
             />
-            <Item disabled label="Pagamento" icon="💰" />
+            <Item href="/admin/pagamento" label="Pagamento" icon="💰" onNavigate={handleNavigate} />
             <Item
               href="/admin/administradores"
               label="Administradores"
               icon="🛡️"
               onNavigate={handleNavigate}
             />
-            <Item disabled label="Configurações" icon="⚙️" />
+            <Item
+              href="/admin/configuracoes"
+              label="Configurações"
+              icon="⚙️"
+              onNavigate={handleNavigate}
+            />
           </Section>
         </nav>
       </div>

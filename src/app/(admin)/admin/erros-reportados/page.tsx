@@ -20,6 +20,7 @@ import {
   DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { buttonStyles } from "@/components/ui/Button";
 
 type ReportStatus = "aberto" | "resolvido" | "ignorado";
 
@@ -473,22 +474,6 @@ export default function ErrosReportadosPage() {
             </select>
           </div>
 
-          <div className="lg:col-span-1 flex gap-2">
-            <button
-              onClick={fetchPrev}
-              disabled={loading || cursorStack.length === 0}
-              className="w-full rounded-xl border bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <button
-              onClick={fetchNext}
-              disabled={loading || !lastDoc}
-              className="w-full rounded-xl border bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"
-            >
-              Próxima
-            </button>
-          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -504,7 +489,7 @@ export default function ErrosReportadosPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="w-full min-w-[1120px] text-sm">
             <thead className="text-xs uppercase text-slate-500 border-b bg-slate-50/60">
               <tr>
                 <th className="text-left px-5 py-3">Data</th>
@@ -581,10 +566,10 @@ export default function ErrosReportadosPage() {
                       </td>
 
                       <td className="px-5 py-4 text-right">
-                        <div className="inline-flex items-center gap-2">
+                        <div className="inline-flex flex-wrap items-center justify-end gap-2">
                           <button
                             onClick={() => openModal(r)}
-                            className="inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+                            className={buttonStyles({ variant: "secondary", size: "sm" })}
                           >
                             Ver
                           </button>
@@ -593,11 +578,7 @@ export default function ErrosReportadosPage() {
                             <button
                               onClick={() => setStatus(r, "resolvido")}
                               disabled={updatingId === r.id}
-                              className={cn(
-                                "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold text-white",
-                                "bg-emerald-600 hover:bg-emerald-700",
-                                updatingId === r.id ? "opacity-60 cursor-wait" : ""
-                              )}
+                              className={cn(buttonStyles({ variant: "primary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
                               title="Marcar como resolvido"
                             >
                               {updatingId === r.id ? "Salvando..." : "Resolver"}
@@ -606,10 +587,7 @@ export default function ErrosReportadosPage() {
                             <button
                               onClick={() => setStatus(r, "aberto")}
                               disabled={updatingId === r.id}
-                              className={cn(
-                                "inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50",
-                                updatingId === r.id ? "opacity-60 cursor-wait" : ""
-                              )}
+                              className={cn(buttonStyles({ variant: "secondary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
                               title="Reabrir"
                             >
                               {updatingId === r.id ? "Salvando..." : "Reabrir"}
@@ -620,10 +598,7 @@ export default function ErrosReportadosPage() {
                             <button
                               onClick={() => setStatus(r, "ignorado")}
                               disabled={updatingId === r.id}
-                              className={cn(
-                                "inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50",
-                                updatingId === r.id ? "opacity-60 cursor-wait" : ""
-                              )}
+                              className={cn(buttonStyles({ variant: "secondary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
                               title="Marcar como ignorado"
                             >
                               Ignorar
@@ -632,10 +607,7 @@ export default function ErrosReportadosPage() {
                             <button
                               onClick={() => setStatus(r, "aberto")}
                               disabled={updatingId === r.id}
-                              className={cn(
-                                "inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50",
-                                updatingId === r.id ? "opacity-60 cursor-wait" : ""
-                              )}
+                              className={cn(buttonStyles({ variant: "secondary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
                               title="Voltar para aberto"
                             >
                               Reabrir
@@ -645,7 +617,7 @@ export default function ErrosReportadosPage() {
                           {qId ? (
                             <Link
                               href={`/admin/questoes/${qId}`}
-                              className="inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+                              className={buttonStyles({ variant: "secondary", size: "sm" })}
                               title="Abrir edição da questão"
                             >
                               Ir para questão
@@ -670,14 +642,14 @@ export default function ErrosReportadosPage() {
             <button
               onClick={fetchPrev}
               disabled={loading || cursorStack.length === 0}
-              className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              className={buttonStyles({ variant: "secondary", size: "sm" })}
             >
               Anterior
             </button>
             <button
               onClick={fetchNext}
               disabled={loading || !lastDoc}
-              className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              className={buttonStyles({ variant: "secondary", size: "sm" })}
             >
               Próxima
             </button>
