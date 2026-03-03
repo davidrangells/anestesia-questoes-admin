@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/Button";
 
@@ -51,11 +52,37 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export default function BlingSettingsCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [authorizing, setAuthorizing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [form, setForm] = useState<SettingsPayload>(DEFAULT_FORM);
   const [accessTokenDraft, setAccessTokenDraft] = useState("");
   const [refreshTokenDraft, setRefreshTokenDraft] = useState("");
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const blingStatus = searchParams.get("bling");
+    const rawMessage = searchParams.get("message");
+
+    if (blingStatus === "connected") {
+      setSuccessMsg("Conexão com o Bling concluída com sucesso.");
+      setErrorMsg(null);
+      void load();
+      return;
+    }
+
+    if (blingStatus === "error") {
+      const message = rawMessage || "";
+      const translated =
+        message === "estado_invalido"
+          ? "Falha na autorização do Bling: o estado da sessão expirou ou não confere. Inicie a conexão novamente."
+          : message === "callback_sem_code"
+            ? "Falha na autorização do Bling: o callback não retornou o código OAuth."
+            : `Falha na autorização do Bling${message ? `: ${message}` : "."}`;
+      setErrorMsg(translated);
+      return;
+    }
+  }, [searchParams]);
 
   const load = async () => {
     setLoading(true);
@@ -170,6 +197,41 @@ export default function BlingSettingsCard() {
     }
   };
 
+  const startOAuth = async () => {
+    setAuthorizing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+      const res = await fetch("/api/admin/configuracoes/bling/oauth/authorize", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        authorizeUrl?: string;
+        redirectUri?: string;
+      };
+
+      if (!res.ok || !data.ok || !data.authorizeUrl) {
+        throw new Error(data.error || "Não foi possível iniciar a autorização do Bling.");
+      }
+
+      window.location.assign(data.authorizeUrl);
+    } catch (error) {
+      setErrorMsg(
+        error instanceof Error ? error.message : "Não foi possível iniciar a autorização do Bling."
+      );
+      setAuthorizing(false);
+    }
+  };
+
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-5">
@@ -230,6 +292,24 @@ export default function BlingSettingsCard() {
                 ? "Pronto para renovação"
                 : "Configuração incompleta"}
             </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <FieldLabel>OAuth do Bling</FieldLabel>
+              <div className="text-sm text-slate-600">
+                Use esta ação para gerar e salvar automaticamente o access token e o refresh token.
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => void startOAuth()}
+              disabled={authorizing || saving || loading}
+            >
+              {authorizing ? "Redirecionando..." : "Conectar Bling"}
+            </Button>
           </div>
         </div>
 

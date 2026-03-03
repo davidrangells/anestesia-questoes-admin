@@ -45,6 +45,7 @@ type BlingInvoiceResult = {
 const SETTINGS_DOC = adminDb.collection("system_settings").doc("bling");
 const DEFAULT_API_BASE = "https://api.bling.com.br";
 const DEFAULT_CONTACTS_PATH = "/Api/v3/contatos";
+const DEFAULT_CALLBACK_PATH = "/api/admin/configuracoes/bling/oauth/callback";
 
 function pickString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -71,6 +72,14 @@ function normalizePath(value: string, fallback = "") {
 
 function joinUrl(base: string, path: string) {
   return `${base.replace(/\/+$/, "")}${normalizePath(path)}`;
+}
+
+function requiredEnv(name: string) {
+  const value = pickString(process.env[name]);
+  if (!value) {
+    throw new Error(`Missing env var: ${name}`);
+  }
+  return value;
 }
 
 function getAddressSource(profile: RecordData, user: RecordData, entitlement: RecordData) {
@@ -274,6 +283,70 @@ async function refreshBlingAccessToken(settings: BlingSettings) {
     ...settings,
     accessToken,
     refreshToken,
+  };
+}
+
+export function resolveBlingRedirectUri(origin: string) {
+  const envRedirect = pickString(process.env.BLING_REDIRECT_URI);
+  if (envRedirect) return envRedirect;
+  return `${origin.replace(/\/+$/, "")}${DEFAULT_CALLBACK_PATH}`;
+}
+
+export function buildBlingAuthorizeUrl(origin: string, state: string) {
+  const clientId = requiredEnv("BLING_CLIENT_ID");
+  const redirectUri = resolveBlingRedirectUri(origin);
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    state,
+  });
+
+  return `https://www.bling.com.br/Api/v3/oauth/authorize?${params.toString()}`;
+}
+
+export async function exchangeBlingAuthorizationCode(code: string, origin: string) {
+  const clientId = requiredEnv("BLING_CLIENT_ID");
+  const clientSecret = requiredEnv("BLING_CLIENT_SECRET");
+  const redirectUri = resolveBlingRedirectUri(origin);
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: redirectUri,
+  });
+
+  const res = await fetch("https://www.bling.com.br/Api/v3/oauth/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+      "enable-jwt": "1",
+    },
+    body,
+  });
+
+  const data = (await res.json().catch(() => ({}))) as RecordData;
+
+  if (!res.ok) {
+    const msg =
+      pickString(data.error_description) || pickString(data.error) || "Falha ao autorizar o app do Bling.";
+    throw new Error(msg);
+  }
+
+  const accessToken = pickString(data.access_token);
+  const refreshToken = pickString(data.refresh_token);
+
+  if (!accessToken || !refreshToken) {
+    throw new Error("O Bling não retornou access token e refresh token válidos.");
+  }
+
+  return {
+    accessToken,
+    refreshToken,
+    expiresIn: pickNumber(data.expires_in),
+    scope: pickString(data.scope),
   };
 }
 
