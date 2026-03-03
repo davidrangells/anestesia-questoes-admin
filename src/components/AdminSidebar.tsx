@@ -12,19 +12,36 @@ function Item({
   href,
   label,
   icon,
+  disabled = false,
   onNavigate,
 }: {
-  href: string;
+  href?: string;
   label: string;
   icon: string;
+  disabled?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const isDashboard = href === "/admin";
 
-  const active = isDashboard
+  const active = href && (isDashboard
     ? pathname === "/admin"
-    : pathname?.startsWith(href);
+    : pathname?.startsWith(href));
+
+  if (!href || disabled) {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold",
+          "cursor-not-allowed text-slate-400"
+        )}
+        aria-disabled="true"
+      >
+        <span className="text-base">{icon}</span>
+        <span className="truncate">{label}</span>
+      </div>
+    );
+  }
 
   return (
     <Link
@@ -40,6 +57,23 @@ function Item({
       <span className="text-base">{icon}</span>
       <span className="truncate">{label}</span>
     </Link>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-5 first:mt-0">
+      <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+        {title}
+      </div>
+      <div className="flex flex-col gap-1">{children}</div>
+    </div>
   );
 }
 
@@ -75,35 +109,47 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
       </div>
 
       <div className="px-4 py-4">
-        <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          Navegação
-        </div>
-        <nav className="flex flex-col gap-2">
-          <Item href="/admin" label="Dashboard" icon="🏠" onNavigate={handleNavigate} />
-          <Item
-            href="/admin/questoes"
-            label="Banco de Questões"
-            icon="🧠"
-            onNavigate={handleNavigate}
-          />
-          <Item href="/admin/provas" label="Provas" icon="📝" onNavigate={handleNavigate} />
-          <Item href="/admin/niveis" label="Níveis" icon="📚" onNavigate={handleNavigate} />
-          <Item href="/admin/temas" label="Temas" icon="🏷️" onNavigate={handleNavigate} />
-          <Item href="/admin/midias" label="Mídias" icon="🖼️" onNavigate={handleNavigate} />
-          <Item
-            href="/admin/erros-reportados"
-            label="Erros reportados"
-            icon="🧯"
-            onNavigate={handleNavigate}
-          />
-          <Item href="/admin/alunos" label="Alunos" icon="👤" onNavigate={handleNavigate} />
-          <Item
-            href="/admin/assinaturas"
-            label="Assinaturas"
-            icon="💳"
-            onNavigate={handleNavigate}
-          />
-          <Item href="/admin/planos" label="Planos" icon="📦" onNavigate={handleNavigate} />
+        <nav>
+          <Section title="Navegação">
+            <Item href="/admin" label="Dashboard" icon="🏠" onNavigate={handleNavigate} />
+          </Section>
+
+          <Section title="Gerenciamento">
+            <Item href="/admin/alunos" label="Alunos" icon="👥" onNavigate={handleNavigate} />
+            <Item href="/admin/provas" label="Provas" icon="📝" onNavigate={handleNavigate} />
+            <Item href="/admin/niveis" label="Níveis" icon="📚" onNavigate={handleNavigate} />
+            <Item href="/admin/temas" label="Temas" icon="🏷️" onNavigate={handleNavigate} />
+            <Item href="/admin/questoes" label="Questões" icon="🧠" onNavigate={handleNavigate} />
+            <Item
+              href="/admin/erros-reportados"
+              label="Erros Reportados"
+              icon="🧯"
+              onNavigate={handleNavigate}
+            />
+            <Item disabled label="Simulados" icon="🧪" />
+          </Section>
+
+          <Section title="Financeiro">
+            <Item
+              href="/admin/assinaturas"
+              label="Assinaturas"
+              icon="💳"
+              onNavigate={handleNavigate}
+            />
+            <Item disabled label="Faturas" icon="🧾" />
+            <Item href="/admin/planos" label="Planos" icon="📦" onNavigate={handleNavigate} />
+          </Section>
+
+          <Section title="CMS">
+            <Item href="/admin/midias" label="Galeria de Mídias" icon="🖼️" onNavigate={handleNavigate} />
+          </Section>
+
+          <Section title="Sistema">
+            <Item disabled label="Importador" icon="📥" />
+            <Item disabled label="Pagamento" icon="💰" />
+            <Item disabled label="Administradores" icon="🛡️" />
+            <Item disabled label="Configurações" icon="⚙️" />
+          </Section>
         </nav>
       </div>
 
