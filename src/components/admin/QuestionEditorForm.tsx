@@ -247,6 +247,15 @@ export function buildQuestionPayload(form: QuestionFormState) {
   };
 }
 
+function normalizeThemeKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function RichTextEditor({
   label,
   helper,
@@ -522,9 +531,22 @@ export function QuestionEditorForm({
           const exam = nextExams.find((item) => item.id === prev.examId) ?? nextExams[0];
           const level = nextLevels.find((item) => item.id === prev.levelId) ?? nextLevels[0];
           const allowedThemes = nextThemes.filter((item) => !level?.id || item.levelId === level.id);
-          const nextThemeIds = prev.themeIds.filter((themeId) =>
+          const persistedThemeIds = prev.themeIds.filter((themeId) =>
             allowedThemes.some((item) => item.id === themeId)
           );
+          const fallbackThemeIds = prev.themes
+            .map((themeTitle) => {
+              const normalizedTheme = normalizeThemeKey(themeTitle);
+              const sameLevelMatch =
+                allowedThemes.find((item) => normalizeThemeKey(item.title) === normalizedTheme) ?? null;
+              if (sameLevelMatch) return sameLevelMatch.id;
+
+              const anyLevelMatch =
+                nextThemes.find((item) => normalizeThemeKey(item.title) === normalizedTheme) ?? null;
+              return anyLevelMatch?.id ?? "";
+            })
+            .filter(Boolean);
+          const nextThemeIds = Array.from(new Set([...persistedThemeIds, ...fallbackThemeIds]));
 
           return {
             ...prev,
@@ -534,7 +556,12 @@ export function QuestionEditorForm({
             level: prev.level || level?.title || prev.level,
             themeIds: nextThemeIds,
             themes: nextThemeIds
-              .map((themeId) => allowedThemes.find((item) => item.id === themeId)?.title || "")
+              .map(
+                (themeId) =>
+                  allowedThemes.find((item) => item.id === themeId)?.title ||
+                  nextThemes.find((item) => item.id === themeId)?.title ||
+                  ""
+              )
               .filter(Boolean),
           };
         });
