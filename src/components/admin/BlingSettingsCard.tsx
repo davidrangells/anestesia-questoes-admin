@@ -58,6 +58,7 @@ export default function BlingSettingsCard() {
   const [form, setForm] = useState<SettingsPayload>(DEFAULT_FORM);
   const [accessTokenDraft, setAccessTokenDraft] = useState("");
   const [refreshTokenDraft, setRefreshTokenDraft] = useState("");
+  const [pendingAuthorizeUrl, setPendingAuthorizeUrl] = useState("");
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -223,6 +224,8 @@ export default function BlingSettingsCard() {
         throw new Error(data.error || "Não foi possível iniciar a autorização do Bling.");
       }
 
+      setPendingAuthorizeUrl(data.authorizeUrl);
+      setSuccessMsg("Redirecionando para o Bling...");
       window.location.assign(data.authorizeUrl);
     } catch (error) {
       setErrorMsg(
@@ -255,6 +258,19 @@ export default function BlingSettingsCard() {
         {successMsg ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {successMsg}
+          </div>
+        ) : null}
+
+        {pendingAuthorizeUrl ? (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            Se o redirecionamento não abrir sozinho, continue por este link:
+            {" "}
+            <a
+              href={pendingAuthorizeUrl}
+              className="font-semibold underline"
+            >
+              Autorizar no Bling
+            </a>
           </div>
         ) : null}
 
