@@ -251,6 +251,7 @@ async function refreshBlingAccessToken(settings: BlingSettings) {
       Authorization: `Basic ${basic}`,
       "Content-Type": "application/x-www-form-urlencoded",
       Accept: "application/json",
+      "enable-jwt": "1",
     },
     body,
   });
@@ -259,7 +260,10 @@ async function refreshBlingAccessToken(settings: BlingSettings) {
 
   if (!res.ok) {
     const msg =
-      pickString(data.error_description) || pickString(data.error) || "Falha ao renovar o token do Bling.";
+      pickString(data.error_description) ||
+      pickString(data.error) ||
+      extractBlingError(data) ||
+      "Falha ao renovar o token do Bling.";
     throw new Error(msg);
   }
 
