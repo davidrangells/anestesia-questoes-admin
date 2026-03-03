@@ -82,6 +82,10 @@ const THEME_ALIASES = {
   "sistema urinario": ["fisiologia e farmacologia do sistema urinario"],
   "etica medica e bioetica responsabilidade profissional do anestesiologista": [
     "etica medica e bioetica. responsabilidade e risco profissional do anestesiologista",
+    "etica medica e bioetica responsabilidade e risco profissional do anestesiologista",
+  ],
+  "etica medica e bioetica. responsabilidade profissional do anestesiologista": [
+    "etica medica e bioetica. responsabilidade e risco profissional do anestesiologista",
   ],
 };
 
@@ -434,7 +438,8 @@ function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
   const docId = normalizeText(row.docId);
   const prompt = normalizeText(row.prompt_text);
   const correctOptionId = normalizeText(row.correctOptionId).toUpperCase();
-  const examType = normalizeText(row.prova_tipo).toUpperCase();
+  const rawExamType = normalizeText(row.prova_tipo).toUpperCase();
+  const examType = rawExamType === "-" ? "" : rawExamType;
   const examYear = parseYear(row.prova_ano);
   const rawLevel = normalizeText(row.nivel).toUpperCase();
   const level = rawLevel === "TODOS" ? "" : rawLevel;
