@@ -146,49 +146,64 @@ export default function BlingSettingsCard() {
     void load();
   }, []);
 
+  const persistSettings = async ({
+    showSuccess = true,
+    includeDraftTokens = true,
+  }: {
+    showSuccess?: boolean;
+    includeDraftTokens?: boolean;
+  } = {}) => {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+    const res = await fetch("/api/admin/configuracoes/bling", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        enabled: form.enabled,
+        apiBaseUrl: form.apiBaseUrl,
+        contactsEndpointPath: form.contactsEndpointPath,
+        nfseEndpointPath: form.nfseEndpointPath,
+        serviceCode: form.serviceCode,
+        serviceDescription: form.serviceDescription,
+        serviceNature: form.serviceNature,
+        serviceListItem: form.serviceListItem,
+        cnae: form.cnae,
+        series: form.series,
+        issRate: form.issRate,
+        defaultComment: form.defaultComment,
+        autoCreateContact: form.autoCreateContact,
+        accessToken: includeDraftTokens ? accessTokenDraft : "",
+        refreshToken: includeDraftTokens ? refreshTokenDraft : "",
+      }),
+    });
+
+    const data = (await res.json()) as { ok: boolean; error?: string };
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Não foi possível salvar a configuração do Bling.");
+    }
+
+    if (includeDraftTokens) {
+      setAccessTokenDraft("");
+      setRefreshTokenDraft("");
+    }
+
+    if (showSuccess) {
+      setSuccessMsg("Dados salvos com sucesso.");
+      await load();
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch("/api/admin/configuracoes/bling", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          enabled: form.enabled,
-          apiBaseUrl: form.apiBaseUrl,
-          contactsEndpointPath: form.contactsEndpointPath,
-          nfseEndpointPath: form.nfseEndpointPath,
-          serviceCode: form.serviceCode,
-          serviceDescription: form.serviceDescription,
-          serviceNature: form.serviceNature,
-          serviceListItem: form.serviceListItem,
-          cnae: form.cnae,
-          series: form.series,
-          issRate: form.issRate,
-          defaultComment: form.defaultComment,
-          autoCreateContact: form.autoCreateContact,
-          accessToken: accessTokenDraft,
-          refreshToken: refreshTokenDraft,
-        }),
-      });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível salvar a configuração do Bling.");
-      }
-
-      setAccessTokenDraft("");
-      setRefreshTokenDraft("");
-      setSuccessMsg("Dados salvos com sucesso.");
-      await load();
+      await persistSettings();
     } catch (error) {
       setErrorMsg(
         error instanceof Error ? error.message : "Não foi possível salvar a configuração do Bling."
@@ -204,6 +219,8 @@ export default function BlingSettingsCard() {
     setSuccessMsg(null);
 
     try {
+      await persistSettings({ showSuccess: false, includeDraftTokens: false });
+
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
