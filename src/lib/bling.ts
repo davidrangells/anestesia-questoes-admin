@@ -375,10 +375,18 @@ export async function exchangeBlingAuthorizationCode(code: string, origin: strin
 function extractBlingError(data: unknown) {
   if (!data || typeof data !== "object") return "";
   const obj = data as RecordData;
+  const nestedError =
+    typeof obj.error === "object" && obj.error !== null ? (obj.error as RecordData) : null;
+  const nestedData =
+    typeof obj.data === "object" && obj.data !== null ? (obj.data as RecordData) : null;
 
   return (
     pickString(obj.message) ||
-    pickString(obj.error?.toString()) ||
+    pickString(nestedError?.message) ||
+    pickString(nestedError?.description) ||
+    (typeof obj.error === "string" ? pickString(obj.error) : "") ||
+    pickString(nestedData?.message) ||
+    pickString(nestedData?.descricao) ||
     pickString(obj.description) ||
     (Array.isArray(obj.errors)
       ? obj.errors
