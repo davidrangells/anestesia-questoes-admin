@@ -1,10 +1,15 @@
 "use client";
 
-import { db } from "@/lib/firebase";
 import { cn } from "@/lib/cn";
+import {
+  loadQuestionMediaGallery,
+  registerQuestionMedia,
+  uploadQuestionAsset,
+  type QuestionGalleryItem,
+} from "@/lib/questionMedia";
 import { Button } from "@/components/ui/Button";
-import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp } from "firebase/firestore";
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type QuestionOption = {
@@ -26,13 +31,6 @@ export type QuestionCatalogOption = {
   status: "ativo" | "inativo";
   levelId?: string | null;
   levelLabel?: string | null;
-};
-
-type MediaGalleryItem = {
-  id: string;
-  url: string;
-  label?: string | null;
-  name?: string | null;
 };
 
 export type QuestionFormState = {
@@ -448,40 +446,6 @@ function Modal({
   );
 }
 
-function safeExt(name: string) {
-  const ext = (name.split(".").pop() || "jpg").toLowerCase();
-  if (!/^[a-z0-9]+$/.test(ext)) return "jpg";
-  if (ext.length > 6) return "jpg";
-  return ext;
-}
-
-async function uploadImage(file: File, folder: string) {
-  const storage = getStorage();
-  const ext = safeExt(file.name);
-  const path = `${folder}/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  const url = await getDownloadURL(storageRef);
-  return { url, path };
-}
-
-async function registerMedia(params: {
-  url: string;
-  path: string;
-  origin: string;
-  kind: "prompt" | "option" | "attachment";
-  label?: string;
-}) {
-  await addDoc(collection(db, "midias"), {
-    url: params.url,
-    path: params.path,
-    origin: params.origin,
-    kind: params.kind,
-    label: params.label || null,
-    createdAt: serverTimestamp(),
-  });
-}
-
 export function QuestionEditorForm({
   mode,
   initialValue,
@@ -499,7 +463,7 @@ export function QuestionEditorForm({
   const [themeOptions, setThemeOptions] = useState<QuestionCatalogOption[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [galleryLoading, setGalleryLoading] = useState(false);
-  const [galleryItems, setGalleryItems] = useState<MediaGalleryItem[]>([]);
+  const [galleryItems, setGalleryItems] = useState<QuestionGalleryItem[]>([]);
   const [commentImageModalOpen, setCommentImageModalOpen] = useState(false);
   const [pendingEditorImageUrl, setPendingEditorImageUrl] = useState<string | null>(null);
 
@@ -639,14 +603,7 @@ export function QuestionEditorForm({
   const loadGalleryItems = async () => {
     setGalleryLoading(true);
     try {
-      const snap = await getDocs(query(collection(db, "midias"), orderBy("createdAt", "desc"), limit(24)));
-      const rows = snap.docs.map((item) => ({
-        id: item.id,
-        url: String(item.data().url ?? ""),
-        label: (item.data().label as string | null) ?? null,
-        name: (item.data().name as string | null) ?? null,
-      }));
-      setGalleryItems(rows.filter((item) => item.url));
+      setGalleryItems(await loadQuestionMediaGallery(24));
     } finally {
       setGalleryLoading(false);
     }
@@ -695,9 +652,9 @@ export function QuestionEditorForm({
   const handleUploadPrompt = async (file: File) => {
     setUploading("prompt");
     try {
-      const { url, path } = await uploadImage(file, "admin_uploads/questionsBank/prompt");
+      const { url, path } = await uploadQuestionAsset(file, "admin_uploads/questionsBank/prompt");
       setForm((prev) => ({ ...prev, imageUrl: url }));
-      await registerMedia({ url, path, origin: "questionsBank", kind: "prompt", label: "Enunciado" });
+      await registerQuestionMedia({ url, path, origin: "questionsBank", kind: "prompt", label: "Enunciado" });
     } finally {
       setUploading(null);
     }
@@ -706,9 +663,9 @@ export function QuestionEditorForm({
   const handleUploadOption = async (optionId: QuestionOption["id"], file: File) => {
     setUploading(optionId);
     try {
-      const { url, path } = await uploadImage(file, `admin_uploads/questionsBank/options/${optionId}`);
+      const { url, path } = await uploadQuestionAsset(file, `admin_uploads/questionsBank/options/${optionId}`);
       setOption(optionId, { imageUrl: url });
-      await registerMedia({
+      await registerQuestionMedia({
         url,
         path,
         origin: "questionsBank",
@@ -723,9 +680,9 @@ export function QuestionEditorForm({
   const handleUploadAttachment = async (file: File) => {
     setUploading("attachment");
     try {
-      const { url, path } = await uploadImage(file, "admin_uploads/questionsBank/attachments");
+      const { url, path } = await uploadQuestionAsset(file, "admin_uploads/questionsBank/attachments");
       addAttachment(file.name, url);
-      await registerMedia({ url, path, origin: "questionsBank", kind: "attachment", label: file.name });
+      await registerQuestionMedia({ url, path, origin: "questionsBank", kind: "attachment", label: file.name });
     } finally {
       setUploading(null);
     }
@@ -734,8 +691,8 @@ export function QuestionEditorForm({
   const handleUploadCommentImage = async (file: File) => {
     setUploading("comment-image");
     try {
-      const { url, path } = await uploadImage(file, "admin_uploads/questionsBank/comment-images");
-      await registerMedia({
+      const { url, path } = await uploadQuestionAsset(file, "admin_uploads/questionsBank/comment-images");
+      await registerQuestionMedia({
         url,
         path,
         origin: "questionsBank",
