@@ -200,22 +200,40 @@ export async function updateBlingSettings(
   },
   adminUid: string
 ) {
+  const current = await readSettingsDoc();
+  const has = (key: string) => Object.prototype.hasOwnProperty.call(input, key);
+
   const payload: RecordData = {
-    enabled: normalizeBool(input.enabled, false),
-    apiBaseUrl: pickString(input.apiBaseUrl) || DEFAULT_API_BASE,
-    contactsEndpointPath:
-      normalizePath(pickString(input.contactsEndpointPath), DEFAULT_CONTACTS_PATH) ||
-      DEFAULT_CONTACTS_PATH,
-    nfseEndpointPath: normalizePath(pickString(input.nfseEndpointPath), ""),
-    serviceCode: pickString(input.serviceCode),
-    serviceDescription: pickString(input.serviceDescription),
-    serviceNature: pickString(input.serviceNature),
-    serviceListItem: pickString(input.serviceListItem),
-    cnae: pickString(input.cnae),
-    series: pickString(input.series),
-    issRate: pickNumber(input.issRate),
-    defaultComment: pickString(input.defaultComment),
-    autoCreateContact: normalizeBool(input.autoCreateContact, false),
+    enabled: has("enabled") ? normalizeBool(input.enabled, false) : current.enabled,
+    apiBaseUrl: has("apiBaseUrl")
+      ? pickString(input.apiBaseUrl) || DEFAULT_API_BASE
+      : current.apiBaseUrl,
+    contactsEndpointPath: has("contactsEndpointPath")
+      ? normalizePath(pickString(input.contactsEndpointPath), DEFAULT_CONTACTS_PATH) ||
+        DEFAULT_CONTACTS_PATH
+      : current.contactsEndpointPath,
+    nfseEndpointPath: has("nfseEndpointPath")
+      ? normalizePath(pickString(input.nfseEndpointPath), "")
+      : current.nfseEndpointPath,
+    serviceCode: has("serviceCode") ? pickString(input.serviceCode) : current.serviceCode,
+    serviceDescription: has("serviceDescription")
+      ? pickString(input.serviceDescription)
+      : current.serviceDescription,
+    serviceNature: has("serviceNature")
+      ? pickString(input.serviceNature)
+      : current.serviceNature,
+    serviceListItem: has("serviceListItem")
+      ? pickString(input.serviceListItem)
+      : current.serviceListItem,
+    cnae: has("cnae") ? pickString(input.cnae) : current.cnae,
+    series: has("series") ? pickString(input.series) : current.series,
+    issRate: has("issRate") ? pickNumber(input.issRate) : current.issRate,
+    defaultComment: has("defaultComment")
+      ? pickString(input.defaultComment)
+      : current.defaultComment,
+    autoCreateContact: has("autoCreateContact")
+      ? normalizeBool(input.autoCreateContact, false)
+      : current.autoCreateContact,
     updatedAt: new Date(),
     updatedBy: adminUid,
   };
