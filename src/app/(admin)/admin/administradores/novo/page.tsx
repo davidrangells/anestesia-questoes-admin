@@ -64,7 +64,7 @@ export default function NovoAdministradorPage() {
         throw new Error(data.error || "Não foi possível criar o administrador.");
       }
 
-      setSuccessMsg("Administrador criado com sucesso.");
+      setSuccessMsg("Cadastro criado com sucesso.");
       setName("");
       setEmail("");
       setPassword("");

@@ -283,11 +283,7 @@ export default function CatalogManagerPage({
       if (entity === "temas") {
         await loadLevels();
       }
-      setSuccessMsg(
-        editing
-          ? `${singularLabel} atualizado com sucesso.`
-          : `${singularLabel} criado com sucesso.`
-      );
+      setSuccessMsg("Dados salvos com sucesso.");
       setModalOpen(false);
       setEditing(null);
     } catch (error) {
@@ -312,7 +308,7 @@ export default function CatalogManagerPage({
       if (entity === "niveis" || entity === "temas") {
         await loadLevels();
       }
-      setSuccessMsg(`${singularLabel} excluído com sucesso.`);
+      setSuccessMsg("Registro excluído com sucesso.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Não foi possível excluir o cadastro.";

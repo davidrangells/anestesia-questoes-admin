@@ -741,11 +741,7 @@ export function QuestionEditorForm({
     setSuccessMsg(null);
     try {
       await onSubmit(buildQuestionPayload(form), form);
-      setSuccessMsg(
-        mode === "create"
-          ? "Questão criada com sucesso."
-          : "Alterações salvas com sucesso."
-      );
+      setSuccessMsg("Dados salvos com sucesso.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao salvar.";
       alert(message);

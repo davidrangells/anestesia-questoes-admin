@@ -185,7 +185,7 @@ export default function EditarAssinaturaPage() {
         throw new Error(data.error || "Não foi possível salvar a assinatura.");
       }
 
-      setSuccessMsg("Assinatura atualizada com sucesso.");
+      setSuccessMsg("Dados salvos com sucesso.");
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Erro ao salvar assinatura.");
     } finally {

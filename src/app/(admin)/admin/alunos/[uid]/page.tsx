@@ -334,7 +334,7 @@ export default function EditarAlunoPage() {
         password: "",
         confirmPassword: "",
       }));
-      setSuccessMsg("Aluno atualizado com sucesso.");
+      setSuccessMsg("Dados salvos com sucesso.");
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Erro ao salvar aluno.");
     } finally {

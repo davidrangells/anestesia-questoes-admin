@@ -251,7 +251,7 @@ export default function PlanosPage() {
       }
 
       setModalOpen(false);
-      setSuccessMsg("Plano salvo com sucesso.");
+      setSuccessMsg("Dados salvos com sucesso.");
       await loadItems();
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Erro ao salvar plano.");
@@ -289,7 +289,7 @@ export default function PlanosPage() {
       }
 
       setSuccessMsg(
-        `Sincronização concluída: ${data.total ?? 0} produtos (${data.created ?? 0} novos, ${data.updated ?? 0} atualizados).`
+        `Sincronização concluída com sucesso: ${data.total ?? 0} produtos (${data.created ?? 0} novos, ${data.updated ?? 0} atualizados).`
       );
       await loadItems();
     } catch (error) {
@@ -318,7 +318,7 @@ export default function PlanosPage() {
         throw new Error(data.error || "Não foi possível excluir o plano.");
       }
 
-      setSuccessMsg("Plano excluído com sucesso.");
+      setSuccessMsg("Registro excluído com sucesso.");
       await loadItems();
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Erro ao excluir plano.");

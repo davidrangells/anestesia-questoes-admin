@@ -127,7 +127,7 @@ export default function EditarAdministradorPage({
         throw new Error(data.error || "Não foi possível salvar o administrador.");
       }
 
-      setSuccessMsg("Administrador atualizado com sucesso.");
+      setSuccessMsg("Dados salvos com sucesso.");
       setPassword("");
       setConfirmPassword("");
     } catch (error) {
