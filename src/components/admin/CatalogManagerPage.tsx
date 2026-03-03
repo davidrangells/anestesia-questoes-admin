@@ -128,6 +128,7 @@ export default function CatalogManagerPage({
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [form, setForm] = useState<CatalogForm>({
     code: "",
     title: "",
@@ -207,6 +208,7 @@ export default function CatalogManagerPage({
 
   const openCreate = () => {
     resetForm();
+    setSuccessMsg(null);
     setModalOpen(true);
   };
 
@@ -219,6 +221,7 @@ export default function CatalogManagerPage({
       levelId: item.levelId ?? "",
     });
     setErrorMsg(null);
+    setSuccessMsg(null);
     setModalOpen(true);
   };
 
@@ -255,6 +258,7 @@ export default function CatalogManagerPage({
 
     setSaving(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     try {
       const payload = {
@@ -279,6 +283,11 @@ export default function CatalogManagerPage({
       if (entity === "temas") {
         await loadLevels();
       }
+      setSuccessMsg(
+        editing
+          ? `${singularLabel} atualizado com sucesso.`
+          : `${singularLabel} criado com sucesso.`
+      );
       setModalOpen(false);
       setEditing(null);
     } catch (error) {
@@ -295,12 +304,19 @@ export default function CatalogManagerPage({
     if (!confirmed) return;
 
     setDeletingId(item.id);
+    setErrorMsg(null);
+    setSuccessMsg(null);
     try {
       await deleteDoc(doc(db, collectionName, item.id));
       await loadItems();
       if (entity === "niveis" || entity === "temas") {
         await loadLevels();
       }
+      setSuccessMsg(`${singularLabel} excluído com sucesso.`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível excluir o cadastro.";
+      setErrorMsg(message);
     } finally {
       setDeletingId(null);
     }
@@ -340,6 +356,11 @@ export default function CatalogManagerPage({
               ? "Carregando..."
               : `${filtered.length} ${filtered.length === 1 ? "registro encontrado" : "registros encontrados"}`}
           </div>
+          {successMsg ? (
+            <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {successMsg}
+            </div>
+          ) : null}
           {!canCreateTheme ? (
             <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               Cadastre pelo menos um nível ativo antes de criar temas.

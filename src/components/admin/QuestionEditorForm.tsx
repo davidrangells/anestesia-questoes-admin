@@ -465,6 +465,7 @@ export function QuestionEditorForm({
   const commentImageInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<QuestionFormState>(initialValue);
   const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [selectedThemeId, setSelectedThemeId] = useState("");
   const [exams, setExams] = useState<QuestionCatalogOption[]>([]);
@@ -478,6 +479,7 @@ export function QuestionEditorForm({
 
   useEffect(() => {
     setForm(initialValue);
+    setSuccessMsg(null);
   }, [initialValue]);
 
   useEffect(() => {
@@ -736,8 +738,14 @@ export function QuestionEditorForm({
   const handleSubmit = async () => {
     if (!canSave) return;
     setSaving(true);
+    setSuccessMsg(null);
     try {
       await onSubmit(buildQuestionPayload(form), form);
+      setSuccessMsg(
+        mode === "create"
+          ? "Questão criada com sucesso."
+          : "Alterações salvas com sucesso."
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao salvar.";
       alert(message);
@@ -758,6 +766,12 @@ export function QuestionEditorForm({
           {saving ? "Salvando..." : titleText}
         </Button>
       </div>
+
+      {successMsg ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          {successMsg}
+        </div>
+      ) : null}
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
         <div className="min-w-0 space-y-6">
