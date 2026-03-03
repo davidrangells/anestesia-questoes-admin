@@ -9,7 +9,8 @@
     "lint": "next lint",
     "seed:temas": "node scripts/seed-catalog-temas.mjs",
     "seed:planos": "node scripts/seed-catalog-planos.mjs",
-    "backfill:eduzz-addresses": "node scripts/backfill-eduzz-addresses.mjs"
+    "backfill:eduzz-addresses": "node scripts/backfill-eduzz-addresses.mjs",
+    "questions:sync": "node scripts/sync-questions-from-xlsx.mjs"
   },
   "dependencies": {
     "firebase": "^12.9.0",
