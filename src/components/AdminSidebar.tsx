@@ -108,7 +108,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         </div>
       </div>
 
-      <div className="px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 overscroll-contain">
         <nav>
           <Section title="Navegação">
             <Item href="/admin" label="Dashboard" icon="🏠" onNavigate={handleNavigate} />
@@ -223,14 +223,14 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[88vw] max-w-[320px] flex-col border-r border-slate-200/70 bg-white shadow-2xl transition-transform lg:hidden",
+          "fixed inset-y-0 left-0 z-40 flex w-[88vw] max-w-[320px] flex-col overflow-hidden border-r border-slate-200/70 bg-white shadow-2xl transition-transform lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {sidebarContent}
       </aside>
 
-      <aside className="hidden w-[320px] shrink-0 border-r border-slate-200/70 bg-white min-h-screen sticky top-0 lg:flex lg:flex-col">
+      <aside className="hidden min-h-screen w-[320px] shrink-0 overflow-hidden border-r border-slate-200/70 bg-white sticky top-0 lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
     </>
