@@ -126,7 +126,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
               icon="🧯"
               onNavigate={handleNavigate}
             />
-            <Item disabled label="Simulados" icon="🧪" />
+            <Item href="/admin/simulados" label="Simulados" icon="🧪" onNavigate={handleNavigate} />
           </Section>
 
           <Section title="Financeiro">
@@ -145,9 +145,19 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
           </Section>
 
           <Section title="Sistema">
-            <Item disabled label="Importador" icon="📥" />
+            <Item
+              href="/admin/importador"
+              label="Importador / Exportador"
+              icon="📥"
+              onNavigate={handleNavigate}
+            />
             <Item disabled label="Pagamento" icon="💰" />
-            <Item disabled label="Administradores" icon="🛡️" />
+            <Item
+              href="/admin/administradores"
+              label="Administradores"
+              icon="🛡️"
+              onNavigate={handleNavigate}
+            />
             <Item disabled label="Configurações" icon="⚙️" />
           </Section>
         </nav>

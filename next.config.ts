@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  outputFileTracingIncludes: {
+    "/api/admin/questions/import": ["./scripts/sync-questions-from-xlsx.mjs"],
+  },
 };
 
 export default nextConfig;
