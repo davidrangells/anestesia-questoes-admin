@@ -1,27 +1,127 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { Button, buttonStyles } from "@/components/ui/Button";
+import { db } from "@/lib/firebase";
 
 type ChartMode = "erros" | "questoes";
 
-export default function AdminDashboardPage() {
-  const [chartMode, setChartMode] = useState<ChartMode>("erros");
+type DashboardStats = {
+  questoesTotal: number;
+  errosPendentes: number;
+  alunosTotal: number;
+};
 
-  // Exemplo (depois você liga no Firestore)
-  const stats = {
-    questoesTotal: 796,
-    errosPendentes: 1,
-    alunosTotal: 2,
+const EMPTY_STATS: DashboardStats = {
+  questoesTotal: 0,
+  errosPendentes: 0,
+  alunosTotal: 0,
+};
+
+function getDayBucket(value: unknown) {
+  const seconds =
+    typeof value === "object" && value !== null && "seconds" in value
+      ? Number((value as { seconds?: number }).seconds ?? 0)
+      : typeof value === "string" || typeof value === "number"
+        ? Math.floor(new Date(value).getTime() / 1000)
+        : 0;
+
+  if (!seconds) return "";
+
+  const date = new Date(seconds * 1000);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
+}
+
+export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [chartMode, setChartMode] = useState<ChartMode>("erros");
+  const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [errorSeries, setErrorSeries] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [questionSeries, setQuestionSeries] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+
+  const loadDashboard = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const [questionsSnap, errorsSnap, studentsSnap] = await Promise.all([
+        getDocs(collection(db, "questionsBank")),
+        getDocs(collection(db, "erros_reportados")),
+        getDocs(query(collection(db, "users"), where("role", "==", "student"))),
+      ]);
+
+      const today = new Date();
+      const buckets = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() - (6 - index));
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+          date.getDate()
+        ).padStart(2, "0")}`;
+      });
+
+      const questionMap = new Map<string, number>();
+      buckets.forEach((bucket) => questionMap.set(bucket, 0));
+      questionsSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const bucket = getDayBucket(data.createdAt ?? data.updatedAt);
+        if (bucket && questionMap.has(bucket)) {
+          questionMap.set(bucket, Number(questionMap.get(bucket) ?? 0) + 1);
+        }
+      });
+
+      const errorMap = new Map<string, number>();
+      buckets.forEach((bucket) => errorMap.set(bucket, 0));
+      let pendingErrors = 0;
+      errorsSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const status = String(data.status ?? "aberto").trim().toLowerCase();
+        if (status !== "resolvido" && status !== "ignorado") {
+          pendingErrors += 1;
+        }
+
+        const bucket = getDayBucket(data.createdAt ?? data.updatedAt);
+        if (bucket && errorMap.has(bucket)) {
+          errorMap.set(bucket, Number(errorMap.get(bucket) ?? 0) + 1);
+        }
+      });
+
+      setStats({
+        questoesTotal: questionsSnap.size,
+        errosPendentes: pendingErrors,
+        alunosTotal: studentsSnap.size,
+      });
+      setQuestionSeries(buckets.map((bucket) => Number(questionMap.get(bucket) ?? 0)));
+      setErrorSeries(buckets.map((bucket) => Number(errorMap.get(bucket) ?? 0)));
+    } catch (error) {
+      setErrorMsg(
+        error instanceof Error ? error.message : "Não foi possível carregar os indicadores."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    void loadDashboard();
+  }, []);
+
   const chartData = useMemo(() => {
-    // 7 pontos (exemplo)
-    return chartMode === "erros"
-      ? [2, 3, 1, 4, 3, 5, 3] // erros
-      : [1, 2, 2, 3, 4, 3, 5]; // criação de questões
-  }, [chartMode]);
+    return chartMode === "erros" ? errorSeries : questionSeries;
+  }, [chartMode, errorSeries, questionSeries]);
+
+  const submitGlobalSearch = () => {
+    const value = globalSearch.trim();
+    if (!value) return;
+    router.push(`/admin/questoes?busca=${encodeURIComponent(value)}`);
+  };
 
   return (
     <div className="min-h-screen overflow-x-hidden">
@@ -38,7 +138,11 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <SearchStub />
+              <SearchStub
+                value={globalSearch}
+                onChange={setGlobalSearch}
+                onSubmit={submitGlobalSearch}
+              />
 
               <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
                 <div className="h-8 w-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center font-black text-blue-700 text-xs">
@@ -51,11 +155,12 @@ export default function AdminDashboardPage() {
               </div>
 
               <Button
-                onClick={() => alert("Depois vamos ligar no Firestore :)")}
+                onClick={() => void loadDashboard()}
                 variant="secondary"
                 size="sm"
+                disabled={loading}
               >
-                Atualizar
+                {loading ? "Atualizando..." : "Atualizar"}
               </Button>
 
               <Link
@@ -79,7 +184,7 @@ export default function AdminDashboardPage() {
               <div>
                 <div className="text-lg font-black text-slate-900">Visão geral</div>
                 <div className="text-sm text-slate-500">
-                  Indicadores do painel (vamos ligar no Firestore depois).
+                  Indicadores ao vivo do Firestore.
                 </div>
               </div>
 
@@ -94,6 +199,12 @@ export default function AdminDashboardPage() {
                 />
               </div>
             </div>
+
+            {errorMsg ? (
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {errorMsg}
+              </div>
+            ) : null}
 
             {/* KPI cards */}
             <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -128,7 +239,7 @@ export default function AdminDashboardPage() {
               <div className="lg:col-span-2">
                 <PremiumMiniChartCard
                   title={chartMode === "erros" ? "Erros reportados" : "Criação de questões"}
-                  subtitle="Últimos 7 dias (exemplo)"
+                  subtitle="Últimos 7 dias"
                   data={chartData}
                   height={170} // << menor aqui
                   rightPill="Últimos 7 pontos"
@@ -183,15 +294,34 @@ export default function AdminDashboardPage() {
 
 /* ------------------------------- UI pieces ------------------------------ */
 
-function SearchStub() {
+function SearchStub({
+  value,
+  onChange,
+  onSubmit,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
   return (
-    <div className="hidden md:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 w-[340px]">
-      <span className="text-slate-400">⌘</span>
+    <div className="hidden md:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 w-[360px]">
+      <span className="text-slate-400">⌕</span>
       <input
-        disabled
-        placeholder="Buscar... (em breve)"
-        className="w-full text-sm outline-none placeholder:text-slate-400 text-slate-600 disabled:bg-transparent"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onSubmit();
+        }}
+        placeholder="Buscar no banco de questões..."
+        className="w-full text-sm outline-none placeholder:text-slate-400 text-slate-600"
       />
+      <button
+        type="button"
+        onClick={onSubmit}
+        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+      >
+        Ir
+      </button>
     </div>
   );
 }

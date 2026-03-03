@@ -136,7 +136,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
               icon="💳"
               onNavigate={handleNavigate}
             />
-            <Item disabled label="Faturas" icon="🧾" />
+            <Item href="/admin/faturas" label="Faturas" icon="🧾" onNavigate={handleNavigate} />
             <Item href="/admin/planos" label="Planos" icon="📦" onNavigate={handleNavigate} />
           </Section>
 

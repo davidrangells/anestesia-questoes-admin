@@ -3,6 +3,7 @@
 import AdminShell from "@/components/AdminShell";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   addDoc,
   collection,
@@ -32,6 +33,7 @@ type QBQuestion = {
 
   // campos possíveis
   prompt?: string;
+  prompt_text?: string;
   statement?: string;
   questionText?: string;
 
@@ -42,14 +44,28 @@ type QBQuestion = {
   correctOptionId?: string;
 
   examType?: string;
+  prova_tipo?: string;
   examYear?: number | null;
+  prova_ano?: number | string | null;
   examSource?: string;
+  Prova?: string;
+  level?: string;
+  nivel?: string;
 
-  themes?: string[];
+  themes?: string[] | string;
+  themeIds?: string[];
 
   isActive?: boolean;
   createdAt?: any;
   updatedAt?: any;
+  optionA_imageUrl?: string | null;
+  optionA_text?: string;
+  optionB_imageUrl?: string | null;
+  optionB_text?: string;
+  optionC_imageUrl?: string | null;
+  optionC_text?: string;
+  optionD_imageUrl?: string | null;
+  optionD_text?: string;
 };
 
 const PAGE_SIZE = 20;
@@ -129,33 +145,88 @@ function Modal({
 
 function hasAnyImage(q: QBQuestion) {
   const questionHas = !!q.imageUrl;
-  const optionHas = (q.options ?? []).some((o) => !!o.imageUrl);
+  const optionHas =
+    (q.options ?? []).some((o) => !!o.imageUrl) ||
+    Boolean(q.optionA_imageUrl || q.optionB_imageUrl || q.optionC_imageUrl || q.optionD_imageUrl);
   return questionHas || optionHas;
 }
 
 function getEnunciado(q: QBQuestion) {
-  const text = (q.prompt ?? q.questionText ?? q.statement ?? "").trim();
+  const text = (q.prompt_text ?? q.prompt ?? q.questionText ?? q.statement ?? "").trim();
   return text.length ? text : "(sem enunciado)";
 }
 
+function getThemes(q: QBQuestion) {
+  if (Array.isArray(q.themes)) {
+    return q.themes.map((theme) => String(theme ?? "").trim()).filter(Boolean);
+  }
+
+  if (typeof q.themes === "string" && q.themes.trim()) {
+    return q.themes
+      .split(/[;,]/)
+      .map((theme) => theme.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function getExamType(q: QBQuestion) {
+  return String(q.examType ?? q.prova_tipo ?? "").trim();
+}
+
+function getExamYear(q: QBQuestion) {
+  const year = q.examYear ?? q.prova_ano ?? null;
+  return year == null ? "" : String(year).trim();
+}
+
+function getExamLabel(q: QBQuestion) {
+  return String(q.Prova ?? q.examSource ?? "").trim();
+}
+
 function sanitizeForCopy(q: QBQuestion) {
+  const optionFallbacks = [
+    {
+      id: "A",
+      text: (q as QBQuestion & { optionA_text?: string }).optionA_text ?? "",
+      imageUrl: q.optionA_imageUrl ?? "",
+    },
+    {
+      id: "B",
+      text: (q as QBQuestion & { optionB_text?: string }).optionB_text ?? "",
+      imageUrl: q.optionB_imageUrl ?? "",
+    },
+    {
+      id: "C",
+      text: (q as QBQuestion & { optionC_text?: string }).optionC_text ?? "",
+      imageUrl: q.optionC_imageUrl ?? "",
+    },
+    {
+      id: "D",
+      text: (q as QBQuestion & { optionD_text?: string }).optionD_text ?? "",
+      imageUrl: q.optionD_imageUrl ?? "",
+    },
+  ];
+
+  const normalizedOptions = Array.isArray(q.options) && q.options.length
+    ? q.options
+    : optionFallbacks;
+
   // cria um payload seguro (não leva id, createdAt, updatedAt antigos)
   const payload: any = {
-    prompt: (q.prompt ?? q.questionText ?? q.statement ?? "").toString().trim(),
+    prompt: (q.prompt_text ?? q.prompt ?? q.questionText ?? q.statement ?? "").toString().trim(),
     explanation: (q.explanation ?? "").toString(),
     imageUrl: (q.imageUrl ?? "").toString(),
-    options: Array.isArray(q.options)
-      ? q.options.map((o) => ({
+    options: normalizedOptions.map((o) => ({
           id: o.id,
           text: (o.text ?? "").toString(),
           imageUrl: (o.imageUrl ?? "").toString(),
-        }))
-      : [],
+        })),
     correctOptionId: q.correctOptionId ?? "A",
-    examType: (q.examType ?? "").toString(),
-    examYear: q.examYear ?? null,
-    examSource: (q.examSource ?? "").toString(),
-    themes: Array.isArray(q.themes) ? q.themes : [],
+    examType: getExamType(q),
+    examYear: getExamYear(q) ? Number(getExamYear(q)) || getExamYear(q) : null,
+    examSource: getExamLabel(q),
+    themes: getThemes(q),
     isActive: q.isActive !== false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -176,12 +247,13 @@ function sanitizeForCopy(q: QBQuestion) {
 }
 
 export default function BancoQuestoesPage() {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<QBQuestion[]>([]);
   const [cursorStack, setCursorStack] = useState<QueryDocumentSnapshot<DocumentData>[]>([]);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("busca") ?? "");
   const [status, setStatus] = useState<"todos" | "ativas" | "inativas">("todos");
   const [themeFilter, setThemeFilter] = useState<string | null>(null);
 
@@ -260,6 +332,11 @@ export default function BancoQuestoesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const next = searchParams.get("busca") ?? "";
+    setSearch(next);
+  }, [searchParams]);
+
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
 
@@ -268,15 +345,18 @@ export default function BancoQuestoesPage() {
         status === "todos" ? true : status === "ativas" ? q.isActive === true : q.isActive === false;
       if (!activeOk) return false;
 
-      const themeOk = themeFilter ? Array.isArray(q.themes) && q.themes.includes(themeFilter) : true;
+      const themes = getThemes(q);
+      const themeOk = themeFilter ? themes.includes(themeFilter) : true;
       if (!themeOk) return false;
 
       if (!s) return true;
 
       const idOk = q.id?.toLowerCase().includes(s);
       const stmtOk = getEnunciado(q).toLowerCase().includes(s);
-      const examOk = `${q.examType ?? ""} ${q.examYear ?? ""} ${q.examSource ?? ""}`.toLowerCase().includes(s);
-      const themesOk = (q.themes ?? []).join(" ").toLowerCase().includes(s);
+      const examOk = `${getExamType(q)} ${getExamYear(q)} ${getExamLabel(q)} ${q.level ?? q.nivel ?? ""}`
+        .toLowerCase()
+        .includes(s);
+      const themesOk = themes.join(" ").toLowerCase().includes(s);
 
       return idOk || stmtOk || examOk || themesOk;
     });
@@ -371,7 +451,7 @@ export default function BancoQuestoesPage() {
       title="Banco de Questões"
       subtitle="Gerencie questões do questionsBank (criar, editar, ativar, duplicar e excluir)."
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <Button onClick={fetchFirst} variant="secondary" size="sm">
             Atualizar
           </Button>
@@ -409,7 +489,7 @@ export default function BancoQuestoesPage() {
       {/* Filtros */}
       <div className="rounded-2xl border bg-white p-4 mb-4">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 items-end">
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-4">
             <div className="text-xs font-semibold text-slate-600 mb-1">Buscar</div>
             <input
               value={search}
@@ -432,24 +512,6 @@ export default function BancoQuestoesPage() {
             </select>
           </div>
 
-          <div className="lg:col-span-1 flex gap-2">
-            <Button
-              onClick={fetchPrev}
-              disabled={loading || cursorStack.length === 0}
-              variant="secondary"
-              block
-            >
-              Anterior
-            </Button>
-            <Button
-              onClick={fetchNext}
-              disabled={loading || !lastDoc}
-              variant="secondary"
-              block
-            >
-              Próxima
-            </Button>
-          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 items-center">
@@ -481,11 +543,11 @@ export default function BancoQuestoesPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="text-xs uppercase text-slate-500 border-b bg-slate-50/60">
               <tr>
                 <th className="text-left px-5 py-3">Enunciado</th>
-                <th className="text-left px-5 py-3">Prova</th>
+                <th className="text-left px-5 py-3">Metadados</th>
                 <th className="text-left px-5 py-3">Temas</th>
                 <th className="text-left px-5 py-3">Imagem</th>
                 <th className="text-left px-5 py-3">Status</th>
@@ -511,25 +573,33 @@ export default function BancoQuestoesPage() {
                 filtered.map((q) => {
                   const anyImg = hasAnyImage(q);
                   const isActive = q.isActive === true;
+                  const themes = getThemes(q);
+                  const examType = getExamType(q);
+                  const examYear = getExamYear(q);
+                  const examLabel = getExamLabel(q);
+                  const levelLabel = String(q.level ?? q.nivel ?? "").trim();
 
                   return (
                     <tr key={q.id} className="hover:bg-slate-50/50">
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-slate-900 line-clamp-2">{getEnunciado(q)}</div>
+                      <td className="px-5 py-4 align-top">
+                        <div className="max-w-[360px] font-semibold text-slate-900 line-clamp-2">{getEnunciado(q)}</div>
                         <div className="text-xs text-slate-500 mt-1">ID: {q.id}</div>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 align-top">
                         <div className="font-semibold text-slate-900">
-                          {(q.examType ?? "—") + (q.examYear ? ` (${q.examYear})` : "")}
+                          {(examType || "—") + (examYear ? ` (${examYear})` : "")}
                         </div>
-                        <div className="text-xs text-slate-500">{q.examSource ?? "—"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{examLabel || "—"}</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {levelLabel ? `Nível ${levelLabel}` : "Sem nível"}
+                        </div>
                       </td>
 
-                      <td className="px-5 py-4">
-                        {Array.isArray(q.themes) && q.themes.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {q.themes.slice(0, 3).map((t) => (
+                      <td className="px-5 py-4 align-top">
+                        {themes.length > 0 ? (
+                          <div className="flex max-w-[260px] flex-wrap gap-2">
+                            {themes.slice(0, 2).map((t) => (
                               <Badge
                                 key={t}
                                 tone={themeFilter === t ? "amber" : "slate"}
@@ -539,9 +609,9 @@ export default function BancoQuestoesPage() {
                                 {t}
                               </Badge>
                             ))}
-                            {q.themes.length > 3 ? (
-                              <Badge tone="slate" title={q.themes.slice(3).join(", ")}>
-                                +{q.themes.length - 3}
+                            {themes.length > 2 ? (
+                              <Badge tone="slate" title={themes.slice(2).join(", ")}>
+                                +{themes.length - 2}
                               </Badge>
                             ) : null}
                           </div>
@@ -550,7 +620,7 @@ export default function BancoQuestoesPage() {
                         )}
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 align-top">
                         {anyImg ? (
                           <Badge tone="blue" onClick={() => openImageModal(q)} title="Ver imagens">
                             📷 Sim (ver)
@@ -560,7 +630,7 @@ export default function BancoQuestoesPage() {
                         )}
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 align-top">
                         <button
                           onClick={() => toggleActive(q)}
                           disabled={togglingId === q.id}
@@ -578,15 +648,15 @@ export default function BancoQuestoesPage() {
                         </button>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 align-top">
                         <span className="font-extrabold text-slate-900">{q.correctOptionId ?? "—"}</span>
                       </td>
 
-                      <td className="px-5 py-4 text-right">
-                        <div className="inline-flex items-center gap-2">
+                      <td className="px-5 py-4 text-right align-top">
+                        <div className="inline-flex flex-wrap justify-end items-center gap-2">
                           <Link
                             href={`/admin/questoes/${q.id}`}
-                            className="inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+                            className={buttonStyles({ variant: "secondary", size: "sm" })}
                           >
                             Editar
                           </Link>
@@ -594,10 +664,7 @@ export default function BancoQuestoesPage() {
                           <button
                             onClick={() => duplicateQuestion(q)}
                             disabled={duplicatingId === q.id || deletingId === q.id}
-                            className={cn(
-                              "inline-flex items-center justify-center rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50",
-                              duplicatingId === q.id ? "opacity-60 cursor-wait" : ""
-                            )}
+                            className={cn(buttonStyles({ variant: "secondary", size: "sm" }), duplicatingId === q.id ? "opacity-60 cursor-wait" : "")}
                             title="Duplicar questão"
                           >
                             {duplicatingId === q.id ? "Duplicando..." : "Duplicar"}
@@ -606,11 +673,7 @@ export default function BancoQuestoesPage() {
                           <button
                             onClick={() => deleteQuestion(q)}
                             disabled={deletingId === q.id || duplicatingId === q.id}
-                            className={cn(
-                              "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold",
-                              "bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100",
-                              deletingId === q.id ? "opacity-60 cursor-wait" : ""
-                            )}
+                            className={cn(buttonStyles({ variant: "danger", size: "sm" }), deletingId === q.id ? "opacity-60 cursor-wait" : "")}
                             title="Excluir questão"
                           >
                             {deletingId === q.id ? "Excluindo..." : "Excluir"}
