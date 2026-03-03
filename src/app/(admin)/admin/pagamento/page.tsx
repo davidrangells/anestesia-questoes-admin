@@ -1,6 +1,5 @@
 import Link from "next/link";
 import AdminShell from "@/components/AdminShell";
-import { buttonStyles } from "@/components/ui/Button";
 
 function StatusPill({
   active,
@@ -61,7 +60,10 @@ export default function PagamentoPage() {
       title="Pagamento"
       subtitle="Centralize a operação financeira do painel e valide os serviços necessários para cobrança."
       actions={
-        <Link href="/admin/planos" className={buttonStyles({ variant: "primary", size: "sm" })}>
+        <Link
+          href="/admin/planos"
+          className="inline-flex min-h-9 items-center justify-center rounded-xl border border-slate-900 bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.16)] transition hover:border-slate-800 hover:bg-slate-800"
+        >
           Gerir planos
         </Link>
       }
