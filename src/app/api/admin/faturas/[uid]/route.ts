@@ -53,6 +53,16 @@ function nextEntitlementFlags(status: string) {
   return { active: false, pending: false };
 }
 
+function isCanceledInvoiceStatus(value: unknown) {
+  const normalized = pickString(value).toLowerCase();
+  return (
+    normalized.includes("cancel") ||
+    normalized === "3" ||
+    normalized === "cancelada" ||
+    normalized === "cancelado"
+  );
+}
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ uid: string }> }
@@ -171,6 +181,28 @@ export async function PATCH(
     }
 
     if (mode === "generate_invoice") {
+      const lastInvoice = invoices.length > 0 ? invoices[invoices.length - 1] : null;
+      const lastTotal = lastInvoice ? pickNumber(lastInvoice.total) : null;
+      const lastProvider = lastInvoice ? pickString(lastInvoice.provider) : "";
+
+      if (
+        lastInvoice &&
+        lastProvider === "bling" &&
+        !isCanceledInvoiceStatus(lastInvoice.status) &&
+        lastTotal != null &&
+        effectiveAmount != null &&
+        Math.abs(lastTotal - effectiveAmount) < 0.0001
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Já existe uma NFS-e ativa para esta fatura com o mesmo valor. Abra a nota abaixo antes de gerar outra.",
+          },
+          { status: 409 }
+        );
+      }
+
       const result = await generateBlingServiceInvoice({
         uid,
         user,

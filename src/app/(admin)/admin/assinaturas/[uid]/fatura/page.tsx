@@ -13,6 +13,9 @@ type BillingInvoice = {
   invoiceNumber?: string | null;
   total?: number | null;
   status?: string | null;
+  provider?: string | null;
+  providerId?: string | null;
+  link?: string | null;
 };
 
 type BillingMovement = {
@@ -194,6 +197,19 @@ export default function FaturaPage() {
     void load();
   }, [params.uid]);
 
+  const hasActiveInvoice = useMemo(
+    () =>
+      payload.invoices.some((invoice) => {
+        const normalized = String(invoice.status ?? "").toLowerCase();
+        return (
+          !normalized.includes("cancel") &&
+          normalized !== "3" &&
+          String(invoice.provider ?? "").toLowerCase() === "bling"
+        );
+      }),
+    [payload.invoices]
+  );
+
   const paymentLabel = useMemo(() => {
     if (payload.paymentMethod) return payload.paymentMethod;
     if (payload.service) return payload.service;
@@ -256,7 +272,7 @@ export default function FaturaPage() {
           <Button
             variant="secondary"
             size="sm"
-            disabled={saving}
+            disabled={saving || hasActiveInvoice}
             onClick={() => void runAction("generate_invoice")}
           >
             Gerar nota no Bling
@@ -350,6 +366,12 @@ export default function FaturaPage() {
                   />
                 </div>
               </div>
+
+              {hasActiveInvoice ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Já existe uma NFS-e ativa gerada para esta fatura. Use a tabela abaixo para abrir a nota antes de gerar outra.
+                </div>
+              ) : null}
             </section>
 
             <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
@@ -365,12 +387,13 @@ export default function FaturaPage() {
                       <th className="px-5 py-4 text-left">Número NFSe</th>
                       <th className="px-5 py-4 text-left">Total</th>
                       <th className="px-5 py-4 text-left">Status</th>
+                      <th className="px-5 py-4 text-left">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {payload.invoices.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                        <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
                           Nenhuma nota fiscal gerada.
                         </td>
                       </tr>
@@ -387,6 +410,22 @@ export default function FaturaPage() {
                           </td>
                           <td className="px-5 py-4 text-slate-700 uppercase">
                             {String(invoice.status ?? "—")}
+                          </td>
+                          <td className="px-5 py-4">
+                            {invoice.link ? (
+                              <a
+                                href={String(invoice.link)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center rounded-xl border border-slate-200 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
+                              >
+                                Abrir nota
+                              </a>
+                            ) : invoice.providerId ? (
+                              <span className="text-slate-500">Gerada no Bling</span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                         </tr>
                       ))
