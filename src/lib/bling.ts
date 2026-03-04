@@ -488,8 +488,18 @@ async function blingRequest(
       },
     });
 
-    const data = await res.json().catch(() => null);
-    return { res, data };
+    const rawText = await res.text().catch(() => "");
+    let data: unknown = null;
+
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = rawText;
+      }
+    }
+
+    return { res, data, rawText };
   };
 
   let currentSettings = settings;
@@ -500,15 +510,38 @@ async function blingRequest(
     token = currentSettings.accessToken;
   }
 
-  let { res, data } = await attempt(token);
+  let { res, data, rawText } = await attempt(token);
 
   if (res.status === 401 && currentSettings.refreshToken) {
     currentSettings = await refreshBlingAccessToken(currentSettings);
-    ({ res, data } = await attempt(currentSettings.accessToken));
+    ({ res, data, rawText } = await attempt(currentSettings.accessToken));
   }
 
   if (!res.ok) {
-    const msg = extractBlingError(data) || "O Bling recusou a requisição.";
+    const baseMsg = extractBlingError(data) || "";
+    const genericMessages = new Set([
+      "",
+      "Não foi possível salvar a nota de serviço",
+      "O Bling recusou a requisição.",
+    ]);
+    const textFallback =
+      typeof data === "string"
+        ? pickString(data)
+        : pickString(rawText)
+            .replace(/\s+/g, " ")
+            .trim();
+    const detail =
+      textFallback &&
+      !genericMessages.has(textFallback) &&
+      textFallback.toLowerCase() !== String(baseMsg).toLowerCase()
+        ? textFallback
+        : "";
+    const msg =
+      baseMsg && !genericMessages.has(baseMsg)
+        ? baseMsg
+        : detail
+          ? `${baseMsg || "O Bling recusou a requisição."} | ${detail}`
+          : `${baseMsg || "O Bling recusou a requisição."} (HTTP ${res.status})`;
     throw new Error(msg);
   }
 
