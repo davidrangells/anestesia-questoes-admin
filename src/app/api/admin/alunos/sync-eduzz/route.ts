@@ -101,9 +101,9 @@ function timestampLikeToDate(value: unknown) {
   if (!value) return null;
   if (value instanceof Date) return value;
   if (typeof value === "object" && value !== null && "toDate" in value) {
-    const toDate = (value as { toDate?: () => Date }).toDate;
-    if (typeof toDate === "function") {
-      const parsed = toDate();
+    const timestamp = value as { toDate?: () => Date };
+    if (typeof timestamp.toDate === "function") {
+      const parsed = timestamp.toDate();
       return parsed instanceof Date && Number.isFinite(parsed.getTime()) ? parsed : null;
     }
   }
