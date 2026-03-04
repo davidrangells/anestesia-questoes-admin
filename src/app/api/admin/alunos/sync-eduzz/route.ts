@@ -129,14 +129,33 @@ function normalizeStateName(value: unknown): string | null {
 function extractArray(payload: RecordData): RecordData[] {
   const candidates = [
     payload.items,
-    payload.data,
     payload.subscriptions,
+    payload.data,
     (payload.data as RecordData | undefined)?.items,
     (payload.data as RecordData | undefined)?.subscriptions,
+    (payload.data as RecordData | undefined)?.data,
+    (payload.result as RecordData | undefined)?.items,
+    (payload.result as RecordData | undefined)?.subscriptions,
   ];
 
   const list = candidates.find((item) => Array.isArray(item));
   return Array.isArray(list) ? (list as RecordData[]) : [];
+}
+
+function summarizePayload(payload: RecordData) {
+  try {
+    const raw = JSON.stringify(payload);
+    return raw.length > 500 ? `${raw.slice(0, 497)}...` : raw;
+  } catch {
+    return "[unserializable payload]";
+  }
+}
+
+function unwrapRecord(raw: RecordData) {
+  if (typeof raw.data === "object" && raw.data !== null) {
+    return raw.data as RecordData;
+  }
+  return raw;
 }
 
 function resolveAddressSource(...sources: Array<RecordData | null | undefined>) {
@@ -177,23 +196,24 @@ function resolveAddressSource(...sources: Array<RecordData | null | undefined>) 
 }
 
 function mapSubscription(raw: RecordData): EduzzSubscription | null {
+  const source = unwrapRecord(raw);
   const student =
-    (raw.student as RecordData | undefined) ??
-    (raw.customer as RecordData | undefined) ??
-    (raw.buyer as RecordData | undefined) ??
-    (raw.client as RecordData | undefined) ??
+    (source.student as RecordData | undefined) ??
+    (source.customer as RecordData | undefined) ??
+    (source.buyer as RecordData | undefined) ??
+    (source.client as RecordData | undefined) ??
     {};
   const buyer =
-    (raw.buyer as RecordData | undefined) ??
-    (raw.customer as RecordData | undefined) ??
-    (raw.client as RecordData | undefined) ??
+    (source.buyer as RecordData | undefined) ??
+    (source.customer as RecordData | undefined) ??
+    (source.client as RecordData | undefined) ??
     {};
-  const address = resolveAddressSource(student, buyer, raw);
-  const items = Array.isArray(raw.items) && raw.items.length
-    ? (raw.items[0] as RecordData)
+  const address = resolveAddressSource(student, buyer, source);
+  const items = Array.isArray(source.items) && source.items.length
+    ? (source.items[0] as RecordData)
     : null;
-  const products = Array.isArray(raw.products) && raw.products.length
-    ? (raw.products[0] as RecordData)
+  const products = Array.isArray(source.products) && source.products.length
+    ? (source.products[0] as RecordData)
     : null;
   const clientPhone =
     typeof (student as RecordData).phone === "object" && (student as RecordData).phone !== null
@@ -201,30 +221,32 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
       : {};
 
   const email = normalizeEmail(
-    student.email ?? buyer.email ?? raw.email ?? raw.edz_cli_email
+    student.email ?? buyer.email ?? source.email ?? source.edz_cli_email
   );
-  const id = pickString(raw.id ?? raw.subscription_id ?? raw.contractId ?? raw.contract_id);
-  const status = pickString(raw.status ?? raw.subscriptionStatus ?? raw.situation);
+  const id = pickString(source.id ?? source.subscription_id ?? source.contractId ?? source.contract_id);
+  const status = pickString(source.status ?? source.subscriptionStatus ?? source.situation);
 
   if (!email || !id) return null;
 
   return {
     id,
     status,
-    createdAt: toDateOrNull(raw.createdAt ?? raw.created_at ?? raw.startDate ?? raw.start_date),
-    updatedAt: toDateOrNull(raw.updatedAt ?? raw.updated_at),
+    createdAt: toDateOrNull(
+      source.createdAt ?? source.created_at ?? source.startDate ?? source.start_date
+    ),
+    updatedAt: toDateOrNull(source.updatedAt ?? source.updated_at),
     email,
-    name: pickString(student.name ?? buyer.name ?? raw.name),
+    name: pickString(student.name ?? buyer.name ?? source.name),
     phone:
       pickFirstString(
         student.phone,
         student.cellphone,
         buyer.phone,
         buyer.cellphone,
-        raw.phone
+        source.phone
       ) ||
       [pickString(clientPhone.areaCode), pickString(clientPhone.number)].filter(Boolean).join(" "),
-    document: pickString(student.document ?? buyer.document ?? raw.document),
+    document: pickString(student.document ?? buyer.document ?? source.document),
     address: {
       street: pickString((address as RecordData).street) || null,
       number: pickString((address as RecordData).number) || null,
@@ -237,25 +259,25 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
     },
     productId:
       pickFirstString(
-        (raw.product as RecordData | undefined)?.id,
-        raw.product_id,
-        (raw.offer as RecordData | undefined)?.id,
-        raw.offer_id,
+        (source.product as RecordData | undefined)?.id,
+        source.product_id,
+        (source.offer as RecordData | undefined)?.id,
+        source.offer_id,
         (products as RecordData | null)?.id,
         (items as RecordData | null)?.productId,
         (items as RecordData | null)?.id
       ) || null,
     productTitle:
       pickFirstString(
-        (raw.product as RecordData | undefined)?.title,
-        (raw.product as RecordData | undefined)?.name,
-        raw.product_title,
-        (raw.offer as RecordData | undefined)?.title,
-        raw.offer_title,
+        (source.product as RecordData | undefined)?.title,
+        (source.product as RecordData | undefined)?.name,
+        source.product_title,
+        (source.offer as RecordData | undefined)?.title,
+        source.offer_title,
         (products as RecordData | null)?.title,
         (items as RecordData | null)?.name
       ) || null,
-    raw,
+    raw: source,
   };
 }
 
@@ -347,14 +369,17 @@ async function fetchAllSubscriptions(token: string) {
     });
     const path = `/myeduzz/v1/subscriptions?${params.toString()}`;
     const payload = await eduzzRequest(path, token);
-    const batch = extractArray(payload)
+    const rawItems = extractArray(payload);
+    const batch = rawItems
       .map((item) => mapSubscription(item))
       .filter((item): item is EduzzSubscription => item !== null);
 
     if (!batch.length) {
       if (page === 1) {
         throw new Error(
-          "A API da Eduzz respondeu, mas não retornou assinaturas em um formato reconhecido."
+          rawItems.length
+            ? `A API da Eduzz respondeu com itens, mas não foi possível mapear as assinaturas. Exemplo: ${summarizePayload(rawItems[0] ?? {})}`
+            : `A API da Eduzz respondeu, mas não retornou assinaturas em um formato reconhecido. Payload: ${summarizePayload(payload)}`
         );
       }
       break;
