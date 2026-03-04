@@ -526,6 +526,7 @@ export async function POST(req: NextRequest) {
     let skippedExpired = 0;
     let skippedWithoutDate = 0;
     let usedSubscriptionDateFallback = 0;
+    let firstExpiredDebug: Record<string, unknown> | null = null;
 
     for (const subscription of subscriptions) {
       scanned += 1;
@@ -574,6 +575,23 @@ export async function POST(req: NextRequest) {
       if (!validUntil || validUntil.getTime() < now.getTime()) {
         skipped += 1;
         skippedExpired += 1;
+        if (!firstExpiredDebug) {
+          firstExpiredDebug = {
+            subscriptionId: subscription.id,
+            subscriptionStatus: subscription.status,
+            subscriptionCreatedAt: subscription.createdAt?.toISOString() ?? null,
+            subscriptionUpdatedAt: subscription.updatedAt?.toISOString() ?? null,
+            subscriptionExplicitValidUntil: subscription.explicitValidUntil?.toISOString() ?? null,
+            latestPaidId: latestPaid?.id ?? null,
+            latestPaidStatus: latestPaid?.status ?? null,
+            latestPaidAt: latestPaid?.paidAt?.toISOString() ?? null,
+            latestInvoiceCreatedAt: latestPaid?.createdAt?.toISOString() ?? null,
+            latestInvoiceDueAt: latestPaid?.dueAt?.toISOString() ?? null,
+            latestInvoiceAmountPaid: latestPaid?.amountPaid ?? null,
+            computedBaseDate: baseDate?.toISOString() ?? null,
+            computedValidUntil: validUntil?.toISOString() ?? null,
+          };
+        }
         continue;
       }
 
@@ -671,6 +689,9 @@ export async function POST(req: NextRequest) {
           expired: skippedExpired,
           withoutDate: skippedWithoutDate,
           usedSubscriptionDateFallback,
+        },
+        debug: {
+          firstExpired: firstExpiredDebug,
         },
       },
       { status: 200 }

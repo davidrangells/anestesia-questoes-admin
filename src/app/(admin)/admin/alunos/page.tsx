@@ -159,6 +159,23 @@ export default function AlunosPage() {
           withoutDate?: number;
           usedSubscriptionDateFallback?: number;
         };
+        debug?: {
+          firstExpired?: {
+            subscriptionId?: string | null;
+            subscriptionStatus?: string | null;
+            subscriptionCreatedAt?: string | null;
+            subscriptionUpdatedAt?: string | null;
+            subscriptionExplicitValidUntil?: string | null;
+            latestPaidId?: string | null;
+            latestPaidStatus?: string | null;
+            latestPaidAt?: string | null;
+            latestInvoiceCreatedAt?: string | null;
+            latestInvoiceDueAt?: string | null;
+            latestInvoiceAmountPaid?: number | null;
+            computedBaseDate?: string | null;
+            computedValidUntil?: string | null;
+          } | null;
+        };
       };
 
       if (!res.ok || !data.ok) {
@@ -185,8 +202,14 @@ export default function AlunosPage() {
         .filter(Boolean)
         .join(" | ");
 
+      const firstExpired = data.debug?.firstExpired;
+      const debugPart =
+        firstExpired && (data.reasons?.expired ?? 0) > 0
+          ? ` Exemplo vencido: assinatura ${firstExpired.subscriptionId ?? "—"} (status ${firstExpired.subscriptionStatus ?? "—"}), base ${firstExpired.computedBaseDate ?? "—"}, validade ${firstExpired.computedValidUntil ?? "—"}, última fatura ${firstExpired.latestPaidStatus ?? "—"} em ${firstExpired.latestPaidAt ?? firstExpired.latestInvoiceCreatedAt ?? firstExpired.latestInvoiceDueAt ?? "—"}.`
+          : "";
+
       setSuccessMsg(
-        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).${reasonParts ? ` Motivos: ${reasonParts}.` : ""}`
+        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).${reasonParts ? ` Motivos: ${reasonParts}.` : ""}${debugPart}`
       );
       await load();
     } catch (error) {
