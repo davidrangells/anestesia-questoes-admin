@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
+import { dateFromUnknown } from "@/lib/dateValue";
 import { auth } from "@/lib/firebase";
 
 type Plano = {
@@ -30,13 +31,9 @@ type AssinaturaForm = {
 };
 
 function formatDateInput(value: unknown) {
-  const seconds =
-    typeof value === "object" && value !== null && "seconds" in value
-      ? Number((value as { seconds?: number }).seconds ?? 0)
-      : 0;
-  if (!seconds) return "";
-  const date = new Date(seconds * 1000);
-  return date.toISOString().slice(0, 10);
+  const parsed = dateFromUnknown(value);
+  if (!parsed) return "";
+  return parsed.toISOString().slice(0, 10);
 }
 
 export default function EditarAssinaturaPage() {

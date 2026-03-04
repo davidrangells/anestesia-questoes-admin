@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
+import { dateFromUnknown, secondsFromUnknown } from "@/lib/dateValue";
 import { auth, db } from "@/lib/firebase";
 
 type AssinaturaItem = {
@@ -29,23 +30,15 @@ type AssinaturaItemWithSort = AssinaturaItem & {
 };
 
 function formatDate(value: unknown) {
-  const seconds =
-    typeof value === "object" && value !== null && "seconds" in value
-      ? Number((value as { seconds?: number }).seconds ?? 0)
-      : 0;
-
-  if (!seconds) return "—";
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(seconds * 1000));
+  const parsed = dateFromUnknown(value);
+  if (!parsed) return "—";
+  return new Intl.DateTimeFormat("pt-BR").format(parsed);
 }
 
 function toDateInput(value: unknown) {
-  const seconds =
-    typeof value === "object" && value !== null && "seconds" in value
-      ? Number((value as { seconds?: number }).seconds ?? 0)
-      : 0;
-
-  if (!seconds) return "";
-  return new Date(seconds * 1000).toISOString().slice(0, 10);
+  const parsed = dateFromUnknown(value);
+  if (!parsed) return "";
+  return parsed.toISOString().slice(0, 10);
 }
 
 function StatusBadge({ status }: { status: AssinaturaItem["status"] }) {
@@ -132,15 +125,7 @@ export default function AssinaturasPage() {
                   : null,
               validUntilRaw: toDateInput(ent?.validUntil ?? null),
               sortSeconds:
-                typeof userData.updatedAt === "object" &&
-                userData.updatedAt !== null &&
-                "seconds" in userData.updatedAt
-                  ? Number((userData.updatedAt as { seconds?: number }).seconds ?? 0)
-                  : typeof userData.createdAt === "object" &&
-                      userData.createdAt !== null &&
-                      "seconds" in userData.createdAt
-                    ? Number((userData.createdAt as { seconds?: number }).seconds ?? 0)
-                    : 0,
+                secondsFromUnknown(userData.updatedAt) || secondsFromUnknown(userData.createdAt),
             } satisfies AssinaturaItemWithSort;
           })
         );

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { Button, buttonStyles } from "@/components/ui/Button";
+import { secondsFromUnknown } from "@/lib/dateValue";
 import { db } from "@/lib/firebase";
 
 type ChartMode = "erros" | "questoes";
@@ -22,12 +23,7 @@ const EMPTY_STATS: DashboardStats = {
 };
 
 function getDayBucket(value: unknown) {
-  const seconds =
-    typeof value === "object" && value !== null && "seconds" in value
-      ? Number((value as { seconds?: number }).seconds ?? 0)
-      : typeof value === "string" || typeof value === "number"
-        ? Math.floor(new Date(value).getTime() / 1000)
-        : 0;
+  const seconds = secondsFromUnknown(value);
 
   if (!seconds) return "";
 

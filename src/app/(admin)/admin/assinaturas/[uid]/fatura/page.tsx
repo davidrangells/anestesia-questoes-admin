@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
+import { dateFromUnknown } from "@/lib/dateValue";
 import { auth } from "@/lib/firebase";
 
 type BillingInvoice = {
@@ -42,15 +43,9 @@ type FaturaPayload = {
 };
 
 function formatDate(value: unknown) {
-  const seconds =
-    typeof value === "object" && value !== null && "seconds" in value
-      ? Number((value as { seconds?: number }).seconds ?? 0)
-      : value instanceof Date
-        ? Math.floor(value.getTime() / 1000)
-        : 0;
-
-  if (!seconds) return "—";
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(seconds * 1000));
+  const parsed = dateFromUnknown(value);
+  if (!parsed) return "—";
+  return new Intl.DateTimeFormat("pt-BR").format(parsed);
 }
 
 function formatCurrency(value: number | null) {

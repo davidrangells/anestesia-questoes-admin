@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { dateFromUnknown } from "@/lib/dateValue";
 import {
   addDoc,
   collection,
@@ -24,8 +25,8 @@ type CatalogDoc = {
   code: string;
   title: string;
   status: "ativo" | "inativo";
-  createdAt?: { seconds?: number } | null;
-  updatedAt?: { seconds?: number } | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
   levelId?: string | null;
   levelLabel?: string | null;
 };
@@ -60,10 +61,10 @@ const COLLECTION_BY_ENTITY: Record<EntityType, string> = {
   temas: "catalog_temas",
 };
 
-function formatDate(value?: { seconds?: number } | null) {
-  if (!value?.seconds) return "—";
-  const date = new Date(value.seconds * 1000);
-  return new Intl.DateTimeFormat("pt-BR").format(date);
+function formatDate(value?: unknown) {
+  const parsed = dateFromUnknown(value);
+  if (!parsed) return "—";
+  return new Intl.DateTimeFormat("pt-BR").format(parsed);
 }
 
 function StatusBadge({ status }: { status: CatalogDoc["status"] }) {

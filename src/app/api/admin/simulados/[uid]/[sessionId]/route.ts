@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
+import { secondsFromUnknown } from "@/lib/dateValue";
 
 type DetailedQuestion = {
   questionId: string;
@@ -15,17 +16,7 @@ type DetailedQuestion = {
 };
 
 function getSeconds(value: unknown) {
-  if (typeof value === "object" && value !== null && "seconds" in value) {
-    return Number((value as { seconds?: number }).seconds ?? 0);
-  }
-
-  if (typeof value === "string" || typeof value === "number") {
-    const date = new Date(value);
-    const time = date.getTime();
-    return Number.isFinite(time) ? Math.floor(time / 1000) : 0;
-  }
-
-  return 0;
+  return secondsFromUnknown(value);
 }
 
 function formatDate(value: unknown) {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
+import { dateFromUnknown } from "@/lib/dateValue";
 import { auth } from "@/lib/firebase";
 
 type Plano = {
@@ -44,18 +45,12 @@ function formatCurrency(value: number | null | undefined, currency = "BRL") {
 }
 
 function formatDate(value: unknown) {
-  const seconds =
-    typeof value === "object" && value !== null && "seconds" in value
-      ? Number((value as { seconds?: number }).seconds ?? 0)
-      : value instanceof Date
-        ? Math.floor(value.getTime() / 1000)
-        : 0;
-
-  if (!seconds) return "—";
+  const parsed = dateFromUnknown(value);
+  if (!parsed) return "—";
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
-  }).format(new Date(seconds * 1000));
+  }).format(parsed);
 }
 
 function StatusBadge({

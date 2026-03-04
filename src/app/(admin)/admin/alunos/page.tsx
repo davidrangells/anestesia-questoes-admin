@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
 import { buttonStyles } from "@/components/ui/Button";
+import { secondsFromUnknown } from "@/lib/dateValue";
 import { auth, db } from "@/lib/firebase";
 
 type AlunoListItem = {
@@ -26,11 +27,7 @@ type AlunoListItem = {
 };
 
 function formatDate(value: unknown) {
-  const seconds =
-    typeof value === "object" && value !== null && "seconds" in value
-      ? Number((value as { seconds?: number }).seconds ?? 0)
-      : 0;
-
+  const seconds = secondsFromUnknown(value);
   if (!seconds) return "—";
   return new Intl.DateTimeFormat("pt-BR").format(new Date(seconds * 1000));
 }
@@ -74,15 +71,7 @@ export default function AlunosPage() {
           const profile = profileSnap.exists() ? profileSnap.data() : {};
           const entitlement = entitlementSnap.exists() ? entitlementSnap.data() : {};
           const sortSeconds =
-            typeof userData.updatedAt === "object" &&
-            userData.updatedAt !== null &&
-            "seconds" in userData.updatedAt
-              ? Number((userData.updatedAt as { seconds?: number }).seconds ?? 0)
-              : typeof userData.createdAt === "object" &&
-                  userData.createdAt !== null &&
-                  "seconds" in userData.createdAt
-                ? Number((userData.createdAt as { seconds?: number }).seconds ?? 0)
-                : 0;
+            secondsFromUnknown(userData.updatedAt) || secondsFromUnknown(userData.createdAt);
 
           return {
             uid: userDoc.id,
