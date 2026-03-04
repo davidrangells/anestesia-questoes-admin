@@ -294,8 +294,24 @@ function mapInvoice(raw: RecordData): EduzzInvoice | null {
   return {
     id,
     status: pickString(raw.status ?? raw.invoiceStatus ?? raw.edz_fat_status),
-    paidAt: toDateOrNull(raw.paidAt ?? raw.paymentDate ?? raw.paid_at),
-    createdAt: toDateOrNull(raw.createdAt ?? raw.created_at ?? raw.date),
+    paidAt: toDateOrNull(
+      raw.paidAt ??
+        raw.paymentDate ??
+        raw.paid_at ??
+        raw.approvedAt ??
+        raw.approved_at ??
+        raw.confirmedAt ??
+        raw.confirmed_at
+    ),
+    createdAt: toDateOrNull(
+      raw.createdAt ??
+        raw.created_at ??
+        raw.updatedAt ??
+        raw.updated_at ??
+        raw.releasedAt ??
+        raw.released_at ??
+        raw.date
+    ),
     amountPaid:
       pickNumber(paidNode.value) ??
       pickNumber(priceNode.value) ??
@@ -505,7 +521,9 @@ export async function POST(req: NextRequest) {
       const baseDate =
         latestPaid?.paidAt ??
         latestPaid?.createdAt ??
-        (!isInactiveSubscription(subscription.status) ? subscription.createdAt : null);
+        (!isInactiveSubscription(subscription.status)
+          ? subscription.updatedAt ?? subscription.createdAt
+          : null);
       if (!baseDate) {
         skipped += 1;
         skippedWithoutDate += 1;
@@ -518,7 +536,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      if (!latestPaid && !subscription.createdAt) {
+      if (!latestPaid && !subscription.updatedAt && !subscription.createdAt) {
         skipped += 1;
         skippedWithoutPaidInvoice += 1;
         continue;
