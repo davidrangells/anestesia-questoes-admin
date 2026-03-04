@@ -388,8 +388,51 @@ function extractBlingError(data: unknown) {
     typeof obj.error === "object" && obj.error !== null ? (obj.error as RecordData) : null;
   const nestedData =
     typeof obj.data === "object" && obj.data !== null ? (obj.data as RecordData) : null;
+  const nestedErrors =
+    typeof obj.errors === "object" && obj.errors !== null ? (obj.errors as RecordData) : null;
+  const nestedErros =
+    typeof obj.erros === "object" && obj.erros !== null ? (obj.erros as RecordData) : null;
 
-  return (
+  const flattenItems = (value: unknown): string[] => {
+    if (!value) return [];
+    if (typeof value === "string") {
+      const text = pickString(value);
+      return text ? [text] : [];
+    }
+    if (Array.isArray(value)) {
+      return value.flatMap((item) => flattenItems(item));
+    }
+    if (typeof value === "object") {
+      const record = value as RecordData;
+      const direct =
+        pickString(record.message) ||
+        pickString(record.descricao) ||
+        pickString(record.description) ||
+        pickString(record.erro) ||
+        pickString(record.detail) ||
+        pickString(record.field);
+      const nested = Object.values(record).flatMap((item) => flattenItems(item));
+      return [direct, ...nested].filter(Boolean);
+    }
+    return [];
+  };
+
+  const objectSummary = (() => {
+    try {
+      const slim = JSON.stringify(data);
+      return slim.length > 320 ? `${slim.slice(0, 317)}...` : slim;
+    } catch {
+      return "";
+    }
+  })();
+
+  const arrayErrors = Array.isArray(obj.errors) ? flattenItems(obj.errors).join(" | ") : "";
+  const objectErrors = flattenItems(nestedErrors).join(" | ");
+  const objectErros = flattenItems(nestedErros).join(" | ");
+  const nestedDataErrors = flattenItems(nestedData?.errors).join(" | ");
+  const nestedDataErros = flattenItems(nestedData?.erros).join(" | ");
+
+  const baseMessage =
     pickString(obj.message) ||
     pickString(nestedError?.message) ||
     pickString(nestedError?.description) ||
@@ -397,19 +440,37 @@ function extractBlingError(data: unknown) {
     pickString(nestedData?.message) ||
     pickString(nestedData?.descricao) ||
     pickString(obj.description) ||
-    (Array.isArray(obj.errors)
-      ? obj.errors
-          .map((item) =>
-            typeof item === "string"
-              ? item
-              : typeof item === "object" && item !== null
-                ? pickString((item as RecordData).message) || JSON.stringify(item)
-                : ""
-          )
-          .filter(Boolean)
-          .join(" | ")
-      : "")
-  );
+    arrayErrors ||
+    objectErrors ||
+    objectErros ||
+    nestedDataErrors ||
+    nestedDataErros;
+
+  const genericMessages = new Set([
+    "não foi possível salvar a nota de serviço",
+    "o bling recusou a requisição.",
+    "bad request",
+  ]);
+  const normalizedBase = baseMessage.toLowerCase();
+  const detailPool = [
+    arrayErrors,
+    objectErrors,
+    objectErros,
+    nestedDataErrors,
+    nestedDataErros,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  if (baseMessage && !genericMessages.has(normalizedBase)) {
+    return baseMessage;
+  }
+
+  if (baseMessage && detailPool) {
+    return `${baseMessage} | ${detailPool}`;
+  }
+
+  return baseMessage || objectSummary;
 }
 
 async function blingRequest(
