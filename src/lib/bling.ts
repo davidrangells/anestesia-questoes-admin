@@ -69,6 +69,51 @@ function formatDateOnly(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+const STATE_TO_UF: Record<string, string> = {
+  acre: "AC",
+  alagoas: "AL",
+  amapa: "AP",
+  amazonas: "AM",
+  bahia: "BA",
+  ceara: "CE",
+  "distrito federal": "DF",
+  "espirito santo": "ES",
+  goias: "GO",
+  maranhao: "MA",
+  "mato grosso": "MT",
+  "mato grosso do sul": "MS",
+  "minas gerais": "MG",
+  para: "PA",
+  paraiba: "PB",
+  parana: "PR",
+  pernambuco: "PE",
+  piaui: "PI",
+  "rio de janeiro": "RJ",
+  "rio grande do norte": "RN",
+  "rio grande do sul": "RS",
+  rondonia: "RO",
+  roraima: "RR",
+  "santa catarina": "SC",
+  "sao paulo": "SP",
+  sergipe: "SE",
+  tocantins: "TO",
+};
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function toUf(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^[A-Za-z]{2}$/.test(trimmed)) return trimmed.toUpperCase();
+  return STATE_TO_UF[normalizeText(trimmed)] || trimmed.toUpperCase().slice(0, 2);
+}
+
 function normalizeBool(value: unknown, fallback = false) {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -581,6 +626,7 @@ function buildContactPayload(
     pickString(input.entitlement.document);
   const email = pickString(input.user.email) || pickString(input.entitlement.email);
   const type = document.length > 11 ? "J" : "F";
+  const uf = toUf(address.state);
 
   ensureRequiredAddress(address);
 
@@ -608,7 +654,7 @@ function buildContactPayload(
         complemento: address.complement,
         bairro: address.neighborhood,
         municipio: address.city,
-        uf: address.state,
+        uf,
         cep: address.zipCode,
       },
     },
@@ -741,6 +787,7 @@ function buildInvoicePayload(
   ensureRequiredAddress(address);
 
   const numeroRPS = onlyDigits(input.invoiceCode).slice(0, 20) || String(Date.now()).slice(-12);
+  const uf = toUf(address.state);
 
   return {
     numeroRPS,
@@ -762,7 +809,7 @@ function buildInvoicePayload(
         complemento: address.complement,
         bairro: address.neighborhood,
         municipio: address.city,
-        uf: address.state,
+        uf,
         cep: address.zipCode,
       },
     },
