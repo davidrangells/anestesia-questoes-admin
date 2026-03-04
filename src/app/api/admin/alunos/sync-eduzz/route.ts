@@ -524,7 +524,11 @@ async function fetchRecentPaidEventCandidates(cutoff: Date) {
       envelopeData.dueDate ??
         (envelopeData.contract as RecordData | undefined)?.dueDate
     );
-    const validUntil = dueDate ?? (paidAt ? addMonths(paidAt, 12) : null);
+    const validUntil = paidAt
+      ? addMonths(paidAt, 12)
+      : dueDate
+        ? addMonths(dueDate, 12)
+        : null;
 
     candidates.push({
       email,

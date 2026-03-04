@@ -107,6 +107,12 @@ function toDateOrNull(v: unknown): Date | null {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
 const STATE_NAME_BY_UF: Record<string, string> = {
   AC: "Acre",
   AL: "Alagoas",
@@ -420,8 +426,13 @@ export async function POST(req: NextRequest) {
     const dueDateRaw = (data as any)?.dueDate || (data as any)?.contract?.dueDate || null;
     const paidAtRaw = (data as any)?.paidAt || (data as any)?.payment?.paidAt || null;
 
-    const validUntil = toDateOrNull(dueDateRaw); // ✅ nosso "vencimento até"
     const paidAt = toDateOrNull(paidAtRaw);
+    const dueDate = toDateOrNull(dueDateRaw);
+    const validUntil = paidAt
+      ? addMonths(paidAt, 12)
+      : dueDate
+        ? addMonths(dueDate, 12)
+        : null;
 
     // Perfil do aluno: prioriza student para identidade, mas usa fallback de endereço do buyer/customer
     const studentProfile = (data as any)?.student || {};
