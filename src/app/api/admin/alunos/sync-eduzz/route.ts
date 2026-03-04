@@ -44,6 +44,24 @@ type EduzzInvoice = {
   raw: RecordData;
 };
 
+type EduzzEventCandidate = {
+  email: string;
+  name: string;
+  phone: string;
+  document: string;
+  address: EduzzSubscription["address"];
+  productId: string | null;
+  productTitle: string | null;
+  amountPaid: number | null;
+  currency: string;
+  paymentMethod: string | null;
+  paidAt: Date | null;
+  validUntil: Date | null;
+  invoiceStatus: string;
+  invoiceId: string | null;
+  subscriptionId: string | null;
+};
+
 function pickString(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -77,6 +95,19 @@ function toDateOrNull(value: unknown) {
   if (!raw) return null;
   const parsed = new Date(raw);
   return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function timestampLikeToDate(value: unknown) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "object" && value !== null && "toDate" in value) {
+    const toDate = (value as { toDate?: () => Date }).toDate;
+    if (typeof toDate === "function") {
+      const parsed = toDate();
+      return parsed instanceof Date && Number.isFinite(parsed.getTime()) ? parsed : null;
+    }
+  }
+  return toDateOrNull(value);
 }
 
 function addMonths(date: Date, months: number) {
@@ -449,6 +480,138 @@ async function fetchSubscriptionInvoices(subscriptionId: string, token: string) 
     .filter((item): item is EduzzInvoice => item !== null);
 }
 
+async function fetchRecentPaidEventCandidates(cutoff: Date) {
+  const snap = await adminDb.collection("eduzz_events").where("action", "==", "activate").get();
+  const candidates: EduzzEventCandidate[] = [];
+
+  for (const doc of snap.docs) {
+    const data = doc.data() as RecordData;
+    const receivedAt = timestampLikeToDate(data.receivedAt);
+    if (receivedAt && receivedAt.getTime() < cutoff.getTime()) continue;
+
+    const raw =
+      typeof data.raw === "object" && data.raw !== null ? (data.raw as RecordData) : {};
+    const envelopeData =
+      typeof raw.data === "object" && raw.data !== null ? (raw.data as RecordData) : raw;
+    const student =
+      (envelopeData.student as RecordData | undefined) ??
+      (envelopeData.customer as RecordData | undefined) ??
+      (envelopeData.buyer as RecordData | undefined) ??
+      (envelopeData.client as RecordData | undefined) ??
+      {};
+    const buyer =
+      (envelopeData.buyer as RecordData | undefined) ??
+      (envelopeData.customer as RecordData | undefined) ??
+      (envelopeData.client as RecordData | undefined) ??
+      {};
+    const address = resolveAddressSource(student, buyer, envelopeData);
+    const items =
+      Array.isArray(envelopeData.items) && envelopeData.items.length
+        ? (envelopeData.items[0] as RecordData)
+        : null;
+
+    const email = normalizeEmail(
+      student.email ?? buyer.email ?? envelopeData.email ?? envelopeData.edz_cli_email
+    );
+    if (!email) continue;
+
+    const paidAt = toDateOrNull(
+      envelopeData.paidAt ??
+        (envelopeData.payment as RecordData | undefined)?.paidAt ??
+        envelopeData.paymentDate
+    );
+    const dueDate = toDateOrNull(
+      envelopeData.dueDate ??
+        (envelopeData.contract as RecordData | undefined)?.dueDate
+    );
+    const validUntil = dueDate ?? (paidAt ? addMonths(paidAt, 12) : null);
+
+    candidates.push({
+      email,
+      name: pickString(student.name ?? buyer.name ?? envelopeData.name),
+      phone: pickFirstString(
+        student.phone,
+        student.cellphone,
+        buyer.phone,
+        buyer.cellphone,
+        envelopeData.phone
+      ),
+      document: pickString(student.document ?? buyer.document ?? envelopeData.document),
+      address: {
+        street: pickString((address as RecordData).street) || null,
+        number: pickString((address as RecordData).number) || null,
+        complement: pickString((address as RecordData).complement) || null,
+        neighborhood: pickString((address as RecordData).neighborhood) || null,
+        city: pickString((address as RecordData).city) || null,
+        state: normalizeStateName((address as RecordData).state),
+        zipCode: pickString((address as RecordData).zipCode) || null,
+        country: pickString((address as RecordData).country) || "Brasil",
+      },
+      productId:
+        pickFirstString(
+          (envelopeData.product as RecordData | undefined)?.id,
+          envelopeData.product_id,
+          (envelopeData.offer as RecordData | undefined)?.id,
+          envelopeData.offer_id,
+          envelopeData.edz_cnt_cod,
+          (items as RecordData | null)?.productId,
+          (items as RecordData | null)?.id
+        ) || null,
+      productTitle:
+        pickFirstString(
+          (envelopeData.product as RecordData | undefined)?.title,
+          envelopeData.product_title,
+          (envelopeData.offer as RecordData | undefined)?.title,
+          envelopeData.offer_title,
+          envelopeData.edz_cnt_titulo,
+          (items as RecordData | null)?.name
+        ) || null,
+      amountPaid:
+        pickNumber(
+          ((envelopeData.price as RecordData | undefined)?.paid as RecordData | undefined)?.value
+        ) ??
+        pickNumber((envelopeData.price as RecordData | undefined)?.value) ??
+        pickNumber(envelopeData.value),
+      currency:
+        pickFirstString(
+          ((envelopeData.price as RecordData | undefined)?.paid as RecordData | undefined)?.currency,
+          (envelopeData.price as RecordData | undefined)?.currency,
+          envelopeData.currency
+        ) || "BRL",
+      paymentMethod:
+        pickFirstString(
+          envelopeData.paymentMethod,
+          (envelopeData.payment as RecordData | undefined)?.method,
+          (envelopeData.invoice as RecordData | undefined)?.paymentMethod
+        ) || null,
+      paidAt,
+      validUntil,
+      invoiceStatus:
+        pickFirstString(
+          (envelopeData.invoice as RecordData | undefined)?.status,
+          envelopeData.invoice_status,
+          envelopeData.status,
+          envelopeData.edz_fat_status
+        ) || "paid",
+      invoiceId:
+        pickFirstString(
+          (envelopeData.invoice as RecordData | undefined)?.id,
+          envelopeData.invoice_id,
+          envelopeData.edz_fat_cod
+        ) || null,
+      subscriptionId:
+        pickFirstString(
+          envelopeData.id,
+          envelopeData.subscription_id,
+          envelopeData.contractId,
+          envelopeData.contract_id
+        ) || null,
+    });
+  }
+
+  return candidates;
+}
+
 async function resolvePlanMatch(productId: string | null, productTitle: string | null) {
   if (productId) {
     const byProductId = await adminDb
@@ -515,6 +678,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const subscriptions = await fetchAllSubscriptions(token);
+    const eventCandidates = await fetchRecentPaidEventCandidates(addMonths(new Date(), -12));
     const now = new Date();
     let scanned = 0;
     let imported = 0;
@@ -527,6 +691,7 @@ export async function POST(req: NextRequest) {
     let skippedWithoutDate = 0;
     let usedSubscriptionDateFallback = 0;
     let firstExpiredDebug: Record<string, unknown> | null = null;
+    const processedEmails = new Set<string>();
 
     for (const subscription of subscriptions) {
       scanned += 1;
@@ -673,6 +838,100 @@ export async function POST(req: NextRequest) {
         updatedUsers += 1;
       }
       imported += 1;
+      processedEmails.add(subscription.email);
+    }
+
+    for (const candidate of eventCandidates) {
+      if (!candidate.email || processedEmails.has(candidate.email)) continue;
+
+      if (!candidate.validUntil) {
+        skipped += 1;
+        skippedWithoutDate += 1;
+        continue;
+      }
+
+      if (candidate.validUntil.getTime() < now.getTime()) {
+        skipped += 1;
+        skippedExpired += 1;
+        continue;
+      }
+
+      let uid = "";
+      let wasCreated = false;
+      try {
+        const authUser = await adminAuth.getUserByEmail(candidate.email);
+        uid = authUser.uid;
+      } catch {
+        const created = await adminAuth.createUser({
+          email: candidate.email,
+          emailVerified: true,
+        });
+        uid = created.uid;
+        wasCreated = true;
+        createdUsers += 1;
+      }
+
+      const userRef = adminDb.collection("users").doc(uid);
+      const profileRef = userRef.collection("profile").doc("main");
+      const entRef = adminDb.collection("entitlements").doc(uid);
+      const userSnap = await userRef.get();
+      const planMatch = await resolvePlanMatch(candidate.productId, candidate.productTitle);
+
+      await Promise.all([
+        userRef.set(
+          {
+            uid,
+            email: candidate.email,
+            role: "student",
+            name: candidate.name || null,
+            updatedAt: now,
+            createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
+          },
+          { merge: true }
+        ),
+        profileRef.set(
+          {
+            name: candidate.name || null,
+            phone: candidate.phone || null,
+            document: candidate.document || null,
+            address: candidate.address,
+            source: "eduzz",
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        entRef.set(
+          {
+            uid,
+            email: candidate.email,
+            active: true,
+            pending: false,
+            source: "eduzz",
+            sourceDetail: "eduzz_event_import",
+            planId: planMatch.planId,
+            productId: candidate.productId,
+            productTitle: planMatch.planTitle,
+            planMatchedBy: planMatch.matchedBy,
+            amountPaid: candidate.amountPaid ?? null,
+            paymentMethod: candidate.paymentMethod ?? null,
+            currency: candidate.currency || "BRL",
+            paidAt: candidate.paidAt ?? null,
+            validUntil: candidate.validUntil,
+            invoiceStatus: candidate.invoiceStatus || "paid",
+            invoiceId: candidate.invoiceId,
+            subscriptionId: candidate.subscriptionId,
+            updatedAt: now,
+            lastSyncAt: now,
+          },
+          { merge: true }
+        ),
+      ]);
+
+      if (!wasCreated) {
+        updatedUsers += 1;
+      }
+      imported += 1;
+      processedEmails.add(candidate.email);
     }
 
     return NextResponse.json(
