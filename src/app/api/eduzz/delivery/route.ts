@@ -574,13 +574,20 @@ export async function POST(req: NextRequest) {
       }
 
       // 6) users/{uid} (portal aluno) + profile em subcoleção
-      await db.collection("users").doc(uid).set(
+      const userRef = db.collection("users").doc(uid);
+      const userSnap = await userRef.get();
+      const existingRole =
+        userSnap.exists && typeof userSnap.data()?.role === "string"
+          ? String(userSnap.data()?.role)
+          : null;
+
+      await userRef.set(
         {
           uid,
           email,
-          role: "student",
+          role: existingRole === "admin" ? "admin" : "student",
           updatedAt: now,
-          createdAt: now,
+          createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
         },
         { merge: true }
       );

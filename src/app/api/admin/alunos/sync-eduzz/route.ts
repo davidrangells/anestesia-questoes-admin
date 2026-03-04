@@ -787,6 +787,10 @@ export async function POST(req: NextRequest) {
       const profileRef = userRef.collection("profile").doc("main");
       const entRef = adminDb.collection("entitlements").doc(uid);
       const userSnap = await userRef.get();
+      const existingRole =
+        userSnap.exists && typeof userSnap.data()?.role === "string"
+          ? String(userSnap.data()?.role)
+          : null;
       const planMatch = await resolvePlanMatch(subscription.productId, subscription.productTitle);
 
       await Promise.all([
@@ -794,7 +798,7 @@ export async function POST(req: NextRequest) {
           {
             uid,
             email: subscription.email,
-            role: "student",
+            role: existingRole === "admin" ? "admin" : "student",
             name: subscription.name || null,
             updatedAt: now,
             createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
@@ -879,6 +883,10 @@ export async function POST(req: NextRequest) {
       const profileRef = userRef.collection("profile").doc("main");
       const entRef = adminDb.collection("entitlements").doc(uid);
       const userSnap = await userRef.get();
+      const existingRole =
+        userSnap.exists && typeof userSnap.data()?.role === "string"
+          ? String(userSnap.data()?.role)
+          : null;
       const planMatch = await resolvePlanMatch(candidate.productId, candidate.productTitle);
 
       await Promise.all([
@@ -886,7 +894,7 @@ export async function POST(req: NextRequest) {
           {
             uid,
             email: candidate.email,
-            role: "student",
+            role: existingRole === "admin" ? "admin" : "student",
             name: candidate.name || null,
             updatedAt: now,
             createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
