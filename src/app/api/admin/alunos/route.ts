@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { secondsFromUnknown } from "@/lib/dateValue";
 
 async function requireAdmin(req: NextRequest) {
   const authHeader = req.headers.get("authorization") || "";
@@ -56,6 +57,69 @@ function sanitizeBody(body: unknown) {
       },
     },
   };
+}
+
+function formatDate(value: unknown) {
+  const seconds = secondsFromUnknown(value);
+  if (!seconds) return "—";
+  return new Intl.DateTimeFormat("pt-BR").format(new Date(seconds * 1000));
+}
+
+export async function GET(req: NextRequest) {
+  const authCheck = await requireAdmin(req);
+  if ("error" in authCheck) return authCheck.error;
+
+  try {
+    const snap = await adminDb.collection("users").where("role", "==", "student").get();
+
+    const rawRows = await Promise.all(
+      snap.docs.map(async (userDoc) => {
+        const [profileSnap, entitlementSnap] = await Promise.all([
+          userDoc.ref.collection("profile").doc("main").get(),
+          adminDb.collection("entitlements").doc(userDoc.id).get(),
+        ]);
+
+        const userData = userDoc.data();
+        const profile = profileSnap.exists ? profileSnap.data() ?? {} : {};
+        const entitlement = entitlementSnap.exists ? entitlementSnap.data() ?? {} : {};
+
+        return {
+          uid: userDoc.id,
+          createdAt: formatDate(userData.updatedAt ?? userData.createdAt),
+          name:
+            String(profile.name ?? "").trim() ||
+            String(userData.name ?? "").trim() ||
+            "Aluno sem nome",
+          cpf: String(profile.document ?? "").trim() || "—",
+          cellphone:
+            String(profile.phone ?? profile.cellphone ?? "").trim() || "—",
+          email:
+            String(userData.email ?? entitlement.email ?? "").trim() || "—",
+          active: entitlement.active === true,
+          sortSeconds:
+            secondsFromUnknown(userData.updatedAt) || secondsFromUnknown(userData.createdAt),
+        };
+      })
+    );
+
+    const items = rawRows
+      .sort((a, b) => b.sortSeconds - a.sortSeconds)
+      .map((item, index) => ({
+        uid: item.uid,
+        code: String(rawRows.length - index),
+        createdAt: item.createdAt,
+        name: item.name,
+        cpf: item.cpf,
+        cellphone: item.cellphone,
+        email: item.email,
+        active: item.active,
+      }));
+
+    return NextResponse.json({ ok: true, items }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao carregar alunos.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

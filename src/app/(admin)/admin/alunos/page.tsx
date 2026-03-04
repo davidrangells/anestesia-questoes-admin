@@ -2,18 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
 import { buttonStyles } from "@/components/ui/Button";
-import { secondsFromUnknown } from "@/lib/dateValue";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 type AlunoListItem = {
   uid: string;
@@ -25,12 +16,6 @@ type AlunoListItem = {
   email: string;
   active: boolean;
 };
-
-function formatDate(value: unknown) {
-  const seconds = secondsFromUnknown(value);
-  if (!seconds) return "—";
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(seconds * 1000));
-}
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -58,54 +43,26 @@ export default function AlunosPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const snap = await getDocs(query(collection(db, "users"), where("role", "==", "student")));
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
-      const rawRows = await Promise.all(
-        snap.docs.map(async (userDoc, index) => {
-          const [profileSnap, entitlementSnap] = await Promise.all([
-            getDoc(doc(db, "users", userDoc.id, "profile", "main")),
-            getDoc(doc(db, "entitlements", userDoc.id)),
-          ]);
+      const res = await fetch("/api/admin/alunos", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-          const userData = userDoc.data();
-          const profile = profileSnap.exists() ? profileSnap.data() : {};
-          const entitlement = entitlementSnap.exists() ? entitlementSnap.data() : {};
-          const sortSeconds =
-            secondsFromUnknown(userData.updatedAt) || secondsFromUnknown(userData.createdAt);
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        items?: AlunoListItem[];
+      };
 
-          return {
-            uid: userDoc.id,
-            code: String(snap.size - index),
-            createdAt: formatDate(userData.updatedAt ?? userData.createdAt),
-            name:
-              String(profile?.name ?? "").trim() ||
-              String(userData.name ?? "").trim() ||
-              "Aluno sem nome",
-            cpf: String(profile?.document ?? "").trim() || "—",
-            cellphone:
-              String(profile?.phone ?? profile?.cellphone ?? "").trim() || "—",
-            email:
-              String(userData.email ?? entitlement?.email ?? "").trim() || "—",
-            active: entitlement?.active === true,
-            sortSeconds,
-          };
-        })
-      );
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível carregar os alunos.");
+      }
 
-      const rows = rawRows
-        .sort((a, b) => b.sortSeconds - a.sortSeconds)
-        .map((item, index) => ({
-          uid: item.uid,
-          code: String(rawRows.length - index),
-          createdAt: item.createdAt,
-          name: item.name,
-          cpf: item.cpf,
-          cellphone: item.cellphone,
-          email: item.email,
-          active: item.active,
-        })) satisfies AlunoListItem[];
-
-      setItems(rows);
+      setItems(Array.isArray(data.items) ? data.items : []);
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os alunos.");
     } finally {
