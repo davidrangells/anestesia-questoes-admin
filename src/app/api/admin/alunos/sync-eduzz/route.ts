@@ -62,6 +62,8 @@ type EduzzEventCandidate = {
   subscriptionId: string | null;
 };
 
+type EduzzSaleCandidate = EduzzEventCandidate;
+
 function pickString(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -616,6 +618,111 @@ async function fetchRecentPaidEventCandidates(cutoff: Date) {
   return candidates;
 }
 
+async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
+  const candidates: EduzzSaleCandidate[] = [];
+  const endDate = new Date();
+
+  for (let page = 1; page <= 20; page += 1) {
+    const params = new URLSearchParams({
+      page: String(page),
+      itemsPerPage: "100",
+      startDate: formatEduzzDateTime(cutoff),
+      endDate: formatEduzzDateTime(endDate),
+      referenceDate: "paidAt",
+      status: "paid",
+    });
+    const payload = await eduzzRequest(`/myeduzz/v1/sales?${params.toString()}`, token);
+    const rawItems = extractArray(payload);
+
+    if (!rawItems.length) {
+      break;
+    }
+
+    for (const rawItem of rawItems) {
+      const item = unwrapRecord(rawItem);
+      const buyer =
+        (item.buyer as RecordData | undefined) ??
+        (item.customer as RecordData | undefined) ??
+        (item.client as RecordData | undefined) ??
+        {};
+      const student =
+        (item.student as RecordData | undefined) ??
+        (item.customer as RecordData | undefined) ??
+        buyer;
+      const product =
+        (item.product as RecordData | undefined) ??
+        (item.offer as RecordData | undefined) ??
+        {};
+      const address = resolveAddressSource(student, buyer, item);
+      const email = normalizeEmail(
+        student.email ?? buyer.email ?? item.buyerEmail ?? item.email
+      );
+      const paidAt = toDateOrNull(item.paidAt ?? item.creditDate ?? item.updatedAt);
+      const dueDate = toDateOrNull(item.dueDate ?? item.createdAt);
+      const validUntil = paidAt
+        ? addMonths(paidAt, 12)
+        : dueDate
+          ? addMonths(dueDate, 12)
+          : null;
+
+      if (!email) continue;
+
+      candidates.push({
+        email,
+        name: pickString(student.name ?? buyer.name ?? item.name),
+        phone: pickFirstString(student.phone, buyer.phone, item.phone),
+        document: pickString(student.document ?? buyer.document ?? item.buyerDocument ?? item.document),
+        address: {
+          street: pickString((address as RecordData).street) || null,
+          number: pickString((address as RecordData).number) || null,
+          complement: pickString((address as RecordData).complement) || null,
+          neighborhood: pickString((address as RecordData).neighborhood) || null,
+          city: pickString((address as RecordData).city) || null,
+          state: normalizeStateName((address as RecordData).state),
+          zipCode: pickString((address as RecordData).zipCode) || null,
+          country: pickString((address as RecordData).country) || "Brasil",
+        },
+        productId:
+          pickFirstString(product.id, item.productId, (item.offer as RecordData | undefined)?.id) ||
+          null,
+        productTitle:
+          pickFirstString(product.name, product.title, item.productName, (item.offer as RecordData | undefined)?.title) ||
+          null,
+        amountPaid:
+          pickNumber((item.total as RecordData | undefined)?.value) ??
+          pickNumber((item.totalInterest as RecordData | undefined)?.value) ??
+          pickNumber(item.value),
+        currency:
+          pickFirstString(
+            (item.total as RecordData | undefined)?.currency,
+            (item.totalInterest as RecordData | undefined)?.currency,
+            item.currency
+          ) || "BRL",
+        paymentMethod:
+          pickFirstString(
+            (item.payment as RecordData | undefined)?.detail,
+            (item.payment as RecordData | undefined)?.method
+          ) || null,
+        paidAt,
+        validUntil,
+        invoiceStatus: pickFirstString(item.status) || "paid",
+        invoiceId: pickFirstString(item.id),
+        subscriptionId: pickFirstString(item.contractId),
+      });
+    }
+
+    const totalPages = pickNumber(
+      payload.pages ??
+        (payload.pagination as RecordData | undefined)?.totalPages ??
+        (payload.meta as RecordData | undefined)?.totalPages
+    );
+
+    if (totalPages && page >= totalPages) break;
+  }
+
+  return candidates;
+}
+
 async function resolvePlanMatch(productId: string | null, productTitle: string | null) {
   if (productId) {
     const byProductId = await adminDb
@@ -681,6 +788,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const salesCandidates = await fetchPaidSalesCandidates(token, addMonths(new Date(), -12));
     const subscriptions = await fetchAllSubscriptions(token);
     const eventCandidates = await fetchRecentPaidEventCandidates(addMonths(new Date(), -12));
     const now = new Date();
@@ -696,6 +804,103 @@ export async function POST(req: NextRequest) {
     let usedSubscriptionDateFallback = 0;
     let firstExpiredDebug: Record<string, unknown> | null = null;
     const processedEmails = new Set<string>();
+
+    for (const candidate of salesCandidates) {
+      if (!candidate.email || processedEmails.has(candidate.email)) continue;
+
+      if (!candidate.validUntil) {
+        skipped += 1;
+        skippedWithoutDate += 1;
+        continue;
+      }
+
+      if (candidate.validUntil.getTime() < now.getTime()) {
+        skipped += 1;
+        skippedExpired += 1;
+        continue;
+      }
+
+      let uid = "";
+      let wasCreated = false;
+      try {
+        const authUser = await adminAuth.getUserByEmail(candidate.email);
+        uid = authUser.uid;
+      } catch {
+        const created = await adminAuth.createUser({
+          email: candidate.email,
+          emailVerified: true,
+        });
+        uid = created.uid;
+        wasCreated = true;
+        createdUsers += 1;
+      }
+
+      const userRef = adminDb.collection("users").doc(uid);
+      const profileRef = userRef.collection("profile").doc("main");
+      const entRef = adminDb.collection("entitlements").doc(uid);
+      const userSnap = await userRef.get();
+      const existingRole =
+        userSnap.exists && typeof userSnap.data()?.role === "string"
+          ? String(userSnap.data()?.role)
+          : null;
+      const planMatch = await resolvePlanMatch(candidate.productId, candidate.productTitle);
+
+      await Promise.all([
+        userRef.set(
+          {
+            uid,
+            email: candidate.email,
+            role: existingRole === "admin" ? "admin" : "student",
+            name: candidate.name || null,
+            updatedAt: now,
+            createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
+          },
+          { merge: true }
+        ),
+        profileRef.set(
+          {
+            name: candidate.name || null,
+            phone: candidate.phone || null,
+            document: candidate.document || null,
+            address: candidate.address,
+            source: "eduzz",
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        entRef.set(
+          {
+            uid,
+            email: candidate.email,
+            active: true,
+            pending: false,
+            source: "eduzz",
+            sourceDetail: "eduzz_sales_import",
+            planId: planMatch.planId,
+            productId: candidate.productId,
+            productTitle: planMatch.planTitle,
+            planMatchedBy: planMatch.matchedBy,
+            amountPaid: candidate.amountPaid ?? null,
+            paymentMethod: candidate.paymentMethod ?? null,
+            currency: candidate.currency || "BRL",
+            paidAt: candidate.paidAt ?? null,
+            validUntil: candidate.validUntil,
+            invoiceStatus: candidate.invoiceStatus || "paid",
+            invoiceId: candidate.invoiceId,
+            subscriptionId: candidate.subscriptionId,
+            updatedAt: now,
+            lastSyncAt: now,
+          },
+          { merge: true }
+        ),
+      ]);
+
+      if (!wasCreated) {
+        updatedUsers += 1;
+      }
+      imported += 1;
+      processedEmails.add(candidate.email);
+    }
 
     for (const subscription of subscriptions) {
       scanned += 1;
