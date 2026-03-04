@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
 import { buttonStyles } from "@/components/ui/Button";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 
 type AlunoListItem = {
   uid: string;
@@ -52,87 +52,124 @@ function StatusBadge({ active }: { active: boolean }) {
 export default function AlunosPage() {
   const [items, setItems] = useState<AlunoListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const snap = await getDocs(query(collection(db, "users"), where("role", "==", "student")));
+
+      const rawRows = await Promise.all(
+        snap.docs.map(async (userDoc, index) => {
+          const [profileSnap, entitlementSnap] = await Promise.all([
+            getDoc(doc(db, "users", userDoc.id, "profile", "main")),
+            getDoc(doc(db, "entitlements", userDoc.id)),
+          ]);
+
+          const userData = userDoc.data();
+          const profile = profileSnap.exists() ? profileSnap.data() : {};
+          const entitlement = entitlementSnap.exists() ? entitlementSnap.data() : {};
+          const sortSeconds =
+            typeof userData.updatedAt === "object" &&
+            userData.updatedAt !== null &&
+            "seconds" in userData.updatedAt
+              ? Number((userData.updatedAt as { seconds?: number }).seconds ?? 0)
+              : typeof userData.createdAt === "object" &&
+                  userData.createdAt !== null &&
+                  "seconds" in userData.createdAt
+                ? Number((userData.createdAt as { seconds?: number }).seconds ?? 0)
+                : 0;
+
+          return {
+            uid: userDoc.id,
+            code: String(snap.size - index),
+            createdAt: formatDate(userData.updatedAt ?? userData.createdAt),
+            name:
+              String(profile?.name ?? "").trim() ||
+              String(userData.name ?? "").trim() ||
+              "Aluno sem nome",
+            cpf: String(profile?.document ?? "").trim() || "—",
+            cellphone:
+              String(profile?.phone ?? profile?.cellphone ?? "").trim() || "—",
+            email:
+              String(userData.email ?? entitlement?.email ?? "").trim() || "—",
+            active: entitlement?.active === true,
+            sortSeconds,
+          };
+        })
+      );
+
+      const rows = rawRows
+        .sort((a, b) => b.sortSeconds - a.sortSeconds)
+        .map((item, index) => ({
+          uid: item.uid,
+          code: String(rawRows.length - index),
+          createdAt: item.createdAt,
+          name: item.name,
+          cpf: item.cpf,
+          cellphone: item.cellphone,
+          email: item.email,
+          active: item.active,
+        })) satisfies AlunoListItem[];
+
+      setItems(rows);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os alunos.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let active = true;
-
-    const load = async () => {
-      setLoading(true);
-      setErrorMsg(null);
-      try {
-        const snap = await getDocs(query(collection(db, "users"), where("role", "==", "student")));
-
-        const rawRows = await Promise.all(
-          snap.docs.map(async (userDoc, index) => {
-            const [profileSnap, entitlementSnap] = await Promise.all([
-              getDoc(doc(db, "users", userDoc.id, "profile", "main")),
-              getDoc(doc(db, "entitlements", userDoc.id)),
-            ]);
-
-            const userData = userDoc.data();
-            const profile = profileSnap.exists() ? profileSnap.data() : {};
-            const entitlement = entitlementSnap.exists() ? entitlementSnap.data() : {};
-            const sortSeconds =
-              typeof userData.updatedAt === "object" &&
-              userData.updatedAt !== null &&
-              "seconds" in userData.updatedAt
-                ? Number((userData.updatedAt as { seconds?: number }).seconds ?? 0)
-                : typeof userData.createdAt === "object" &&
-                    userData.createdAt !== null &&
-                    "seconds" in userData.createdAt
-                  ? Number((userData.createdAt as { seconds?: number }).seconds ?? 0)
-                  : 0;
-
-            return {
-              uid: userDoc.id,
-              code: String(snap.size - index),
-              createdAt: formatDate(userData.updatedAt ?? userData.createdAt),
-              name:
-                String(profile?.name ?? "").trim() ||
-                String(userData.name ?? "").trim() ||
-                "Aluno sem nome",
-              cpf: String(profile?.document ?? "").trim() || "—",
-              cellphone:
-                String(profile?.phone ?? profile?.cellphone ?? "").trim() || "—",
-              email:
-                String(userData.email ?? entitlement?.email ?? "").trim() || "—",
-              active: entitlement?.active === true,
-              sortSeconds,
-            };
-          })
-        );
-
-        const rows = rawRows
-          .sort((a, b) => b.sortSeconds - a.sortSeconds)
-          .map((item, index) => ({
-            uid: item.uid,
-            code: String(rawRows.length - index),
-            createdAt: item.createdAt,
-            name: item.name,
-            cpf: item.cpf,
-            cellphone: item.cellphone,
-            email: item.email,
-            active: item.active,
-          })) satisfies AlunoListItem[];
-
-        if (active) setItems(rows);
-      } catch (error) {
-        if (active) {
-          setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os alunos.");
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
     void load();
-
-    return () => {
-      active = false;
-    };
   }, []);
+
+  const syncEduzz = async () => {
+    setSyncing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+      const res = await fetch("/api/admin/alunos/sync-eduzz", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        scanned?: number;
+        imported?: number;
+        createdUsers?: number;
+        updatedUsers?: number;
+        skipped?: number;
+      };
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível sincronizar os alunos da Eduzz.");
+      }
+
+      setSuccessMsg(
+        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).`
+      );
+      await load();
+    } catch (error) {
+      setErrorMsg(
+        error instanceof Error ? error.message : "Não foi possível sincronizar os alunos da Eduzz."
+      );
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -164,6 +201,15 @@ export default function AlunosPage() {
             />
           </div>
 
+          <button
+            type="button"
+            onClick={() => void syncEduzz()}
+            disabled={syncing}
+            className={buttonStyles({ variant: "secondary" })}
+          >
+            {syncing ? "Sincronizando..." : "Sincronizar Eduzz"}
+          </button>
+
           <Link href="/admin/alunos/novo" className={buttonStyles({ variant: "primary" })}>
             Criar
           </Link>
@@ -181,6 +227,11 @@ export default function AlunosPage() {
           {errorMsg ? (
             <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               {errorMsg}
+            </div>
+          ) : null}
+          {successMsg ? (
+            <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {successMsg}
             </div>
           ) : null}
         </div>
