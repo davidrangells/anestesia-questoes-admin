@@ -357,7 +357,7 @@ async function eduzzRequest(path: string, token: string) {
 async function fetchAllSubscriptions(token: string) {
   const subscriptions: EduzzSubscription[] = [];
   const endDate = new Date();
-  const startDate = addMonths(endDate, -12);
+  const startDate = addMonths(endDate, -60);
 
   for (let page = 1; page <= 20; page += 1) {
     const params = new URLSearchParams({
@@ -379,7 +379,7 @@ async function fetchAllSubscriptions(token: string) {
         throw new Error(
           rawItems.length
             ? `A API da Eduzz respondeu com itens, mas não foi possível mapear as assinaturas. Exemplo: ${summarizePayload(rawItems[0] ?? {})}`
-            : `A API da Eduzz respondeu, mas não retornou assinaturas em um formato reconhecido. Payload: ${summarizePayload(payload)}`
+            : `A API da Eduzz respondeu sem assinaturas para o período consultado. Payload: ${summarizePayload(payload)}`
         );
       }
       break;
