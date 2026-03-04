@@ -68,6 +68,7 @@ export async function GET(
           entitlement: entitlementSnap.exists ? entitlementSnap.data() ?? {} : {},
         },
         billing: {
+          manualTotal: billing.manualTotal ?? null,
           invoices: ensureArray(billing.invoices),
           movements: ensureArray(billing.movements),
           updatedAt: billing.updatedAt ?? null,
@@ -95,6 +96,15 @@ export async function PATCH(
     const mode = pickString(body.mode);
     const comment = pickString(body.comment);
     const status = pickString(body.status);
+    const hasAmount = Object.prototype.hasOwnProperty.call(body, "amount");
+    const amount = hasAmount ? pickNumber(body.amount) : null;
+
+    if (hasAmount && (amount == null || amount < 0)) {
+      return NextResponse.json(
+        { ok: false, error: "Informe um valor válido para a fatura." },
+        { status: 400 }
+      );
+    }
 
     const entRef = adminDb.collection("entitlements").doc(uid);
     const billingRef = adminDb.collection("billing_records").doc(uid);
@@ -119,6 +129,28 @@ export async function PATCH(
     const invoices = ensureArray<Record<string, unknown>>(billing.invoices);
     const movements = ensureArray<Record<string, unknown>>(billing.movements);
     const now = new Date();
+    const effectiveAmount =
+      hasAmount && amount != null ? amount : pickNumber(billing.manualTotal) ?? pickNumber(entitlement.amountPaid);
+
+    if (hasAmount && amount != null) {
+      await Promise.all([
+        entRef.set(
+          {
+            amountPaid: amount,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        billingRef.set(
+          {
+            uid,
+            manualTotal: amount,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+      ]);
+    }
 
     if (mode === "generate_invoice") {
       const result = await generateBlingServiceInvoice({
@@ -130,6 +162,7 @@ export async function PATCH(
           pickString(entitlement.invoiceId) ||
           pickString(entitlement.lastEventId) ||
           uid,
+        amountOverride: effectiveAmount,
       });
 
       const invoice = {
@@ -137,7 +170,7 @@ export async function PATCH(
         createdAt: now,
         service: result.service,
         invoiceNumber: result.invoiceNumber || `NFSe-${String(invoices.length + 1).padStart(3, "0")}`,
-        total: result.total ?? pickNumber(entitlement.amountPaid),
+        total: result.total ?? effectiveAmount,
         status: result.status || "emitida",
         provider: result.provider,
         providerId: result.providerId,
@@ -161,6 +194,7 @@ export async function PATCH(
                 `Nota fiscal ${String(invoice.invoiceNumber)} gerada manualmente no Bling.`,
             },
           ],
+          manualTotal: result.total ?? effectiveAmount ?? null,
           updatedAt: now,
         },
         { merge: true }
@@ -189,6 +223,7 @@ export async function PATCH(
             invoiceStatus: status,
             active: flags.active,
             pending: flags.pending,
+            ...(effectiveAmount != null ? { amountPaid: effectiveAmount } : {}),
             updatedAt: now,
           },
           { merge: true }
@@ -205,6 +240,7 @@ export async function PATCH(
                 comment: comment || "Status alterado manualmente no painel.",
               },
             ],
+            ...(effectiveAmount != null ? { manualTotal: effectiveAmount } : {}),
             updatedAt: now,
           },
           { merge: true }

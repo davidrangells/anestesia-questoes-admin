@@ -28,6 +28,7 @@ type BlingInvoiceInput = {
   profile: RecordData;
   entitlement: RecordData;
   invoiceCode: string;
+  amountOverride?: number | null;
 };
 
 type BlingInvoiceResult = {
@@ -58,6 +59,14 @@ function pickNumber(value: unknown) {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D+/g, "");
+}
+
+function formatDateOnly(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
 
 function normalizeBool(value: unknown, fallback = false) {
@@ -447,45 +456,12 @@ async function blingRequest(
 
 async function syncBlingContactBestEffort(
   settings: BlingSettings,
-  input: BlingInvoiceInput,
-  address: ReturnType<typeof getAddressSource>
+  path: string,
+  payload: RecordData
 ) {
-  if (!settings.autoCreateContact || !settings.contactsEndpointPath) return;
-
-  const payload = {
-    nome:
-      pickString(input.profile.name) || pickString(input.user.name) || pickString(input.entitlement.name),
-    codigo: input.uid,
-    email: pickString(input.user.email) || pickString(input.entitlement.email),
-    telefone:
-      pickString(input.profile.phone) ||
-      pickString(input.profile.cellphone) ||
-      pickString(input.user.phone),
-    celular:
-      pickString(input.profile.cellphone) ||
-      pickString(input.profile.phone) ||
-      pickString(input.user.phone),
-    numeroDocumento:
-      pickString(input.profile.document) ||
-      pickString(input.user.document) ||
-      pickString(input.entitlement.document),
-    endereco: {
-      geral: {
-        endereco: address.street,
-        numero: address.number,
-        complemento: address.complement,
-        bairro: address.neighborhood,
-        municipio: address.city,
-        uf: address.state,
-        cep: address.zipCode,
-        pais: address.country,
-      },
-    },
-  };
-
   try {
-    await blingRequest(settings, settings.contactsEndpointPath, {
-      method: "POST",
+    await blingRequest(settings, path, {
+      method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
@@ -496,16 +472,10 @@ async function syncBlingContactBestEffort(
   }
 }
 
-function buildInvoicePayload(
-  settings: BlingSettings,
+function buildContactPayload(
   input: BlingInvoiceInput,
   address: ReturnType<typeof getAddressSource>
 ) {
-  const total = pickNumber(input.entitlement.amountPaid);
-  const serviceTitle =
-    settings.serviceDescription ||
-    pickString(input.entitlement.productTitle) ||
-    "Assinatura da plataforma";
   const customerName =
     pickString(input.profile.name) ||
     pickString(input.user.name) ||
@@ -515,6 +485,150 @@ function buildInvoicePayload(
     pickString(input.profile.document) ||
     pickString(input.user.document) ||
     pickString(input.entitlement.document);
+  const email = pickString(input.user.email) || pickString(input.entitlement.email);
+  const type = document.length > 11 ? "J" : "F";
+
+  ensureRequiredAddress(address);
+
+  return {
+    nome: customerName,
+    codigo: input.uid,
+    situacao: "A",
+    tipo: type,
+    email,
+    emailNotaFiscal: email || undefined,
+    numeroDocumento: onlyDigits(document),
+    telefone:
+      pickString(input.profile.phone) ||
+      pickString(input.profile.cellphone) ||
+      pickString(input.user.phone),
+    celular:
+      pickString(input.profile.cellphone) ||
+      pickString(input.profile.phone) ||
+      pickString(input.user.phone),
+    indicadorIe: 9,
+    endereco: {
+      geral: {
+        endereco: address.street,
+        numero: address.number,
+        complemento: address.complement,
+        bairro: address.neighborhood,
+        municipio: address.city,
+        uf: address.state,
+        cep: address.zipCode,
+      },
+    },
+    pais: address.country ? { nome: address.country } : undefined,
+  };
+}
+
+async function findOrCreateBlingContact(
+  settings: BlingSettings,
+  input: BlingInvoiceInput,
+  address: ReturnType<typeof getAddressSource>
+) {
+  if (!settings.contactsEndpointPath) {
+    throw new Error("Configure o endpoint de contatos do Bling em Configurações.");
+  }
+
+  const document =
+    pickString(input.profile.document) ||
+    pickString(input.user.document) ||
+    pickString(input.entitlement.document);
+  const email = pickString(input.user.email) || pickString(input.entitlement.email);
+  const contactPayload = buildContactPayload(input, address);
+
+  let path = settings.contactsEndpointPath;
+  const query = new URLSearchParams();
+  const numericDocument = onlyDigits(document);
+
+  if (numericDocument) {
+    query.set("numeroDocumento", numericDocument);
+  } else if (email) {
+    query.set("pesquisa", email);
+  } else {
+    throw new Error("Dados insuficientes para localizar o contato no Bling.");
+  }
+
+  if (query.size) {
+    path += `?${query.toString()}`;
+  }
+
+  const lookup = (await blingRequest(settings, path, {
+    method: "GET",
+  })) as RecordData;
+
+  const existing = Array.isArray(lookup.data) ? (lookup.data[0] as RecordData | undefined) : undefined;
+  const existingId = existing ? Number(existing.id) : NaN;
+
+  if (Number.isFinite(existingId) && existingId > 0) {
+    const existingContact = existing as RecordData;
+
+    if (settings.autoCreateContact) {
+      await syncBlingContactBestEffort(
+        settings,
+        `${settings.contactsEndpointPath}/${existingId}`,
+        contactPayload
+      );
+    }
+
+    return {
+      id: existingId,
+      nome: pickString(existingContact.nome) || pickString(contactPayload.nome),
+      numeroDocumento: numericDocument || pickString(existingContact.numeroDocumento),
+      email: email || pickString(existingContact.email),
+      payload: contactPayload,
+    };
+  }
+
+  const created = (await blingRequest(settings, settings.contactsEndpointPath, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(contactPayload),
+  })) as RecordData;
+
+  const createdData =
+    typeof created.data === "object" && created.data !== null ? (created.data as RecordData) : created;
+  const createdId = Number(createdData.id);
+
+  if (!Number.isFinite(createdId) || createdId <= 0) {
+    throw new Error("O Bling não retornou um ID válido para o contato.");
+  }
+
+  return {
+    id: createdId,
+    nome: pickString(contactPayload.nome),
+    numeroDocumento: numericDocument,
+    email,
+    payload: contactPayload,
+  };
+}
+
+function buildInvoicePayload(
+  settings: BlingSettings,
+  input: BlingInvoiceInput,
+  address: ReturnType<typeof getAddressSource>,
+  contact: {
+    id: number;
+    nome: string;
+    numeroDocumento: string;
+    email: string;
+  }
+) {
+  const total = input.amountOverride ?? pickNumber(input.entitlement.amountPaid);
+  const serviceTitle =
+    settings.serviceDescription ||
+    pickString(input.entitlement.productTitle) ||
+    "Assinatura da plataforma";
+  const customerName =
+    contact.nome ||
+    pickString(input.profile.name) ||
+    pickString(input.user.name) ||
+    pickString(input.entitlement.name) ||
+    "Aluno";
+  const document = contact.numeroDocumento;
 
   if (!customerName || !document || total == null) {
     throw new Error(
@@ -522,50 +636,51 @@ function buildInvoicePayload(
     );
   }
 
+  if (total <= 0) {
+    throw new Error("Informe um valor maior que zero para emitir a nota no Bling.");
+  }
+
+  if (!settings.series) {
+    throw new Error("Preencha a série da NFS-e em Configurações antes de emitir.");
+  }
+
   ensureRequiredAddress(address);
 
-  const commentBase = settings.defaultComment || "Nota gerada manualmente pelo gestor admin.";
+  const numeroRPS = onlyDigits(input.invoiceCode).slice(0, 20) || String(Date.now()).slice(-12);
 
   return {
-    referenciaExterna: input.invoiceCode,
-    dataEmissao: new Date().toISOString(),
-    naturezaOperacao: settings.serviceNature || undefined,
-    serie: settings.series || undefined,
-    observacoes: commentBase,
+    numeroRPS,
+    serie: settings.series,
     contato: {
+      id: contact.id,
       nome: customerName,
-      email: pickString(input.user.email) || pickString(input.entitlement.email),
+      email: contact.email,
       numeroDocumento: document,
       telefone:
         pickString(input.profile.phone) ||
         pickString(input.profile.cellphone) ||
         pickString(input.user.phone),
+      ie: undefined,
+      im: undefined,
       endereco: {
-        logradouro: address.street,
-        numero: address.number,
+        endereco: address.street,
+        numero: address.number || undefined,
         complemento: address.complement,
         bairro: address.neighborhood,
-        cidade: address.city,
+        municipio: address.city,
         uf: address.state,
         cep: address.zipCode,
-        pais: address.country,
       },
     },
-    servico: {
-      codigo: settings.serviceCode || undefined,
-      itemListaServico: settings.serviceListItem || undefined,
-      descricao: serviceTitle,
-      cnae: settings.cnae || undefined,
-      aliquotaIss: settings.issRate ?? undefined,
-      valor: total,
-      quantidade: 1,
-    },
-    itens: [
+    data: formatDateOnly(new Date()),
+    dataEmissao: formatDateOnly(new Date()),
+    baseCalculo: total,
+    reterISS: false,
+    servicos: [
       {
-        codigo: pickString(input.entitlement.productId) || undefined,
+        codigo: settings.serviceCode || settings.serviceListItem || "1",
         descricao: serviceTitle,
         valor: total,
-        quantidade: 1,
       },
     ],
   };
@@ -632,9 +747,8 @@ export async function generateBlingServiceInvoice(
   }
 
   const address = getAddressSource(input.profile, input.user, input.entitlement);
-  await syncBlingContactBestEffort(settings, input, address);
-
-  const requestPayload = buildInvoicePayload(settings, input, address);
+  const contact = await findOrCreateBlingContact(settings, input, address);
+  const requestPayload = buildInvoicePayload(settings, input, address, contact);
   const rawResponse = await blingRequest(settings, settings.nfseEndpointPath, {
     method: "POST",
     headers: {
@@ -643,7 +757,7 @@ export async function generateBlingServiceInvoice(
     body: JSON.stringify(requestPayload),
   });
 
-  const total = pickNumber(input.entitlement.amountPaid);
+  const total = input.amountOverride ?? pickNumber(input.entitlement.amountPaid);
   const service = settings.serviceDescription || pickString(input.entitlement.productTitle) || "Assinatura";
   const meta = extractInvoiceMeta(rawResponse, total, service);
 

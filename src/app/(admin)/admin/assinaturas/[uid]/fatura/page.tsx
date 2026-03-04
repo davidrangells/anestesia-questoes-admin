@@ -58,6 +58,13 @@ function formatCurrency(value: number | null) {
   }).format(value);
 }
 
+function parseAmountDraft(value: string) {
+  const normalized = value.replace(/\./g, "").replace(",", ".").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function ReadonlyField({
   label,
   value,
@@ -87,6 +94,7 @@ export default function FaturaPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [statusDraft, setStatusDraft] = useState("pendente");
   const [commentDraft, setCommentDraft] = useState("");
+  const [amountDraft, setAmountDraft] = useState("");
   const [payload, setPayload] = useState<FaturaPayload>({
     aluno: "",
     email: "",
@@ -126,6 +134,7 @@ export default function FaturaPage() {
           entitlement?: Record<string, unknown>;
         };
         billing?: {
+          manualTotal?: unknown;
           invoices?: BillingInvoice[];
           movements?: BillingMovement[];
         };
@@ -146,10 +155,16 @@ export default function FaturaPage() {
           "Aluno sem nome",
         email: String(user.email ?? ent.email ?? "").trim(),
         code: String(ent.invoiceId ?? ent.lastEventId ?? params.uid).trim(),
-        total:
-          ent.amountPaid != null && Number.isFinite(Number(ent.amountPaid))
+        total: (() => {
+          const manual =
+            data.billing?.manualTotal != null && Number.isFinite(Number(data.billing.manualTotal))
+              ? Number(data.billing.manualTotal)
+              : null;
+          if (manual != null) return manual;
+          return ent.amountPaid != null && Number.isFinite(Number(ent.amountPaid))
             ? Number(ent.amountPaid)
-            : null,
+            : null;
+        })(),
         dueDate: ent.validUntil ?? null,
         createdAt: ent.paidAt ?? ent.updatedAt ?? user.createdAt ?? null,
         status: String(ent.invoiceStatus ?? (ent.active === true ? "ativo" : ent.pending === true ? "pendente" : "inativo")).trim() || "pendente",
@@ -163,6 +178,11 @@ export default function FaturaPage() {
 
       setPayload(nextPayload);
       setStatusDraft(nextPayload.status.toLowerCase());
+      setAmountDraft(
+        nextPayload.total != null && Number.isFinite(nextPayload.total)
+          ? nextPayload.total.toFixed(2).replace(".", ",")
+          : ""
+      );
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Erro ao carregar a fatura.");
     } finally {
@@ -188,6 +208,8 @@ export default function FaturaPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+      const parsedAmount = parseAmountDraft(amountDraft);
+      const shouldSendAmount = amountDraft.trim().length > 0;
 
       const res = await fetch(`/api/admin/faturas/${params.uid}`, {
         method: "PATCH",
@@ -199,6 +221,7 @@ export default function FaturaPage() {
           mode,
           status: statusDraft,
           comment: commentDraft,
+          ...(shouldSendAmount ? { amount: parsedAmount } : {}),
         }),
       });
 
@@ -273,7 +296,21 @@ export default function FaturaPage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <ReadonlyField label="Cód." value={payload.code} />
-                <ReadonlyField label="Total" value={formatCurrency(payload.total)} />
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Total
+                  </div>
+                  <input
+                    value={amountDraft}
+                    onChange={(e) => setAmountDraft(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0,01"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <div className="mt-1 text-xs text-slate-500">
+                    Informe um valor manual para evitar emissão com total zerado.
+                  </div>
+                </div>
                 <ReadonlyField label="Aluno" value={payload.aluno} />
               </div>
 
