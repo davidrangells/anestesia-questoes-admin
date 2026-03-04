@@ -12,6 +12,7 @@ type EduzzSubscription = {
   status: string;
   createdAt: Date | null;
   updatedAt: Date | null;
+  explicitValidUntil: Date | null;
   email: string;
   name: string;
   phone: string;
@@ -36,6 +37,7 @@ type EduzzInvoice = {
   status: string;
   paidAt: Date | null;
   createdAt: Date | null;
+  dueAt: Date | null;
   amountPaid: number | null;
   currency: string;
   paymentMethod: string | null;
@@ -235,6 +237,20 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
       source.createdAt ?? source.created_at ?? source.startDate ?? source.start_date
     ),
     updatedAt: toDateOrNull(source.updatedAt ?? source.updated_at),
+    explicitValidUntil: toDateOrNull(
+      source.endDate ??
+        source.end_date ??
+        source.expiresAt ??
+        source.expires_at ??
+        source.expirationDate ??
+        source.expiration_date ??
+        source.nextChargeDate ??
+        source.next_charge_date ??
+        source.nextBillingDate ??
+        source.next_billing_date ??
+        source.renewalDate ??
+        source.renewal_date
+    ),
     email,
     name: pickString(student.name ?? buyer.name ?? source.name),
     phone:
@@ -312,6 +328,7 @@ function mapInvoice(raw: RecordData): EduzzInvoice | null {
         raw.released_at ??
         raw.date
     ),
+    dueAt: toDateOrNull(raw.dueAt ?? raw.due_at ?? raw.dueDate ?? raw.expireDate ?? raw.expire_date),
     amountPaid:
       pickNumber(paidNode.value) ??
       pickNumber(priceNode.value) ??
@@ -353,6 +370,10 @@ function isPaidInvoice(status: string) {
     normalized.includes("autoriz") ||
     normalized === "2"
   );
+}
+
+function hasPaymentEvidence(invoice: EduzzInvoice) {
+  return Boolean(invoice.paidAt) || (invoice.amountPaid ?? 0) > 0;
 }
 
 async function eduzzRequest(path: string, token: string) {
@@ -511,20 +532,28 @@ export async function POST(req: NextRequest) {
 
       const invoices = await fetchSubscriptionInvoices(subscription.id, token);
       const latestPaid = invoices
-        .filter((invoice) => isPaidInvoice(invoice.status))
+        .filter((invoice) => isPaidInvoice(invoice.status) || hasPaymentEvidence(invoice))
         .sort((a, b) => {
-          const aTime = (a.paidAt ?? a.createdAt)?.getTime() ?? 0;
-          const bTime = (b.paidAt ?? b.createdAt)?.getTime() ?? 0;
+          const aTime = (a.paidAt ?? a.createdAt ?? a.dueAt)?.getTime() ?? 0;
+          const bTime = (b.paidAt ?? b.createdAt ?? b.dueAt)?.getTime() ?? 0;
           return bTime - aTime;
         })[0];
 
       const baseDate =
         latestPaid?.paidAt ??
         latestPaid?.createdAt ??
+        latestPaid?.dueAt ??
         (!isInactiveSubscription(subscription.status)
           ? subscription.updatedAt ?? subscription.createdAt
           : null);
-      if (!baseDate) {
+      const validUntil =
+        subscription.explicitValidUntil && subscription.explicitValidUntil.getTime() > now.getTime()
+          ? subscription.explicitValidUntil
+          : baseDate
+            ? addMonths(baseDate, 12)
+            : null;
+
+      if (!baseDate && !subscription.explicitValidUntil) {
         skipped += 1;
         skippedWithoutDate += 1;
         continue;
@@ -542,8 +571,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const validUntil = addMonths(baseDate, 12);
-      if (validUntil.getTime() < now.getTime()) {
+      if (!validUntil || validUntil.getTime() < now.getTime()) {
         skipped += 1;
         skippedExpired += 1;
         continue;
