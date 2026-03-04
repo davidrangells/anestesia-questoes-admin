@@ -24,6 +24,24 @@ function ensureArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripUndefinedDeep(item))
+      .filter((item) => item !== undefined) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, nested]) => nested !== undefined)
+      .map(([key, nested]) => [key, stripUndefinedDeep(nested)]);
+
+    return Object.fromEntries(entries) as T;
+  }
+
+  return value;
+}
+
 function nextEntitlementFlags(status: string) {
   const normalized = status.toLowerCase();
   if (normalized === "ativo") {
@@ -175,8 +193,8 @@ export async function PATCH(
         provider: result.provider,
         providerId: result.providerId,
         link: result.link,
-        requestPayload: result.requestPayload,
-        rawResponse: result.rawResponse,
+        requestPayload: stripUndefinedDeep(result.requestPayload),
+        rawResponse: stripUndefinedDeep(result.rawResponse),
       };
 
       await billingRef.set(
