@@ -83,6 +83,10 @@ function addMonths(date: Date, months: number) {
   return next;
 }
 
+function formatEduzzDateTime(date: Date) {
+  return date.toISOString();
+}
+
 function normalizeStateName(value: unknown): string | null {
   const raw = pickString(value);
   if (!raw) return null;
@@ -188,6 +192,13 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
   const items = Array.isArray(raw.items) && raw.items.length
     ? (raw.items[0] as RecordData)
     : null;
+  const products = Array.isArray(raw.products) && raw.products.length
+    ? (raw.products[0] as RecordData)
+    : null;
+  const clientPhone =
+    typeof (student as RecordData).phone === "object" && (student as RecordData).phone !== null
+      ? ((student as RecordData).phone as RecordData)
+      : {};
 
   const email = normalizeEmail(
     student.email ?? buyer.email ?? raw.email ?? raw.edz_cli_email
@@ -204,9 +215,15 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
     updatedAt: toDateOrNull(raw.updatedAt ?? raw.updated_at),
     email,
     name: pickString(student.name ?? buyer.name ?? raw.name),
-    phone: pickString(
-      student.phone ?? student.cellphone ?? buyer.phone ?? buyer.cellphone ?? raw.phone
-    ),
+    phone:
+      pickFirstString(
+        student.phone,
+        student.cellphone,
+        buyer.phone,
+        buyer.cellphone,
+        raw.phone
+      ) ||
+      [pickString(clientPhone.areaCode), pickString(clientPhone.number)].filter(Boolean).join(" "),
     document: pickString(student.document ?? buyer.document ?? raw.document),
     address: {
       street: pickString((address as RecordData).street) || null,
@@ -224,6 +241,7 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
         raw.product_id,
         (raw.offer as RecordData | undefined)?.id,
         raw.offer_id,
+        (products as RecordData | null)?.id,
         (items as RecordData | null)?.productId,
         (items as RecordData | null)?.id
       ) || null,
@@ -234,6 +252,7 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
         raw.product_title,
         (raw.offer as RecordData | undefined)?.title,
         raw.offer_title,
+        (products as RecordData | null)?.title,
         (items as RecordData | null)?.name
       ) || null,
     raw,
@@ -315,9 +334,18 @@ async function eduzzRequest(path: string, token: string) {
 
 async function fetchAllSubscriptions(token: string) {
   const subscriptions: EduzzSubscription[] = [];
+  const endDate = new Date();
+  const startDate = addMonths(endDate, -12);
 
   for (let page = 1; page <= 20; page += 1) {
-    const path = `/myeduzz/v1/subscriptions?page=${page}&itemsPerPage=100`;
+    const params = new URLSearchParams({
+      page: String(page),
+      itemsPerPage: "100",
+      startDate: formatEduzzDateTime(startDate),
+      endDate: formatEduzzDateTime(endDate),
+      filterBy: "creation",
+    });
+    const path = `/myeduzz/v1/subscriptions?${params.toString()}`;
     const payload = await eduzzRequest(path, token);
     const batch = extractArray(payload)
       .map((item) => mapSubscription(item))
