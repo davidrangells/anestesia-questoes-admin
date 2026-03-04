@@ -152,14 +152,41 @@ export default function AlunosPage() {
         createdUsers?: number;
         updatedUsers?: number;
         skipped?: number;
+        reasons?: {
+          blockedStatus?: number;
+          withoutPaidInvoice?: number;
+          expired?: number;
+          withoutDate?: number;
+          usedSubscriptionDateFallback?: number;
+        };
       };
 
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Não foi possível sincronizar os alunos da Eduzz.");
       }
 
+      const reasonParts = [
+        (data.reasons?.blockedStatus ?? 0) > 0
+          ? `${data.reasons?.blockedStatus ?? 0} bloqueado(s) por estorno/chargeback`
+          : null,
+        (data.reasons?.withoutPaidInvoice ?? 0) > 0
+          ? `${data.reasons?.withoutPaidInvoice ?? 0} sem fatura paga reconhecida`
+          : null,
+        (data.reasons?.expired ?? 0) > 0
+          ? `${data.reasons?.expired ?? 0} vencido(s)`
+          : null,
+        (data.reasons?.withoutDate ?? 0) > 0
+          ? `${data.reasons?.withoutDate ?? 0} sem data base`
+          : null,
+        (data.reasons?.usedSubscriptionDateFallback ?? 0) > 0
+          ? `${data.reasons?.usedSubscriptionDateFallback ?? 0} usando data da assinatura`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
       setSuccessMsg(
-        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).`
+        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).${reasonParts ? ` Motivos: ${reasonParts}.` : ""}`
       );
       await load();
     } catch (error) {

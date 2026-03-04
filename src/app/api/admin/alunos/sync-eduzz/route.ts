@@ -313,11 +313,6 @@ function mapInvoice(raw: RecordData): EduzzInvoice | null {
 function isInactiveSubscription(status: string) {
   const normalized = status.toLowerCase();
   return (
-    normalized.includes("cancel") ||
-    normalized.includes("finish") ||
-    normalized.includes("suspend") ||
-    normalized.includes("expire") ||
-    normalized.includes("inactive") ||
     normalized.includes("refunded") ||
     normalized.includes("chargeback")
   );
@@ -327,8 +322,19 @@ function isPaidInvoice(status: string) {
   const normalized = status.toLowerCase();
   return (
     normalized.includes("paid") ||
+    normalized.includes("pago") ||
     normalized.includes("approved") ||
+    normalized.includes("aprov") ||
     normalized.includes("complete") ||
+    normalized.includes("conclu") ||
+    normalized.includes("success") ||
+    normalized.includes("sucesso") ||
+    normalized.includes("confirm") ||
+    normalized.includes("liberad") ||
+    normalized.includes("settled") ||
+    normalized.includes("liquid") ||
+    normalized.includes("authorized") ||
+    normalized.includes("autoriz") ||
     normalized === "2"
   );
 }
@@ -478,14 +484,14 @@ export async function POST(req: NextRequest) {
     let createdUsers = 0;
     let updatedUsers = 0;
     let skipped = 0;
+    let skippedBlockedStatus = 0;
+    let skippedWithoutPaidInvoice = 0;
+    let skippedExpired = 0;
+    let skippedWithoutDate = 0;
+    let usedSubscriptionDateFallback = 0;
 
     for (const subscription of subscriptions) {
       scanned += 1;
-
-      if (isInactiveSubscription(subscription.status)) {
-        skipped += 1;
-        continue;
-      }
 
       const invoices = await fetchSubscriptionInvoices(subscription.id, token);
       const latestPaid = invoices
@@ -496,16 +502,37 @@ export async function POST(req: NextRequest) {
           return bTime - aTime;
         })[0];
 
-      const baseDate = latestPaid?.paidAt ?? latestPaid?.createdAt ?? subscription.createdAt;
+      const baseDate =
+        latestPaid?.paidAt ??
+        latestPaid?.createdAt ??
+        (!isInactiveSubscription(subscription.status) ? subscription.createdAt : null);
       if (!baseDate) {
         skipped += 1;
+        skippedWithoutDate += 1;
+        continue;
+      }
+
+      if (!latestPaid && isInactiveSubscription(subscription.status)) {
+        skipped += 1;
+        skippedBlockedStatus += 1;
+        continue;
+      }
+
+      if (!latestPaid && !subscription.createdAt) {
+        skipped += 1;
+        skippedWithoutPaidInvoice += 1;
         continue;
       }
 
       const validUntil = addMonths(baseDate, 12);
       if (validUntil.getTime() < now.getTime()) {
         skipped += 1;
+        skippedExpired += 1;
         continue;
+      }
+
+      if (!latestPaid) {
+        usedSubscriptionDateFallback += 1;
       }
 
       let uid = "";
@@ -592,6 +619,13 @@ export async function POST(req: NextRequest) {
         createdUsers,
         updatedUsers,
         skipped,
+        reasons: {
+          blockedStatus: skippedBlockedStatus,
+          withoutPaidInvoice: skippedWithoutPaidInvoice,
+          expired: skippedExpired,
+          withoutDate: skippedWithoutDate,
+          usedSubscriptionDateFallback,
+        },
       },
       { status: 200 }
     );
