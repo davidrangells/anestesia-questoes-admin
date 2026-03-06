@@ -2,42 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
-
-type ThemeMode = "light" | "dark" | "system";
-
-function getEffectiveTheme(mode: ThemeMode) {
-  if (mode === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return mode;
-}
-
-function applyTheme(mode: ThemeMode) {
-  const effective = getEffectiveTheme(mode);
-  const root = document.documentElement;
-  root.classList.remove("light", "dark");
-  root.classList.add(effective);
-  root.setAttribute("data-theme", mode);
-  localStorage.setItem("aq-theme", mode);
-}
+import { applyThemeMode, getStoredThemeMode, type ThemeMode } from "@/lib/themeClient";
 
 export default function ThemeSettingsCard() {
   const [mode, setMode] = useState<ThemeMode>("system");
 
   useEffect(() => {
-    const stored = localStorage.getItem("aq-theme");
-    if (stored === "light" || stored === "dark" || stored === "system") {
-      setMode(stored);
-      applyTheme(stored);
-      return;
-    }
-    applyTheme("system");
+    const stored = getStoredThemeMode();
+    setMode(stored);
+    applyThemeMode(stored);
   }, []);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
-      if (mode === "system") applyTheme("system");
+      if (mode === "system") applyThemeMode("system");
     };
     media.addEventListener("change", handler);
     return () => media.removeEventListener("change", handler);
@@ -45,7 +24,7 @@ export default function ThemeSettingsCard() {
 
   const setTheme = (next: ThemeMode) => {
     setMode(next);
-    applyTheme(next);
+    applyThemeMode(next);
   };
 
   return (

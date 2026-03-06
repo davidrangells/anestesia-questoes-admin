@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { applyThemeMode, getStoredThemeMode, type ThemeMode } from "@/lib/themeClient";
 
 function Item({
   href,
@@ -80,6 +81,15 @@ function Section({
 export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = getStoredThemeMode();
+      setThemeMode(stored);
+      applyThemeMode(stored);
+    }
+  }, []);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -90,6 +100,11 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
   const handleNavigate = () => {
     onNavigate?.();
     setMobileOpen(false);
+  };
+
+  const onThemeChange = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    applyThemeMode(mode);
   };
 
   const sidebarContent = (
@@ -169,6 +184,49 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
       </div>
 
       <div className="mt-auto p-4 border-t border-slate-200/70">
+        <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+          <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            Tema
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            <button
+              type="button"
+              onClick={() => onThemeChange("light")}
+              className={cn(
+                "rounded-lg px-2 py-2 text-xs font-semibold transition",
+                themeMode === "light"
+                  ? "bg-slate-900 text-white"
+                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+              )}
+            >
+              Claro
+            </button>
+            <button
+              type="button"
+              onClick={() => onThemeChange("dark")}
+              className={cn(
+                "rounded-lg px-2 py-2 text-xs font-semibold transition",
+                themeMode === "dark"
+                  ? "bg-slate-900 text-white"
+                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+              )}
+            >
+              Escuro
+            </button>
+            <button
+              type="button"
+              onClick={() => onThemeChange("system")}
+              className={cn(
+                "rounded-lg px-2 py-2 text-xs font-semibold transition",
+                themeMode === "system"
+                  ? "bg-slate-900 text-white"
+                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+              )}
+            >
+              Sistema
+            </button>
+          </div>
+        </div>
         <Button onClick={handleLogout} variant="primary" block>
           Sair
         </Button>
