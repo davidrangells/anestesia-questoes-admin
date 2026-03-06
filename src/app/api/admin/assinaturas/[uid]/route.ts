@@ -34,7 +34,10 @@ function pickString(value: unknown) {
 function pickNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
-    const normalized = value.replace(",", ".").trim();
+    const raw = value.trim();
+    const normalized = raw.includes(",")
+      ? raw.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".")
+      : raw.replace(/[^\d.-]/g, "");
     const parsed = Number(normalized);
     if (Number.isFinite(parsed)) return parsed;
   }

@@ -30,6 +30,53 @@ type AssinaturaForm = {
   validUntil: string;
 };
 
+const CURRENCY_FORMATTER = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  paid: "PAGO",
+  pending: "PENDENTE",
+  refunded: "REEMBOLSADO",
+  canceled: "CANCELADO",
+  chargeback: "CHARGEBACK",
+  active: "ATIVO",
+  inactive: "INATIVO",
+};
+
+function formatBRL(value: number) {
+  return CURRENCY_FORMATTER.format(value);
+}
+
+function parseBRL(value: string) {
+  const cleaned = value.replace(/[^\d,-.]/g, "").trim();
+  if (!cleaned) return null;
+  if (cleaned.includes(",")) {
+    const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeInvoiceStatus(value: unknown) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw === "pago") return "paid";
+  if (raw === "pendente") return "pending";
+  if (raw === "reembolsado") return "refunded";
+  if (raw === "cancelado") return "canceled";
+  if (raw === "ativo") return "active";
+  if (raw === "inativo") return "inactive";
+  return raw;
+}
+
+function invoiceStatusLabel(value: string) {
+  return INVOICE_STATUS_LABEL[value] || value.toUpperCase();
+}
+
 function formatDateInput(value: unknown) {
   const parsed = dateFromUnknown(value);
   if (!parsed) return "";
@@ -108,10 +155,10 @@ export default function EditarAssinaturaPage() {
           planId: String(ent.planId ?? ""),
           productId: String(ent.productId ?? ""),
           productTitle: String(ent.productTitle ?? ""),
-          invoiceStatus: String(ent.invoiceStatus ?? ""),
+          invoiceStatus: normalizeInvoiceStatus(ent.invoiceStatus),
           amountPaid:
             ent.amountPaid != null && Number.isFinite(Number(ent.amountPaid))
-              ? String(ent.amountPaid)
+              ? formatBRL(Number(ent.amountPaid))
               : "",
           validUntil: formatDateInput(ent.validUntil),
         });
@@ -140,9 +187,9 @@ export default function EditarAssinaturaPage() {
       planId,
       productId: selected?.productId || prev.productId,
       productTitle: selected?.title || prev.productTitle,
-      amountPaid:
+          amountPaid:
         selected?.price != null && prev.source === "admin"
-          ? String(selected.price)
+          ? formatBRL(selected.price)
           : prev.amountPaid,
     }));
   };
@@ -172,7 +219,7 @@ export default function EditarAssinaturaPage() {
           productId: form.productId,
           productTitle: form.productTitle,
           invoiceStatus: form.invoiceStatus,
-          amountPaid: form.amountPaid,
+          amountPaid: parseBRL(form.amountPaid),
           validUntil: form.validUntil,
         }),
       });
@@ -340,6 +387,11 @@ export default function EditarAssinaturaPage() {
                 <input
                   value={form.amountPaid}
                   onChange={(e) => setForm((prev) => ({ ...prev, amountPaid: e.target.value }))}
+                  onBlur={(e) => {
+                    const parsed = parseBRL(e.target.value);
+                    if (parsed == null) return;
+                    setForm((prev) => ({ ...prev, amountPaid: formatBRL(parsed) }));
+                  }}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
                 />
               </div>
@@ -360,11 +412,22 @@ export default function EditarAssinaturaPage() {
               <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 Status da fatura
               </div>
-              <input
-                value={form.invoiceStatus}
-                onChange={(e) => setForm((prev) => ({ ...prev, invoiceStatus: e.target.value }))}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
-              />
+              <select
+                value={normalizeInvoiceStatus(form.invoiceStatus)}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, invoiceStatus: e.target.value }))
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="">Selecione</option>
+                <option value="paid">{invoiceStatusLabel("paid")}</option>
+                <option value="pending">{invoiceStatusLabel("pending")}</option>
+                <option value="refunded">{invoiceStatusLabel("refunded")}</option>
+                <option value="canceled">{invoiceStatusLabel("canceled")}</option>
+                <option value="chargeback">{invoiceStatusLabel("chargeback")}</option>
+                <option value="active">{invoiceStatusLabel("active")}</option>
+                <option value="inactive">{invoiceStatusLabel("inactive")}</option>
+              </select>
             </div>
           </div>
         )}

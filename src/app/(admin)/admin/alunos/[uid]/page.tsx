@@ -115,6 +115,18 @@ function normalizeEstado(value: unknown) {
   return ESTADO_NORMALIZADO_MAP.get(normalized) || raw;
 }
 
+function formatCpf(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function cpfDigits(value: string) {
+  return value.replace(/\D/g, "").slice(0, 11);
+}
+
 function Field({
   label,
   value,
@@ -230,7 +242,7 @@ export default function EditarAlunoPage() {
           confirmPassword: "",
           profile: {
             name: String(profile.name ?? ""),
-            document: String(profile.document ?? ""),
+            document: formatCpf(String(profile.document ?? "")),
             phone: String(profile.phone ?? ""),
             cellphone: String(profile.cellphone ?? profile.phone ?? ""),
             address: {
@@ -316,7 +328,7 @@ export default function EditarAlunoPage() {
           password: form.password,
           profile: {
             name: form.profile.name,
-            document: form.profile.document,
+            document: cpfDigits(form.profile.document),
             phone: form.profile.phone,
             cellphone: form.profile.cellphone,
             address: form.profile.address,
@@ -345,7 +357,7 @@ export default function EditarAlunoPage() {
   return (
     <AdminShell
       title="Editar aluno"
-      subtitle={form.uid ? `Aluno ${form.uid}` : "Carregando dados do aluno"}
+      subtitle={form.email ? `Aluno ${form.email}` : "Carregando dados do aluno"}
       actions={
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={() => router.push("/admin/alunos")}>
@@ -388,7 +400,7 @@ export default function EditarAlunoPage() {
               <Field
                 label="CPF"
                 value={form.profile.document}
-                onChange={(value) => patchProfile({ document: value })}
+                onChange={(value) => patchProfile({ document: formatCpf(value) })}
                 placeholder="000.000.000-00"
               />
               <Field

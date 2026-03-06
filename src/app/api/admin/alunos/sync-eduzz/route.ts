@@ -64,6 +64,18 @@ type EduzzEventCandidate = {
 
 type EduzzSaleCandidate = EduzzEventCandidate;
 
+function hasAddressData(address: EduzzSubscription["address"]) {
+  return Boolean(
+    address.street ||
+      address.number ||
+      address.neighborhood ||
+      address.complement ||
+      address.city ||
+      address.state ||
+      address.zipCode
+  );
+}
+
 function pickString(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -237,6 +249,41 @@ function resolveAddressSource(...sources: Array<RecordData | null | undefined>) 
   return {};
 }
 
+function buildAddress(addressSource: RecordData): EduzzSubscription["address"] {
+  return {
+    street:
+      pickFirstString(
+        addressSource.street,
+        addressSource.logradouro,
+        addressSource.address1,
+        addressSource.addressLine1
+      ) || null,
+    number: pickFirstString(addressSource.number, addressSource.numero) || null,
+    complement:
+      pickFirstString(
+        addressSource.complement,
+        addressSource.complemento,
+        addressSource.address2,
+        addressSource.addressLine2
+      ) || null,
+    neighborhood:
+      pickFirstString(addressSource.neighborhood, addressSource.district, addressSource.bairro) ||
+      null,
+    city: pickFirstString(addressSource.city, addressSource.cidade, addressSource.town) || null,
+    state: normalizeStateName(
+      pickFirstString(addressSource.state, addressSource.uf, addressSource.stateCode)
+    ),
+    zipCode:
+      pickFirstString(
+        addressSource.zipCode,
+        addressSource.zipcode,
+        addressSource.postalCode,
+        addressSource.cep
+      ) || null,
+    country: pickFirstString(addressSource.country, addressSource.pais) || "Brasil",
+  };
+}
+
 function mapSubscription(raw: RecordData): EduzzSubscription | null {
   const source = unwrapRecord(raw);
   const student =
@@ -303,16 +350,7 @@ function mapSubscription(raw: RecordData): EduzzSubscription | null {
       ) ||
       [pickString(clientPhone.areaCode), pickString(clientPhone.number)].filter(Boolean).join(" "),
     document: pickString(student.document ?? buyer.document ?? source.document),
-    address: {
-      street: pickString((address as RecordData).street) || null,
-      number: pickString((address as RecordData).number) || null,
-      complement: pickString((address as RecordData).complement) || null,
-      neighborhood: pickString((address as RecordData).neighborhood) || null,
-      city: pickString((address as RecordData).city) || null,
-      state: normalizeStateName((address as RecordData).state),
-      zipCode: pickString((address as RecordData).zipCode) || null,
-      country: pickString((address as RecordData).country) || "Brasil",
-    },
+    address: buildAddress(address as RecordData),
     productId:
       pickFirstString(
         (source.product as RecordData | undefined)?.id,
@@ -546,16 +584,7 @@ async function fetchRecentPaidEventCandidates(cutoff: Date) {
         envelopeData.phone
       ),
       document: pickString(student.document ?? buyer.document ?? envelopeData.document),
-      address: {
-        street: pickString((address as RecordData).street) || null,
-        number: pickString((address as RecordData).number) || null,
-        complement: pickString((address as RecordData).complement) || null,
-        neighborhood: pickString((address as RecordData).neighborhood) || null,
-        city: pickString((address as RecordData).city) || null,
-        state: normalizeStateName((address as RecordData).state),
-        zipCode: pickString((address as RecordData).zipCode) || null,
-        country: pickString((address as RecordData).country) || "Brasil",
-      },
+      address: buildAddress(address as RecordData),
       productId:
         pickFirstString(
           (envelopeData.product as RecordData | undefined)?.id,
@@ -675,16 +704,7 @@ async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
         name: pickString(student.name ?? buyer.name ?? item.name),
         phone: pickFirstString(student.phone, buyer.phone, item.phone),
         document: pickString(student.document ?? buyer.document ?? item.buyerDocument ?? item.document),
-        address: {
-          street: pickString((address as RecordData).street) || null,
-          number: pickString((address as RecordData).number) || null,
-          complement: pickString((address as RecordData).complement) || null,
-          neighborhood: pickString((address as RecordData).neighborhood) || null,
-          city: pickString((address as RecordData).city) || null,
-          state: normalizeStateName((address as RecordData).state),
-          zipCode: pickString((address as RecordData).zipCode) || null,
-          country: pickString((address as RecordData).country) || "Brasil",
-        },
+        address: buildAddress(address as RecordData),
         productId:
           pickFirstString(product.id, item.productId, (item.offer as RecordData | undefined)?.id) ||
           null,
@@ -812,9 +832,12 @@ export async function POST(req: NextRequest) {
       rangeStart = new Date(Date.UTC(2025, 0, 1, 0, 0, 0, 0));
     }
 
+    const eventCandidates = await fetchRecentPaidEventCandidates(rangeStart);
+    const eventByEmail = new Map(
+      eventCandidates.map((candidate) => [candidate.email, candidate] as const)
+    );
     const salesCandidates = await fetchPaidSalesCandidates(token, rangeStart);
     const subscriptions = await fetchAllSubscriptions(token, rangeStart, rangeEnd);
-    const eventCandidates = await fetchRecentPaidEventCandidates(rangeStart);
     let scanned = 0;
     let imported = 0;
     let createdUsers = 0;
@@ -830,14 +853,24 @@ export async function POST(req: NextRequest) {
 
     for (const candidate of salesCandidates) {
       if (!candidate.email || processedEmails.has(candidate.email)) continue;
+      const eventMatch = eventByEmail.get(candidate.email);
+      const mergedCandidate: EduzzSaleCandidate =
+        eventMatch && !hasAddressData(candidate.address)
+          ? {
+              ...candidate,
+              address: eventMatch.address,
+              phone: candidate.phone || eventMatch.phone,
+              document: candidate.document || eventMatch.document,
+            }
+          : candidate;
 
-      if (!candidate.validUntil) {
+      if (!mergedCandidate.validUntil) {
         skipped += 1;
         skippedWithoutDate += 1;
         continue;
       }
 
-      if (candidate.validUntil.getTime() < now.getTime()) {
+      if (mergedCandidate.validUntil.getTime() < now.getTime()) {
         skipped += 1;
         skippedExpired += 1;
         continue;
@@ -850,7 +883,7 @@ export async function POST(req: NextRequest) {
         uid = authUser.uid;
       } catch {
         const created = await adminAuth.createUser({
-          email: candidate.email,
+          email: mergedCandidate.email,
           emailVerified: true,
         });
         uid = created.uid;
@@ -866,15 +899,18 @@ export async function POST(req: NextRequest) {
         userSnap.exists && typeof userSnap.data()?.role === "string"
           ? String(userSnap.data()?.role)
           : null;
-      const planMatch = await resolvePlanMatch(candidate.productId, candidate.productTitle);
+      const planMatch = await resolvePlanMatch(
+        mergedCandidate.productId,
+        mergedCandidate.productTitle
+      );
 
       await Promise.all([
         userRef.set(
           {
             uid,
-            email: candidate.email,
+            email: mergedCandidate.email,
             role: existingRole === "admin" ? "admin" : "student",
-            name: candidate.name || null,
+            name: mergedCandidate.name || null,
             updatedAt: now,
             createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
           },
@@ -882,10 +918,10 @@ export async function POST(req: NextRequest) {
         ),
         profileRef.set(
           {
-            name: candidate.name || null,
-            phone: candidate.phone || null,
-            document: candidate.document || null,
-            address: candidate.address,
+            name: mergedCandidate.name || null,
+            phone: mergedCandidate.phone || null,
+            document: mergedCandidate.document || null,
+            address: mergedCandidate.address,
             source: "eduzz",
             updatedAt: now,
           },
@@ -894,23 +930,23 @@ export async function POST(req: NextRequest) {
         entRef.set(
           {
             uid,
-            email: candidate.email,
+            email: mergedCandidate.email,
             active: true,
             pending: false,
             source: "eduzz",
             sourceDetail: "eduzz_sales_import",
             planId: planMatch.planId,
-            productId: candidate.productId,
+            productId: mergedCandidate.productId,
             productTitle: planMatch.planTitle,
             planMatchedBy: planMatch.matchedBy,
-            amountPaid: candidate.amountPaid ?? null,
-            paymentMethod: candidate.paymentMethod ?? null,
-            currency: candidate.currency || "BRL",
-            paidAt: candidate.paidAt ?? null,
-            validUntil: candidate.validUntil,
-            invoiceStatus: candidate.invoiceStatus || "paid",
-            invoiceId: candidate.invoiceId,
-            subscriptionId: candidate.subscriptionId,
+            amountPaid: mergedCandidate.amountPaid ?? null,
+            paymentMethod: mergedCandidate.paymentMethod ?? null,
+            currency: mergedCandidate.currency || "BRL",
+            paidAt: mergedCandidate.paidAt ?? null,
+            validUntil: mergedCandidate.validUntil,
+            invoiceStatus: mergedCandidate.invoiceStatus || "paid",
+            invoiceId: mergedCandidate.invoiceId,
+            subscriptionId: mergedCandidate.subscriptionId,
             updatedAt: now,
             lastSyncAt: now,
           },
@@ -922,7 +958,7 @@ export async function POST(req: NextRequest) {
         updatedUsers += 1;
       }
       imported += 1;
-      processedEmails.add(candidate.email);
+      processedEmails.add(mergedCandidate.email);
     }
 
     for (const subscription of subscriptions) {
