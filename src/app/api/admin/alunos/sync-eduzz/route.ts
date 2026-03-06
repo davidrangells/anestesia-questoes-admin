@@ -76,6 +76,10 @@ function hasAddressData(address: EduzzSubscription["address"]) {
   );
 }
 
+function hasAtLeastOneContactAddress(address: EduzzSubscription["address"]) {
+  return hasAddressData(address);
+}
+
 function pickString(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -850,12 +854,21 @@ export async function POST(req: NextRequest) {
     let usedSubscriptionDateFallback = 0;
     let firstExpiredDebug: Record<string, unknown> | null = null;
     const processedEmails = new Set<string>();
+    const emailsStillMissingAddress = new Set<string>();
 
     for (const candidate of salesCandidates) {
-      if (!candidate.email || processedEmails.has(candidate.email)) continue;
+      if (!candidate.email) continue;
+      if (
+        processedEmails.has(candidate.email) &&
+        !emailsStillMissingAddress.has(candidate.email)
+      ) {
+        continue;
+      }
       const eventMatch = eventByEmail.get(candidate.email);
       const mergedCandidate: EduzzSaleCandidate =
-        eventMatch && !hasAddressData(candidate.address) && hasAddressData(eventMatch.address)
+        eventMatch &&
+        !hasAtLeastOneContactAddress(candidate.address) &&
+        hasAtLeastOneContactAddress(eventMatch.address)
           ? {
               ...candidate,
               address: eventMatch.address,
@@ -921,7 +934,7 @@ export async function POST(req: NextRequest) {
             name: mergedCandidate.name || null,
             phone: mergedCandidate.phone || null,
             document: mergedCandidate.document || null,
-            ...(hasAddressData(mergedCandidate.address)
+            ...(hasAtLeastOneContactAddress(mergedCandidate.address)
               ? { address: mergedCandidate.address }
               : {}),
             source: "eduzz",
@@ -961,10 +974,21 @@ export async function POST(req: NextRequest) {
       }
       imported += 1;
       processedEmails.add(mergedCandidate.email);
+      if (hasAtLeastOneContactAddress(mergedCandidate.address)) {
+        emailsStillMissingAddress.delete(mergedCandidate.email);
+      } else {
+        emailsStillMissingAddress.add(mergedCandidate.email);
+      }
     }
 
     for (const subscription of subscriptions) {
       scanned += 1;
+      if (
+        processedEmails.has(subscription.email) &&
+        !emailsStillMissingAddress.has(subscription.email)
+      ) {
+        continue;
+      }
 
       const invoices = await fetchSubscriptionInvoices(subscription.id, token);
       const latestPaid = invoices
@@ -1076,7 +1100,7 @@ export async function POST(req: NextRequest) {
             name: subscription.name || null,
             phone: subscription.phone || null,
             document: subscription.document || null,
-            ...(hasAddressData(subscription.address)
+            ...(hasAtLeastOneContactAddress(subscription.address)
               ? { address: subscription.address }
               : {}),
             source: "eduzz",
@@ -1115,10 +1139,21 @@ export async function POST(req: NextRequest) {
       }
       imported += 1;
       processedEmails.add(subscription.email);
+      if (hasAtLeastOneContactAddress(subscription.address)) {
+        emailsStillMissingAddress.delete(subscription.email);
+      } else {
+        emailsStillMissingAddress.add(subscription.email);
+      }
     }
 
     for (const candidate of eventCandidates) {
-      if (!candidate.email || processedEmails.has(candidate.email)) continue;
+      if (!candidate.email) continue;
+      if (
+        processedEmails.has(candidate.email) &&
+        !emailsStillMissingAddress.has(candidate.email)
+      ) {
+        continue;
+      }
 
       if (!candidate.validUntil) {
         skipped += 1;
@@ -1174,7 +1209,7 @@ export async function POST(req: NextRequest) {
             name: candidate.name || null,
             phone: candidate.phone || null,
             document: candidate.document || null,
-            ...(hasAddressData(candidate.address)
+            ...(hasAtLeastOneContactAddress(candidate.address)
               ? { address: candidate.address }
               : {}),
             source: "eduzz",
@@ -1214,6 +1249,11 @@ export async function POST(req: NextRequest) {
       }
       imported += 1;
       processedEmails.add(candidate.email);
+      if (hasAtLeastOneContactAddress(candidate.address)) {
+        emailsStillMissingAddress.delete(candidate.email);
+      } else {
+        emailsStillMissingAddress.add(candidate.email);
+      }
     }
 
     return NextResponse.json(
