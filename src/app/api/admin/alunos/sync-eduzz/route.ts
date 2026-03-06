@@ -887,6 +887,9 @@ export async function POST(req: NextRequest) {
     let skippedExpired = 0;
     let skippedWithoutDate = 0;
     let usedSubscriptionDateFallback = 0;
+    let importedWithAddress = 0;
+    let importedWithoutAddress = 0;
+    const withoutAddressEmails: string[] = [];
     let firstExpiredDebug: Record<string, unknown> | null = null;
     const processedEmails = new Set<string>();
     const emailsStillMissingAddress = new Set<string>();
@@ -1009,6 +1012,14 @@ export async function POST(req: NextRequest) {
       }
       imported += 1;
       processedEmails.add(mergedCandidate.email);
+      if (hasAtLeastOneContactAddress(mergedCandidate.address)) {
+        importedWithAddress += 1;
+      } else {
+        importedWithoutAddress += 1;
+        if (withoutAddressEmails.length < 5) {
+          withoutAddressEmails.push(mergedCandidate.email);
+        }
+      }
       if (hasAtLeastOneContactAddress(mergedCandidate.address)) {
         emailsStillMissingAddress.delete(mergedCandidate.email);
       } else {
@@ -1175,6 +1186,14 @@ export async function POST(req: NextRequest) {
       imported += 1;
       processedEmails.add(subscription.email);
       if (hasAtLeastOneContactAddress(subscription.address)) {
+        importedWithAddress += 1;
+      } else {
+        importedWithoutAddress += 1;
+        if (withoutAddressEmails.length < 5) {
+          withoutAddressEmails.push(subscription.email);
+        }
+      }
+      if (hasAtLeastOneContactAddress(subscription.address)) {
         emailsStillMissingAddress.delete(subscription.email);
       } else {
         emailsStillMissingAddress.add(subscription.email);
@@ -1285,6 +1304,14 @@ export async function POST(req: NextRequest) {
       imported += 1;
       processedEmails.add(candidate.email);
       if (hasAtLeastOneContactAddress(candidate.address)) {
+        importedWithAddress += 1;
+      } else {
+        importedWithoutAddress += 1;
+        if (withoutAddressEmails.length < 5) {
+          withoutAddressEmails.push(candidate.email);
+        }
+      }
+      if (hasAtLeastOneContactAddress(candidate.address)) {
         emailsStillMissingAddress.delete(candidate.email);
       } else {
         emailsStillMissingAddress.add(candidate.email);
@@ -1309,6 +1336,11 @@ export async function POST(req: NextRequest) {
         period: {
           startDate: rangeStart.toISOString(),
           endDate: rangeEnd.toISOString(),
+        },
+        addressCoverage: {
+          withAddress: importedWithAddress,
+          withoutAddress: importedWithoutAddress,
+          sampleWithoutAddressEmails: withoutAddressEmails,
         },
         debug: {
           firstExpired: firstExpiredDebug,

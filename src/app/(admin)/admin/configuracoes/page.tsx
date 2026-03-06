@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AdminShell from "@/components/AdminShell";
 import BlingSettingsCard from "@/components/admin/BlingSettingsCard";
+import ThemeSettingsCard from "@/components/admin/ThemeSettingsCard";
 
 function ConfigItem({
   label,
@@ -101,6 +102,7 @@ export default function ConfiguracoesPage() {
         </div>
 
         <BlingSettingsCard />
+        <ThemeSettingsCard />
       </div>
     </AdminShell>
   );

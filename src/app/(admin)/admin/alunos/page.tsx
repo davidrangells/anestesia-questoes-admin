@@ -110,6 +110,11 @@ export default function AlunosPage() {
           withoutDate?: number;
           usedSubscriptionDateFallback?: number;
         };
+        addressCoverage?: {
+          withAddress?: number;
+          withoutAddress?: number;
+          sampleWithoutAddressEmails?: string[];
+        };
         debug?: {
           firstExpired?: {
             subscriptionId?: string | null;
@@ -160,7 +165,7 @@ export default function AlunosPage() {
           : "";
 
       setSuccessMsg(
-        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).${reasonParts ? ` Motivos: ${reasonParts}.` : ""}${debugPart}`
+        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).${reasonParts ? ` Motivos: ${reasonParts}.` : ""}${debugPart}${(data.addressCoverage?.withoutAddress ?? 0) > 0 ? ` Endereço: ${data.addressCoverage?.withAddress ?? 0} com endereço, ${data.addressCoverage?.withoutAddress ?? 0} sem endereço${(data.addressCoverage?.sampleWithoutAddressEmails?.length ?? 0) > 0 ? ` (ex.: ${(data.addressCoverage?.sampleWithoutAddressEmails ?? []).join(", ")})` : ""}.` : ""}`
       );
       await load();
     } catch (error) {
