@@ -855,7 +855,7 @@ export async function POST(req: NextRequest) {
       if (!candidate.email || processedEmails.has(candidate.email)) continue;
       const eventMatch = eventByEmail.get(candidate.email);
       const mergedCandidate: EduzzSaleCandidate =
-        eventMatch && !hasAddressData(candidate.address)
+        eventMatch && !hasAddressData(candidate.address) && hasAddressData(eventMatch.address)
           ? {
               ...candidate,
               address: eventMatch.address,
@@ -921,7 +921,9 @@ export async function POST(req: NextRequest) {
             name: mergedCandidate.name || null,
             phone: mergedCandidate.phone || null,
             document: mergedCandidate.document || null,
-            address: mergedCandidate.address,
+            ...(hasAddressData(mergedCandidate.address)
+              ? { address: mergedCandidate.address }
+              : {}),
             source: "eduzz",
             updatedAt: now,
           },
@@ -1074,7 +1076,9 @@ export async function POST(req: NextRequest) {
             name: subscription.name || null,
             phone: subscription.phone || null,
             document: subscription.document || null,
-            address: subscription.address,
+            ...(hasAddressData(subscription.address)
+              ? { address: subscription.address }
+              : {}),
             source: "eduzz",
             updatedAt: now,
           },
@@ -1170,7 +1174,9 @@ export async function POST(req: NextRequest) {
             name: candidate.name || null,
             phone: candidate.phone || null,
             document: candidate.document || null,
-            address: candidate.address,
+            ...(hasAddressData(candidate.address)
+              ? { address: candidate.address }
+              : {}),
             source: "eduzz",
             updatedAt: now,
           },

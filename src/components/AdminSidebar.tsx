@@ -108,7 +108,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 overscroll-contain">
+      <div className="h-0 min-h-0 flex-1 overflow-y-auto px-4 py-4 overscroll-contain [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
         <nav>
           <Section title="Navegação">
             <Item href="/admin" label="Dashboard" icon="🏠" onNavigate={handleNavigate} />
@@ -230,7 +230,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         {sidebarContent}
       </aside>
 
-      <aside className="hidden min-h-screen w-[320px] shrink-0 overflow-hidden border-r border-slate-200/70 bg-white sticky top-0 lg:flex lg:flex-col">
+      <aside className="hidden h-[100dvh] min-h-0 w-[320px] shrink-0 overflow-hidden border-r border-slate-200/70 bg-white sticky top-0 lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
     </>
