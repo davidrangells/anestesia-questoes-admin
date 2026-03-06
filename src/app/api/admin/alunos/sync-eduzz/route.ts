@@ -122,6 +122,13 @@ function formatEduzzDateTime(date: Date) {
   return date.toISOString();
 }
 
+function formatEduzzDate(date: Date) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function normalizeStateName(value: unknown): string | null {
   const raw = pickString(value);
   if (!raw) return null;
@@ -437,8 +444,8 @@ async function fetchAllSubscriptions(token: string, startDate: Date, endDate: Da
     const params = new URLSearchParams({
       page: String(page),
       itemsPerPage: "100",
-      startDate: formatEduzzDateTime(startDate),
-      endDate: formatEduzzDateTime(endDate),
+      startDate: formatEduzzDate(startDate),
+      endDate: formatEduzzDate(endDate),
       filterBy: "creation",
     });
     const path = `/myeduzz/v1/subscriptions?${params.toString()}`;
@@ -624,8 +631,8 @@ async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
     const params = new URLSearchParams({
       page: String(page),
       itemsPerPage: "100",
-      startDate: formatEduzzDateTime(cutoff),
-      endDate: formatEduzzDateTime(endDate),
+      startDate: formatEduzzDate(cutoff),
+      endDate: formatEduzzDate(endDate),
       referenceDate: "paidAt",
       status: "paid",
     });
