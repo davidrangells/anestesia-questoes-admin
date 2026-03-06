@@ -430,10 +430,8 @@ async function eduzzRequest(path: string, token: string) {
   return (await res.json()) as RecordData;
 }
 
-async function fetchAllSubscriptions(token: string) {
+async function fetchAllSubscriptions(token: string, startDate: Date, endDate: Date) {
   const subscriptions: EduzzSubscription[] = [];
-  const endDate = new Date();
-  const startDate = addMonths(endDate, -60);
 
   for (let page = 1; page <= 20; page += 1) {
     const params = new URLSearchParams({
@@ -788,10 +786,30 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const salesCandidates = await fetchPaidSalesCandidates(token, addMonths(new Date(), -12));
-    const subscriptions = await fetchAllSubscriptions(token);
-    const eventCandidates = await fetchRecentPaidEventCandidates(addMonths(new Date(), -12));
     const now = new Date();
+    let rangeStart = new Date(Date.UTC(2025, 0, 1, 0, 0, 0, 0));
+    let rangeEnd = now;
+
+    try {
+      const body = (await req.json()) as { startDate?: string; endDate?: string };
+      const parsedStart = toDateOrNull(body?.startDate);
+      const parsedEnd = toDateOrNull(body?.endDate);
+      if (parsedStart) rangeStart = parsedStart;
+      if (parsedEnd) rangeEnd = parsedEnd;
+    } catch {
+      // Corpo opcional (mantém período padrão)
+    }
+
+    if (rangeEnd.getTime() > now.getTime()) {
+      rangeEnd = now;
+    }
+    if (rangeStart.getTime() > rangeEnd.getTime()) {
+      rangeStart = new Date(Date.UTC(2025, 0, 1, 0, 0, 0, 0));
+    }
+
+    const salesCandidates = await fetchPaidSalesCandidates(token, rangeStart);
+    const subscriptions = await fetchAllSubscriptions(token, rangeStart, rangeEnd);
+    const eventCandidates = await fetchRecentPaidEventCandidates(rangeStart);
     let scanned = 0;
     let imported = 0;
     let createdUsers = 0;
@@ -1165,6 +1183,10 @@ export async function POST(req: NextRequest) {
           expired: skippedExpired,
           withoutDate: skippedWithoutDate,
           usedSubscriptionDateFallback,
+        },
+        period: {
+          startDate: rangeStart.toISOString(),
+          endDate: rangeEnd.toISOString(),
         },
         debug: {
           firstExpired: firstExpiredDebug,

@@ -87,7 +87,12 @@ export default function AlunosPage() {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          startDate: "2025-01-01T00:00:00.000Z",
+          endDate: new Date().toISOString(),
+        }),
       });
 
       const data = (await res.json()) as {
