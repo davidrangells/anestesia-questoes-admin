@@ -456,11 +456,9 @@ async function fetchAllSubscriptions(token: string, startDate: Date, endDate: Da
       .filter((item): item is EduzzSubscription => item !== null);
 
     if (!batch.length) {
-      if (page === 1) {
+      if (page === 1 && rawItems.length) {
         throw new Error(
-          rawItems.length
-            ? `A API da Eduzz respondeu com itens, mas não foi possível mapear as assinaturas. Exemplo: ${summarizePayload(rawItems[0] ?? {})}`
-            : `A API da Eduzz respondeu sem assinaturas para o período consultado. Payload: ${summarizePayload(payload)}`
+          `A API da Eduzz respondeu com itens, mas não foi possível mapear as assinaturas. Exemplo: ${summarizePayload(rawItems[0] ?? {})}`
         );
       }
       break;
