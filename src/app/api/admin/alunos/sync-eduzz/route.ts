@@ -527,6 +527,32 @@ async function fetchSubscriptionInvoices(subscriptionId: string, token: string) 
     .filter((item): item is EduzzInvoice => item !== null);
 }
 
+async function fetchSaleAddressFromDetail(saleId: string, token: string) {
+  if (!saleId) return null;
+  try {
+    const payload = await eduzzRequest(`/myeduzz/v1/sales/${saleId}`, token);
+    const source = unwrapRecord(payload);
+    const detailData =
+      (source.data as RecordData | undefined) ??
+      (source.sale as RecordData | undefined) ??
+      source;
+    const buyer =
+      (detailData.buyer as RecordData | undefined) ??
+      (detailData.customer as RecordData | undefined) ??
+      (detailData.client as RecordData | undefined) ??
+      {};
+    const student =
+      (detailData.student as RecordData | undefined) ??
+      (detailData.customer as RecordData | undefined) ??
+      buyer;
+    const addressSource = resolveAddressSource(student, buyer, detailData);
+    const address = buildAddress(addressSource as RecordData);
+    return hasAddressData(address) ? address : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchRecentPaidEventCandidates(cutoff: Date) {
   const snap = await adminDb.collection("eduzz_events").where("action", "==", "activate").get();
   const candidates: EduzzEventCandidate[] = [];
@@ -703,7 +729,7 @@ async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
 
       if (!email) continue;
 
-      candidates.push({
+      const candidate: EduzzSaleCandidate = {
         email,
         name: pickString(student.name ?? buyer.name ?? item.name),
         phone: pickFirstString(student.phone, buyer.phone, item.phone),
@@ -735,7 +761,16 @@ async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
         invoiceStatus: pickFirstString(item.status) || "paid",
         invoiceId: pickFirstString(item.id),
         subscriptionId: pickFirstString(item.contractId),
-      });
+      };
+
+      if (!hasAddressData(candidate.address) && candidate.invoiceId) {
+        const detailAddress = await fetchSaleAddressFromDetail(candidate.invoiceId, token);
+        if (detailAddress) {
+          candidate.address = detailAddress;
+        }
+      }
+
+      candidates.push(candidate);
     }
 
     const totalPages = pickNumber(
