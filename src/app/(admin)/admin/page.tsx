@@ -367,10 +367,10 @@ function KpiCard({
 }) {
   const pillClass =
     pill.tone === "ok"
-      ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-emerald-500/35 dark:bg-emerald-500/16 dark:text-emerald-200"
+      ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-emerald-200/90 dark:bg-emerald-200 dark:text-emerald-950"
       : pill.tone === "warn"
-      ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/35 dark:bg-amber-500/14 dark:text-amber-200"
-      : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200";
+      ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-200/90 dark:bg-amber-200 dark:text-amber-950"
+      : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-300/90 dark:bg-slate-200 dark:text-slate-950";
 
   return (
     <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -385,7 +385,7 @@ function KpiCard({
           </div>
         </div>
 
-        <span className={["text-xs px-2.5 py-1 rounded-full border", pillClass].join(" ")}>
+        <span className={["text-xs px-2.5 py-1 rounded-full border font-bold", pillClass].join(" ")}>
           {pill.label}
         </span>
       </div>
