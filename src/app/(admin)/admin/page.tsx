@@ -369,7 +369,7 @@ function KpiCard({
     pill.tone === "ok"
       ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-emerald-200/90 dark:bg-emerald-200 dark:text-emerald-950"
       : pill.tone === "warn"
-      ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-200/90 dark:bg-amber-200 dark:text-amber-950"
+      ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-100 dark:bg-amber-100 dark:text-amber-950"
       : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-300/90 dark:bg-slate-200 dark:text-slate-950";
 
   return (

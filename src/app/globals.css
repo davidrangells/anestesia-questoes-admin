@@ -128,11 +128,23 @@ html.dark .text-rose-700 {
 }
 
 html.dark .text-emerald-700 {
-  color: #6ee7b7 !important;
+  color: #052e16 !important;
+}
+
+html.dark .text-amber-700 {
+  color: #451a03 !important;
+}
+
+html.dark .text-sky-700 {
+  color: #082f49 !important;
 }
 
 html.dark .bg-emerald-50 {
   background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+html.dark .bg-emerald-100 {
+  background-color: #bbf7d0 !important;
 }
 
 html.dark .bg-rose-50 {
@@ -143,8 +155,20 @@ html.dark .bg-amber-50 {
   background-color: rgba(245, 158, 11, 0.15) !important;
 }
 
+html.dark .bg-amber-100 {
+  background-color: #fde68a !important;
+}
+
+html.dark .bg-sky-100 {
+  background-color: #bae6fd !important;
+}
+
 html.dark .border-emerald-200 {
   border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+html.dark .border-emerald-100 {
+  border-color: rgba(187, 247, 208, 0.7) !important;
 }
 
 html.dark .border-rose-200 {
@@ -153,6 +177,10 @@ html.dark .border-rose-200 {
 
 html.dark .border-amber-200 {
   border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+html.dark .border-amber-100 {
+  border-color: rgba(253, 230, 138, 0.7) !important;
 }
 
 html.dark input,
