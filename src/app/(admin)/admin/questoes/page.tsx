@@ -580,7 +580,7 @@ export default function BancoQuestoesPage() {
                   const levelLabel = String(q.level ?? q.nivel ?? "").trim();
 
                   return (
-                    <tr key={q.id} className="hover:bg-slate-50/50">
+                    <tr key={q.id} className="question-row transition-colors hover:bg-slate-50/40">
                       <td className="px-5 py-4 align-top">
                         <div className="max-w-[360px] font-semibold text-slate-900 line-clamp-2">{getEnunciado(q)}</div>
                         <div className="text-xs text-slate-500 mt-1">ID: {q.id}</div>

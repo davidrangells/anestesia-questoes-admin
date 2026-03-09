@@ -122,7 +122,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen overflow-x-hidden">
       {/* Top header */}
-      <div className="sticky top-0 z-10 border-b border-slate-200/70 bg-slate-50/70 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-slate-200/70 bg-slate-50/70 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
         <div className="mx-auto max-w-[1200px] px-4 py-4 pl-24 sm:px-6 sm:pl-24 lg:pl-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -140,13 +140,13 @@ export default function AdminDashboardPage() {
                 onSubmit={submitGlobalSearch}
               />
 
-              <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                <div className="h-8 w-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center font-black text-blue-700 text-xs">
+              <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
+                <div className="h-8 w-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center font-black text-blue-700 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300">
                   AQ
                 </div>
                 <div className="leading-tight">
-                  <div className="text-sm font-bold text-slate-900">Admin</div>
-                  <div className="text-[11px] text-slate-500">Acesso total</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-slate-50">Admin</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Acesso total</div>
                 </div>
               </div>
 
@@ -173,9 +173,9 @@ export default function AdminDashboardPage() {
       {/* Body */}
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
         {/* Hero card */}
-        <div className="rounded-[32px] border border-slate-200 bg-white shadow-[0_10px_40px_rgba(15,23,42,0.06)] overflow-hidden">
+        <div className="rounded-[32px] border border-slate-200 bg-white shadow-[0_10px_40px_rgba(15,23,42,0.06)] overflow-hidden dark:border-slate-800 dark:bg-slate-950">
           {/* subtle gradient */}
-          <div className="bg-gradient-to-b from-blue-50/60 via-white to-white px-4 py-5 sm:px-6 sm:py-6">
+          <div className="bg-gradient-to-b from-blue-50/60 via-white to-white px-4 py-5 sm:px-6 sm:py-6 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <div className="text-lg font-black text-slate-900">Visão geral</div>
@@ -300,8 +300,8 @@ function SearchStub({
   onSubmit: () => void;
 }) {
   return (
-    <div className="hidden md:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 w-[360px]">
-      <span className="text-slate-400">⌕</span>
+    <div className="hidden md:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 w-[360px] dark:border-slate-800 dark:bg-slate-900">
+      <span className="text-slate-400 dark:text-slate-500">⌕</span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -309,12 +309,12 @@ function SearchStub({
           if (e.key === "Enter") onSubmit();
         }}
         placeholder="Buscar no banco de questões..."
-        className="w-full text-sm outline-none placeholder:text-slate-400 text-slate-600"
+        className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 text-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
       />
       <button
         type="button"
         onClick={onSubmit}
-        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"
       >
         Ir
       </button>
@@ -332,7 +332,7 @@ function Segmented<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-1 flex gap-1">
+    <div className="rounded-2xl border border-slate-200 bg-white p-1 flex gap-1 dark:border-slate-800 dark:bg-slate-900">
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -341,7 +341,7 @@ function Segmented<T extends string>({
             onClick={() => onChange(opt.value)}
             className={[
               "px-3 py-2 rounded-xl text-xs font-semibold transition",
-              active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50",
+              active ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950" : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800",
             ].join(" ")}
           >
             {opt.label}
@@ -373,10 +373,10 @@ function KpiCard({
       : "border-slate-200 bg-slate-50 text-slate-600";
 
   return (
-    <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center dark:border-slate-700 dark:bg-slate-800">
             <span className="text-base">{icon}</span>
           </div>
           <div>
@@ -392,7 +392,7 @@ function KpiCard({
 
       <div className="mt-4 flex items-end justify-between">
         <div className="text-3xl font-black text-slate-900">{value}</div>
-        <div className="h-8 w-24 rounded-xl bg-slate-50 border border-slate-200" />
+        <div className="h-8 w-24 rounded-xl bg-slate-50 border border-slate-200 dark:border-slate-700 dark:bg-slate-800" />
       </div>
     </div>
   );
@@ -412,13 +412,13 @@ function PremiumMiniChartCard({
   rightPill: string;
 }) {
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden dark:border-slate-800 dark:bg-slate-900">
       <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-slate-100">
         <div>
           <div className="text-sm font-black text-slate-900">{title}</div>
           <div className="text-xs text-slate-500">{subtitle}</div>
         </div>
-        <span className="text-xs px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+        <span className="text-xs px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
           {rightPill}
         </span>
       </div>
@@ -461,7 +461,7 @@ function MiniAreaChart({ data, height }: { data: number[]; height: number }) {
   const gridLines = 4;
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white">
+    <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white dark:border-slate-800 dark:from-slate-900 dark:to-slate-950">
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full block">
         <defs>
           <linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1">
@@ -538,9 +538,9 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="group flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:bg-slate-50 transition"
+      className="group flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:bg-slate-50 transition dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/70"
     >
-      <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
+      <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0 dark:border-slate-700 dark:bg-slate-800">
         <span className="text-base">{icon}</span>
       </div>
 

@@ -52,7 +52,7 @@ function Item({
         "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
         active
           ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_12px_30px_rgba(37,99,235,0.28)]"
-          : "text-slate-700 hover:bg-slate-100",
+          : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white",
       )}
     >
       <span className="text-base">{icon}</span>
@@ -109,16 +109,16 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
 
   const sidebarContent = (
     <>
-      <div className="px-5 py-5 border-b border-slate-200/70">
+      <div className="px-5 py-5 border-b border-slate-200/70 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-slate-200 flex items-center justify-center font-black text-blue-700">
+          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-slate-200 flex items-center justify-center font-black text-blue-700 dark:border-slate-700 dark:from-slate-900 dark:to-slate-800 dark:text-blue-300">
             AQ
           </div>
           <div>
-            <div className="text-lg font-black text-slate-900">
+            <div className="text-lg font-black text-slate-900 dark:text-slate-50">
               Anestesia Questões
             </div>
-            <div className="text-xs text-slate-500">Painel Administrativo</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Painel Administrativo</div>
           </div>
         </div>
       </div>
@@ -183,20 +183,20 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         </nav>
       </div>
 
-      <div className="mt-auto p-4 border-t border-slate-200/70">
-        <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+      <div className="mt-auto p-4 border-t border-slate-200/70 dark:border-slate-800">
+        <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-950/70">
           <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
             Tema
           </div>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-2 gap-1">
             <button
               type="button"
               onClick={() => onThemeChange("light")}
               className={cn(
                 "rounded-lg px-2 py-2 text-xs font-semibold transition",
                 themeMode === "light"
-                  ? "bg-slate-900 text-white"
-                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950"
+                  : "bg-white text-slate-800 border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               )}
             >
               Claro
@@ -207,23 +207,11 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
               className={cn(
                 "rounded-lg px-2 py-2 text-xs font-semibold transition",
                 themeMode === "dark"
-                  ? "bg-slate-900 text-white"
-                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950"
+                  : "bg-white text-slate-800 border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               )}
             >
               Escuro
-            </button>
-            <button
-              type="button"
-              onClick={() => onThemeChange("system")}
-              className={cn(
-                "rounded-lg px-2 py-2 text-xs font-semibold transition",
-                themeMode === "system"
-                  ? "bg-slate-900 text-white"
-                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-              )}
-            >
-              Sistema
             </button>
           </div>
         </div>
