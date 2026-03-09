@@ -22,8 +22,8 @@ function StatusBadge({ active }: { active: boolean }) {
     <span
       className={
         active
-          ? "inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase text-emerald-700"
-          : "inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase text-amber-700"
+          ? "inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase text-emerald-800 dark:border dark:border-emerald-500/35 dark:bg-emerald-500/16 dark:text-emerald-200"
+          : "inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase text-amber-800 dark:border dark:border-amber-500/35 dark:bg-amber-500/14 dark:text-amber-200"
       }
     >
       {active ? "ativo" : "pendente"}
