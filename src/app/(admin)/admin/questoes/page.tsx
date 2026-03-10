@@ -83,14 +83,14 @@ function Badge({
 }) {
   const cls =
     tone === "blue"
-      ? "bg-blue-50 text-blue-700 border-blue-100 dark:border-slate-300/90 dark:bg-slate-100 dark:text-slate-950"
+      ? "bg-blue-50 text-blue-700 border-blue-100 dark:!border-[#bfdbfe] dark:!bg-[#dbeafe] dark:!text-[#1e3a8a]"
       : tone === "green"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:border-emerald-200/90 dark:bg-emerald-200 dark:text-emerald-950"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:!border-[#a7f3d0] dark:!bg-[#d1fae5] dark:!text-[#064e3b]"
       : tone === "amber"
-      ? "bg-amber-50 text-amber-700 border-amber-100 dark:border-amber-200/90 dark:bg-amber-200 dark:text-amber-950"
+      ? "bg-amber-50 text-amber-700 border-amber-100 dark:!border-[#fcd34d] dark:!bg-[#fde68a] dark:!text-[#78350f]"
       : tone === "red"
-      ? "bg-rose-50 text-rose-700 border-rose-100 dark:border-rose-200/90 dark:bg-rose-200 dark:text-rose-950"
-      : "bg-slate-50 text-slate-700 border-slate-100 dark:border-slate-300/90 dark:bg-slate-200 dark:text-slate-950";
+      ? "bg-rose-50 text-rose-700 border-rose-100 dark:!border-[#fecdd3] dark:!bg-[#ffe4e6] dark:!text-[#881337]"
+      : "bg-slate-50 text-slate-700 border-slate-100 dark:!border-[#cbd5e1] dark:!bg-[#e2e8f0] dark:!text-[#0f172a]";
 
   const clickable = !!onClick;
   return (
@@ -637,8 +637,8 @@ export default function BancoQuestoesPage() {
                           className={cn(
                             "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-extrabold transition",
                             isActive
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100 dark:border-emerald-200/90 dark:bg-emerald-200 dark:text-emerald-950 dark:hover:bg-emerald-200"
-                              : "bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100 dark:border-amber-200/90 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-200",
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100 dark:!border-[#a7f3d0] dark:!bg-[#d1fae5] dark:!text-[#064e3b] dark:hover:!bg-[#bbf7d0]"
+                              : "bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100 dark:!border-[#fcd34d] dark:!bg-[#fde68a] dark:!text-[#78350f] dark:hover:!bg-[#fcd34d]",
                             togglingId === q.id ? "opacity-60 cursor-wait" : ""
                           )}
                           title="Clique para alternar"

@@ -367,10 +367,10 @@ function KpiCard({
 }) {
   const pillClass =
     pill.tone === "ok"
-      ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-emerald-200/90 dark:bg-emerald-200 dark:text-emerald-950"
+      ? "border-blue-200 bg-blue-50 text-blue-800 dark:!border-[#a7f3d0] dark:!bg-[#d1fae5] dark:!text-[#064e3b]"
       : pill.tone === "warn"
-      ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-200/90 dark:bg-amber-200 dark:text-amber-950"
-      : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-300/90 dark:bg-slate-200 dark:text-slate-950";
+      ? "border-amber-200 bg-amber-50 text-amber-800 dark:!border-[#fcd34d] dark:!bg-[#fde68a] dark:!text-[#78350f]"
+      : "border-slate-200 bg-slate-50 text-slate-700 dark:!border-[#cbd5e1] dark:!bg-[#e2e8f0] dark:!text-[#0f172a]";
 
   return (
     <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
