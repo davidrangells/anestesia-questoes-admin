@@ -83,14 +83,14 @@ function Badge({
 }) {
   const cls =
     tone === "blue"
-      ? "bg-blue-50 text-blue-700 border-blue-100 dark:!border-[#bfdbfe] dark:!bg-[#dbeafe] dark:!text-[#1e3a8a]"
+      ? "border-[#bfdbfe] bg-[#dbeafe] text-[#1e3a8a]"
       : tone === "green"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:!border-[#a7f3d0] dark:!bg-[#d1fae5] dark:!text-[#064e3b]"
+      ? "border-[#86efac] bg-[#dcfce7] text-[#14532d]"
       : tone === "amber"
-      ? "bg-amber-50 text-amber-700 border-amber-100 dark:!border-[#fcd34d] dark:!bg-[#fde68a] dark:!text-[#78350f]"
+      ? "border-[#f59e0b] bg-[#fef3c7] text-[#78350f]"
       : tone === "red"
-      ? "bg-rose-50 text-rose-700 border-rose-100 dark:!border-[#fecdd3] dark:!bg-[#ffe4e6] dark:!text-[#881337]"
-      : "bg-slate-50 text-slate-700 border-slate-100 dark:!border-[#cbd5e1] dark:!bg-[#e2e8f0] dark:!text-[#0f172a]";
+      ? "border-[#fecdd3] bg-[#ffe4e6] text-[#881337]"
+      : "border-[#cbd5e1] bg-[#e2e8f0] text-[#0f172a]";
 
   const clickable = !!onClick;
   return (
@@ -637,8 +637,8 @@ export default function BancoQuestoesPage() {
                           className={cn(
                             "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-extrabold transition",
                             isActive
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100 dark:!border-[#a7f3d0] dark:!bg-[#d1fae5] dark:!text-[#064e3b] dark:hover:!bg-[#bbf7d0]"
-                              : "bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100 dark:!border-[#fcd34d] dark:!bg-[#fde68a] dark:!text-[#78350f] dark:hover:!bg-[#fcd34d]",
+                              ? "border-[#86efac] bg-[#dcfce7] text-[#14532d] hover:bg-[#bbf7d0]"
+                              : "border-[#f59e0b] bg-[#fef3c7] text-[#78350f] hover:bg-[#fde68a]",
                             togglingId === q.id ? "opacity-60 cursor-wait" : ""
                           )}
                           title="Clique para alternar"
