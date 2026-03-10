@@ -895,6 +895,19 @@ export function QuestionEditorForm({
               onChange={(value) => setForm((prev) => ({ ...prev, explanation: value }))}
             />
           </div>
+
+          <div className="min-w-0 rounded-2xl border bg-white p-5">
+            <div className="text-sm font-extrabold text-slate-900">Referência</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Campo bibliográfico para rastrear a origem da questão.
+            </div>
+            <textarea
+              value={form.reference}
+              onChange={(event) => setForm((prev) => ({ ...prev, reference: event.target.value }))}
+              placeholder="Livro, capítulo, artigo, banca, legislação..."
+              className="mt-3 min-h-[110px] w-full rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
         </div>
 
         <div className="min-w-0 space-y-6">
@@ -1072,19 +1085,6 @@ export function QuestionEditorForm({
                 <div className="text-xs text-slate-500">Nenhum tema adicionado.</div>
               )}
             </div>
-          </div>
-
-          <div className="min-w-0 rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Referência</div>
-            <div className="mt-1 text-xs text-slate-500">
-              Campo bibliográfico para rastrear a origem da questão.
-            </div>
-            <textarea
-              value={form.reference}
-              onChange={(event) => setForm((prev) => ({ ...prev, reference: event.target.value }))}
-              placeholder="Livro, capítulo, artigo, banca, legislação..."
-              className="mt-3 min-h-[110px] w-full rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-            />
           </div>
 
           <div className="min-w-0 rounded-2xl border bg-white p-5">
