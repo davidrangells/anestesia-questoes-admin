@@ -356,6 +356,10 @@ with ZipFile(file_path) as zf:
             values[idx] = read_cell_value(cell, shared_strings)
         rows.append(values)
 
+    if not rows:
+        print("[]")
+        raise SystemExit(0)
+
     headers = [str(value).strip() if value is not None else "" for value in rows[0]]
     data = []
     for row in rows[1:]:
@@ -376,7 +380,13 @@ function parseWorkbookRows(filePath, sheetName = "firebase_import") {
   });
 
   if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || "Failed to parse workbook.");
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+    const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+    const spawnError =
+      result.error instanceof Error ? result.error.message : "";
+    throw new Error(
+      stderr || stdout || spawnError || "Failed to parse workbook."
+    );
   }
 
   try {
