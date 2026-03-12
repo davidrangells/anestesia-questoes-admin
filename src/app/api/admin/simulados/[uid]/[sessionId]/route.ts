@@ -94,6 +94,109 @@ function uniqueStrings(values: unknown[]) {
   return Array.from(set);
 }
 
+function normalizeOptionId(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function invertMap(map: Record<string, string>) {
+  const inverted: Record<string, string> = {};
+  Object.entries(map).forEach(([displayId, originalId]) => {
+    if (displayId && originalId) {
+      inverted[originalId] = displayId;
+    }
+  });
+  return inverted;
+}
+
+function normalizeOptionMap(input: unknown) {
+  if (!isRecord(input)) return null;
+
+  const map: Record<string, string> = {};
+  Object.entries(input).forEach(([displayId, originalId]) => {
+    const normalizedDisplay = normalizeOptionId(displayId);
+    const normalizedOriginal = normalizeOptionId(originalId);
+    if (normalizedDisplay && normalizedOriginal) {
+      map[normalizedDisplay] = normalizedOriginal;
+    }
+  });
+
+  return Object.keys(map).length > 0 ? map : null;
+}
+
+function parseOptionMapFromArray(input: unknown) {
+  if (!Array.isArray(input) || input.length === 0) return null;
+
+  if (input.every((item) => typeof item === "string")) {
+    const map: Record<string, string> = {};
+    input.forEach((originalId, index) => {
+      const displayId = String.fromCharCode(65 + index);
+      const normalizedOriginal = normalizeOptionId(originalId);
+      if (normalizedOriginal) {
+        map[displayId] = normalizedOriginal;
+      }
+    });
+    return Object.keys(map).length > 0 ? map : null;
+  }
+
+  const map: Record<string, string> = {};
+  input.forEach((item, index) => {
+    if (!isRecord(item)) return;
+    const displayId = normalizeOptionId(
+      item.displayId ?? item.id ?? item.displayOptionId ?? item.letter ?? String.fromCharCode(65 + index)
+    );
+    const originalId = normalizeOptionId(
+      item.originalId ?? item.optionId ?? item.originalOptionId ?? item.sourceId
+    );
+    if (displayId && originalId) {
+      map[displayId] = originalId;
+    }
+  });
+
+  return Object.keys(map).length > 0 ? map : null;
+}
+
+function parseOptionMap(input: unknown) {
+  const fromRecord = normalizeOptionMap(input);
+  if (fromRecord) return fromRecord;
+  return parseOptionMapFromArray(input);
+}
+
+function extractOptionMap(...sources: unknown[]) {
+  for (const source of sources) {
+    if (!isRecord(source)) continue;
+    const directCandidates = [
+      source.optionMap,
+      source.optionsMap,
+      source.optionOrderMap,
+      source.displayOptionMap,
+    ];
+    for (const candidate of directCandidates) {
+      const parsed = parseOptionMap(candidate);
+      if (parsed) return parsed;
+    }
+
+    const arrayCandidates = [
+      source.optionOrder,
+      source.optionsOrder,
+      source.shuffledOptions,
+      source.displayedOptions,
+      source.options,
+    ];
+    for (const candidate of arrayCandidates) {
+      const parsed = parseOptionMap(candidate);
+      if (parsed) return parsed;
+    }
+  }
+
+  return null;
+}
+
 async function loadQuestions(questionIds: string[]) {
   if (!questionIds.length) return new Map<string, Record<string, unknown>>();
 
@@ -220,26 +323,47 @@ export async function GET(
       )
         .trim()
         .toUpperCase();
-      const correctOptionId = String(
-        storedQuestion.correctOptionId ?? answer.correctOptionId ?? answer.correctAnswer ?? ""
-      )
-        .trim()
-        .toUpperCase();
+      const optionMap = extractOptionMap(answer, embeddedQuestion, data);
+      const displayedToOriginalMap = optionMap ?? {};
+      const originalToDisplayedMap = invertMap(displayedToOriginalMap);
+
+      const selectedOriginalOptionId = normalizeOptionId(
+        answer.selectedOriginalOptionId ??
+          answer.originalSelectedOptionId ??
+          displayedToOriginalMap[selectedOptionId] ??
+          selectedOptionId
+      );
+
+      const rawCorrectOptionId = normalizeOptionId(
+        storedQuestion.correctOptionId ??
+          answer.correctOriginalOptionId ??
+          answer.originalCorrectOptionId ??
+          answer.correctOptionId ??
+          answer.correctAnswer ??
+          ""
+      );
+      const correctOriginalOptionId = normalizeOptionId(
+        displayedToOriginalMap[rawCorrectOptionId] ?? rawCorrectOptionId
+      );
+      const displayedCorrectOptionId = normalizeOptionId(
+        originalToDisplayedMap[correctOriginalOptionId] ?? ""
+      );
+      const correctOptionId = displayedCorrectOptionId || correctOriginalOptionId;
 
       let isCorrect: boolean | null = null;
       if (typeof answer.isCorrect === "boolean") {
         isCorrect = answer.isCorrect;
-      } else if (selectedOptionId && correctOptionId) {
-        isCorrect = selectedOptionId === correctOptionId;
+      } else if (selectedOriginalOptionId && correctOriginalOptionId) {
+        isCorrect = selectedOriginalOptionId === correctOriginalOptionId;
       }
 
       return {
         questionId,
         prompt,
-        selectedOptionId,
+        selectedOptionId: selectedOptionId || selectedOriginalOptionId,
         correctOptionId,
         isCorrect,
-        answered: Boolean(selectedOptionId),
+        answered: Boolean(selectedOptionId || selectedOriginalOptionId),
       };
     });
 

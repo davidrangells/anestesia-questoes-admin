@@ -42,6 +42,7 @@ type QBQuestion = {
   imageUrl?: string | null;
   options?: Option[];
   correctOptionId?: string;
+  shuffleOptions?: boolean;
 
   examType?: string;
   prova_tipo?: string;
@@ -245,6 +246,7 @@ function sanitizeForCopy(q: QBQuestion) {
           imageUrl: (o.imageUrl ?? "").toString(),
         })),
     correctOptionId: q.correctOptionId ?? "A",
+    shuffleOptions: q.shuffleOptions !== false,
     examType: getExamType(q),
     examYear: getExamYear(q) ? Number(getExamYear(q)) || getExamYear(q) : null,
     examSource: getExamLabel(q),

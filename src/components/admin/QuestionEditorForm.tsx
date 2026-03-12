@@ -50,6 +50,7 @@ export type QuestionFormState = {
   commentAttachments: QuestionAttachment[];
   options: QuestionOption[];
   correctOptionId: QuestionOption["id"];
+  shuffleOptions: boolean;
 };
 
 type QuestionDocLike = {
@@ -69,6 +70,7 @@ type QuestionDocLike = {
   optionE_text?: string;
   optionE_imageUrl?: string | null;
   correctOptionId?: QuestionOption["id"];
+  shuffleOptions?: boolean;
   examId?: string | null;
   examType?: string;
   prova_tipo?: string;
@@ -182,6 +184,7 @@ export function createEmptyQuestionForm(): QuestionFormState {
     commentAttachments: [],
     options: createBaseOptions(),
     correctOptionId: "A",
+    shuffleOptions: true,
   };
 }
 
@@ -233,6 +236,7 @@ export function questionDocToForm(data: QuestionDocLike): QuestionFormState {
     commentAttachments: Array.isArray(data.commentAttachments) ? data.commentAttachments : [],
     options: normalizeQuestionOptions(options, correctOptionId),
     correctOptionId,
+    shuffleOptions: data.shuffleOptions !== false,
   };
 }
 
@@ -281,6 +285,7 @@ export function buildQuestionPayload(form: QuestionFormState) {
     optionE_text: optionMap.E?.text ?? "",
     optionE_imageUrl: optionMap.E?.imageUrl ?? null,
     correctOptionId: form.correctOptionId,
+    shuffleOptions: form.shuffleOptions,
     reference: form.reference.trim(),
     internalNote: form.internalNote.trim(),
     commentAttachments: form.commentAttachments,
@@ -1084,6 +1089,27 @@ export function QuestionEditorForm({
                   )}
                 >
                   {form.isActive ? "● Ativo" : "○ Inativo"}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between rounded-2xl border bg-slate-50 p-4">
+                <div>
+                  <div className="text-sm font-extrabold text-slate-900">Alternativas embaralhadas</div>
+                  <div className="text-xs text-slate-500">
+                    Ligado por padrão. Desative apenas para questões com ordem fixa.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, shuffleOptions: !prev.shuffleOptions }))}
+                  className={cn(
+                    "rounded-full border px-3 py-2 text-xs font-extrabold",
+                    form.shuffleOptions
+                      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-700"
+                  )}
+                >
+                  {form.shuffleOptions ? "● Ligado" : "○ Desligado"}
                 </button>
               </div>
             </div>

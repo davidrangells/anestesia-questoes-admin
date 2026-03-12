@@ -211,6 +211,18 @@ function parseBool(value) {
   return ["1", "true", "sim", "yes", "ativo", "active"].includes(normalized);
 }
 
+function parseBoolWithDefault(value, defaultValue) {
+  const normalized = normalizeKey(value);
+  if (!normalized) return defaultValue;
+  if (["1", "true", "sim", "yes", "ativo", "active", "on", "ligado"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "nao", "não", "no", "off", "desligado"].includes(normalized)) {
+    return false;
+  }
+  return defaultValue;
+}
+
 function parseYear(value) {
   const raw = normalizeText(value);
   if (!raw) return null;
@@ -446,6 +458,7 @@ function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
   const proofLabel = buildProofLabel(examType, row.prova_ano, row.Prova);
   const themes = parseThemes(row.themes);
   const isActive = parseBool(row.isActive);
+  const shuffleOptions = parseBoolWithDefault(row.shuffleOptions, true);
   const warnings = [];
   const errors = [];
 
@@ -535,6 +548,7 @@ function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
     optionD_text: optionMap.D?.text ?? "",
     optionD_imageUrl: optionMap.D?.imageUrl ?? null,
     correctOptionId,
+    shuffleOptions,
     reference: normalizeText(row.reference),
     internalNote:
       normalizeText(row.internalNote) ||
