@@ -6,7 +6,17 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   outputFileTracingIncludes: {
-    "/api/admin/questions/import": ["./scripts/sync-questions-from-xlsx.mjs"],
+    "/api/admin/questions/import": [
+      "./scripts/sync-questions-from-xlsx.mjs",
+      "./node_modules/xlsx/**/*",
+      "./node_modules/adler-32/**/*",
+      "./node_modules/cfb/**/*",
+      "./node_modules/codepage/**/*",
+      "./node_modules/crc-32/**/*",
+      "./node_modules/ssf/**/*",
+      "./node_modules/wmf/**/*",
+      "./node_modules/word/**/*",
+    ],
   },
 };
 
