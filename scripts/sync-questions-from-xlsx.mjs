@@ -2,7 +2,7 @@ import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import xlsx from "xlsx";
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -273,131 +273,32 @@ function chunk(array, size) {
   return items;
 }
 
-const PYTHON_XLSX_PARSER = String.raw`
-import json
-import re
-import sys
-from zipfile import ZipFile
-from xml.etree import ElementTree as ET
-
-MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-DOC_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
-NS = {"a": MAIN_NS, "r": DOC_REL_NS, "pr": PKG_REL_NS}
-
-def col_to_index(col):
-    num = 0
-    for ch in col:
-        if ch.isalpha():
-            num = num * 26 + (ord(ch.upper()) - 64)
-    return num - 1
-
-def read_cell_value(cell, shared_strings):
-    cell_type = cell.attrib.get("t")
-    value_node = cell.find("a:v", NS)
-    if cell_type == "inlineStr":
-        inline = cell.find("a:is", NS)
-        if inline is None:
-            return None
-        return "".join(node.text or "" for node in inline.iter("{%s}t" % MAIN_NS))
-    if value_node is None:
-        inline = cell.find("a:is", NS)
-        if inline is not None:
-            return "".join(node.text or "" for node in inline.iter("{%s}t" % MAIN_NS))
-        return None
-    raw = value_node.text
-    if cell_type == "s":
-        return shared_strings[int(raw)]
-    if cell_type == "b":
-        return "1" if raw == "1" else "0"
-    return raw
-
-file_path = sys.argv[1]
-sheet_name = sys.argv[2]
-
-with ZipFile(file_path) as zf:
-    shared_strings = []
-    if "xl/sharedStrings.xml" in zf.namelist():
-        shared_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
-        for si in shared_root:
-            shared_strings.append("".join(node.text or "" for node in si.iter("{%s}t" % MAIN_NS)))
-
-    workbook = ET.fromstring(zf.read("xl/workbook.xml"))
-    rels = ET.fromstring(zf.read("xl/_rels/workbook.xml.rels"))
-    rel_map = {
-        rel.attrib["Id"]: rel.attrib["Target"].lstrip("/")
-        for rel in rels
-        if rel.tag.endswith("Relationship")
-    }
-
-    target = None
-    for sheet in workbook.find("a:sheets", NS):
-        if sheet.attrib.get("name") != sheet_name:
-            continue
-        rel_id = sheet.attrib.get("{%s}id" % DOC_REL_NS)
-        target = rel_map.get(rel_id)
-        break
-
-    if not target:
-        raise SystemExit(f"Worksheet not found: {sheet_name}")
-
-    sheet_root = ET.fromstring(zf.read(target))
-    sheet_data = sheet_root.find("a:sheetData", NS)
-    rows = []
-
-    for row in sheet_data:
-        values = []
-        for cell in row:
-            ref = cell.attrib.get("r", "")
-            match = re.match(r"([A-Z]+)", ref)
-            idx = col_to_index(match.group(1)) if match else len(values)
-            while len(values) <= idx:
-                values.append(None)
-            values[idx] = read_cell_value(cell, shared_strings)
-        rows.append(values)
-
-    if not rows:
-        print("[]")
-        raise SystemExit(0)
-
-    headers = [str(value).strip() if value is not None else "" for value in rows[0]]
-    data = []
-    for row in rows[1:]:
-        item = {}
-        for idx, header in enumerate(headers):
-            if not header:
-                continue
-            item[header] = row[idx] if idx < len(row) else None
-        data.append(item)
-
-print(json.dumps(data, ensure_ascii=False))
-`;
-
 function parseWorkbookRows(filePath, sheetName = "firebase_import") {
-  const result = spawnSync("python3", ["-c", PYTHON_XLSX_PARSER, filePath, sheetName], {
-    encoding: "utf8",
-    maxBuffer: 1024 * 1024 * 20,
+  const workbook = xlsx.readFile(filePath, { raw: false, cellDates: false });
+  const sheet = workbook.Sheets[sheetName];
+
+  if (!sheet) {
+    throw new Error(`Worksheet not found: ${sheetName}`);
+  }
+
+  const parsed = xlsx.utils.sheet_to_json(sheet, {
+    raw: false,
+    defval: null,
+    blankrows: false,
   });
 
-  if (result.status !== 0) {
-    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
-    const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
-    const spawnError =
-      result.error instanceof Error ? result.error.message : "";
-    throw new Error(
-      stderr || stdout || spawnError || "Failed to parse workbook."
-    );
-  }
+  if (!Array.isArray(parsed)) return [];
 
-  try {
-    const parsed = JSON.parse(result.stdout);
-    if (!Array.isArray(parsed)) {
-      throw new Error("Workbook parser returned invalid payload.");
+  return parsed.map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return {};
+    const normalized = {};
+    for (const [key, value] of Object.entries(row)) {
+      const normalizedKey = normalizeText(key);
+      if (!normalizedKey) continue;
+      normalized[normalizedKey] = value;
     }
-    return parsed;
-  } catch (error) {
-    throw new Error(`Failed to decode workbook payload: ${error instanceof Error ? error.message : "unknown error"}`);
-  }
+    return normalized;
+  });
 }
 
 function resolveCatalogRef(items, keyCandidates) {
