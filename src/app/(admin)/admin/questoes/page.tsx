@@ -66,6 +66,8 @@ type QBQuestion = {
   optionC_text?: string;
   optionD_imageUrl?: string | null;
   optionD_text?: string;
+  optionE_imageUrl?: string | null;
+  optionE_text?: string;
 };
 
 const PAGE_SIZE = 20;
@@ -147,7 +149,13 @@ function hasAnyImage(q: QBQuestion) {
   const questionHas = !!q.imageUrl;
   const optionHas =
     (q.options ?? []).some((o) => !!o.imageUrl) ||
-    Boolean(q.optionA_imageUrl || q.optionB_imageUrl || q.optionC_imageUrl || q.optionD_imageUrl);
+    Boolean(
+      q.optionA_imageUrl ||
+        q.optionB_imageUrl ||
+        q.optionC_imageUrl ||
+        q.optionD_imageUrl ||
+        q.optionE_imageUrl
+    );
   return questionHas || optionHas;
 }
 
@@ -207,6 +215,20 @@ function sanitizeForCopy(q: QBQuestion) {
       imageUrl: q.optionD_imageUrl ?? "",
     },
   ];
+
+  const hasOptionE = Boolean(
+    (q as QBQuestion & { optionE_text?: string }).optionE_text?.trim() ||
+      q.optionE_imageUrl ||
+      q.correctOptionId === "E"
+  );
+
+  if (hasOptionE) {
+    optionFallbacks.push({
+      id: "E",
+      text: (q as QBQuestion & { optionE_text?: string }).optionE_text ?? "",
+      imageUrl: q.optionE_imageUrl ?? "",
+    });
+  }
 
   const normalizedOptions = Array.isArray(q.options) && q.options.length
     ? q.options

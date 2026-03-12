@@ -536,7 +536,11 @@ function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
     optionD_imageUrl: optionMap.D?.imageUrl ?? null,
     correctOptionId,
     reference: normalizeText(row.reference),
-    internalNote: typeof existingData.internalNote === "string" ? existingData.internalNote : "",
+    internalNote:
+      normalizeText(row.internalNote) ||
+      normalizeText(row["Nota interna"]) ||
+      normalizeText(row.observacao) ||
+      (typeof existingData.internalNote === "string" ? existingData.internalNote : ""),
     commentAttachments: Array.isArray(existingData.commentAttachments) ? existingData.commentAttachments : [],
     createdAt: existingData.createdAt ?? FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

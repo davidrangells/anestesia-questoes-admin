@@ -66,6 +66,8 @@ type QuestionDocLike = {
   optionC_imageUrl?: string | null;
   optionD_text?: string;
   optionD_imageUrl?: string | null;
+  optionE_text?: string;
+  optionE_imageUrl?: string | null;
   correctOptionId?: QuestionOption["id"];
   examId?: string | null;
   examType?: string;
@@ -124,6 +126,44 @@ export function buildProofLabel(examType: string, examYear: string) {
   return normalizedYear ? `(${normalizedType}-${normalizedYear})` : `(${normalizedType})`;
 }
 
+const REQUIRED_OPTION_IDS = ["A", "B", "C", "D"] as const;
+
+function createBaseOptions(): QuestionOption[] {
+  return REQUIRED_OPTION_IDS.map((id) => ({ id, text: "", imageUrl: "" }));
+}
+
+function normalizeQuestionOptions(
+  options: QuestionOption[],
+  correctOptionId?: QuestionOption["id"]
+): QuestionOption[] {
+  const optionMap = new Map(
+    options.map((option) => [
+      option.id,
+      {
+        id: option.id,
+        text: String(option.text ?? ""),
+        imageUrl: String(option.imageUrl ?? ""),
+      },
+    ])
+  );
+
+  const normalized = REQUIRED_OPTION_IDS.map(
+    (id) => optionMap.get(id) ?? { id, text: "", imageUrl: "" }
+  );
+
+  const optionalE = optionMap.get("E");
+  const shouldIncludeE =
+    Boolean(optionalE?.text?.trim()) ||
+    Boolean(optionalE?.imageUrl?.trim()) ||
+    correctOptionId === "E";
+
+  if (shouldIncludeE) {
+    normalized.push(optionalE ?? { id: "E", text: "", imageUrl: "" });
+  }
+
+  return normalized;
+}
+
 export function createEmptyQuestionForm(): QuestionFormState {
   return {
     prompt: "",
@@ -140,12 +180,7 @@ export function createEmptyQuestionForm(): QuestionFormState {
     reference: "",
     internalNote: "",
     commentAttachments: [],
-    options: [
-      { id: "A", text: "", imageUrl: "" },
-      { id: "B", text: "", imageUrl: "" },
-      { id: "C", text: "", imageUrl: "" },
-      { id: "D", text: "", imageUrl: "" },
-    ],
+    options: createBaseOptions(),
     correctOptionId: "A",
   };
 }
@@ -171,7 +206,10 @@ export function questionDocToForm(data: QuestionDocLike): QuestionFormState {
           { id: "B", text: String(data.optionB_text ?? ""), imageUrl: String(data.optionB_imageUrl ?? "") },
           { id: "C", text: String(data.optionC_text ?? ""), imageUrl: String(data.optionC_imageUrl ?? "") },
           { id: "D", text: String(data.optionD_text ?? ""), imageUrl: String(data.optionD_imageUrl ?? "") },
+          { id: "E", text: String(data.optionE_text ?? ""), imageUrl: String(data.optionE_imageUrl ?? "") },
         ];
+
+  const correctOptionId = (data.correctOptionId ?? "A") as QuestionOption["id"];
 
   return {
     prompt,
@@ -193,8 +231,8 @@ export function questionDocToForm(data: QuestionDocLike): QuestionFormState {
     reference: (data.reference ?? "").toString(),
     internalNote: (data.internalNote ?? "").toString(),
     commentAttachments: Array.isArray(data.commentAttachments) ? data.commentAttachments : [],
-    options,
-    correctOptionId: (data.correctOptionId ?? "A") as QuestionOption["id"],
+    options: normalizeQuestionOptions(options, correctOptionId),
+    correctOptionId,
   };
 }
 
@@ -240,6 +278,8 @@ export function buildQuestionPayload(form: QuestionFormState) {
     optionC_imageUrl: optionMap.C?.imageUrl ?? null,
     optionD_text: optionMap.D?.text ?? "",
     optionD_imageUrl: optionMap.D?.imageUrl ?? null,
+    optionE_text: optionMap.E?.text ?? "",
+    optionE_imageUrl: optionMap.E?.imageUrl ?? null,
     correctOptionId: form.correctOptionId,
     reference: form.reference.trim(),
     internalNote: form.internalNote.trim(),
@@ -581,7 +621,9 @@ export function QuestionEditorForm({
 
   const canSave = useMemo(() => {
     const hasPrompt = form.prompt.trim().length > 0;
-    const hasOptions = form.options.every((option) => option.text.trim().length > 0);
+    const hasOptions = REQUIRED_OPTION_IDS.every((optionId) =>
+      form.options.find((option) => option.id === optionId)?.text.trim().length
+    );
     const hasTheme = form.themes.length > 0;
     const hasExam = form.examId.trim().length > 0;
     const hasLevel = form.levelId.trim().length > 0;
@@ -604,6 +646,24 @@ export function QuestionEditorForm({
       options: prev.options.map((option) =>
         option.id === optionId ? { ...option, ...patch } : option
       ),
+    }));
+  };
+
+  const addOptionalOptionE = () => {
+    setForm((prev) => {
+      if (prev.options.some((option) => option.id === "E")) return prev;
+      return {
+        ...prev,
+        options: [...prev.options, { id: "E", text: "", imageUrl: "" }],
+      };
+    });
+  };
+
+  const removeOptionalOptionE = () => {
+    setForm((prev) => ({
+      ...prev,
+      options: prev.options.filter((option) => option.id !== "E"),
+      correctOptionId: prev.correctOptionId === "E" ? "A" : prev.correctOptionId,
     }));
   };
 
@@ -821,22 +881,34 @@ export function QuestionEditorForm({
             </div>
 
             <div className="mt-4 space-y-4">
-              {form.options.slice(0, 4).map((option) => {
+              {form.options.map((option) => {
                 const isCorrect = form.correctOptionId === option.id;
+                const isOptionalE = option.id === "E";
                 return (
                   <div key={option.id} className="rounded-xl border p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-semibold">Alternativa {option.id}</div>
-                      <button
-                        type="button"
-                        onClick={() => setForm((prev) => ({ ...prev, correctOptionId: option.id }))}
-                        className={cn(
-                          "rounded-full px-3 py-1 text-xs font-bold",
-                          isCorrect ? "bg-emerald-600 text-white" : "bg-slate-100"
-                        )}
-                      >
-                        {isCorrect ? "Correta" : "Marcar correta"}
-                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {isOptionalE ? (
+                          <button
+                            type="button"
+                            onClick={removeOptionalOptionE}
+                            className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
+                          >
+                            Remover
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setForm((prev) => ({ ...prev, correctOptionId: option.id }))}
+                          className={cn(
+                            "rounded-full px-3 py-1 text-xs font-bold",
+                            isCorrect ? "bg-emerald-600 text-white" : "bg-slate-100"
+                          )}
+                        >
+                          {isCorrect ? "Correta" : "Marcar correta"}
+                        </button>
+                      </div>
                     </div>
 
                     <textarea
@@ -881,6 +953,16 @@ export function QuestionEditorForm({
                 );
               })}
             </div>
+
+            {!form.options.some((option) => option.id === "E") ? (
+              <button
+                type="button"
+                onClick={addOptionalOptionE}
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Adicionar alternativa E
+              </button>
+            ) : null}
           </div>
 
           <div className="min-w-0">

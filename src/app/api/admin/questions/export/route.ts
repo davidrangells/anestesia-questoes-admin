@@ -17,6 +17,8 @@ const HEADERS = [
   "optionC_imageUrl",
   "optionD_text",
   "optionD_imageUrl",
+  "optionE_text",
+  "optionE_imageUrl",
   "correctOptionId",
   "explanation",
   "reference",
@@ -58,6 +60,7 @@ function buildRow(docId: string, data: Record<string, unknown>) {
     B: options.find((option) => String(option.id ?? "").trim().toUpperCase() === "B"),
     C: options.find((option) => String(option.id ?? "").trim().toUpperCase() === "C"),
     D: options.find((option) => String(option.id ?? "").trim().toUpperCase() === "D"),
+    E: options.find((option) => String(option.id ?? "").trim().toUpperCase() === "E"),
   };
 
   return [
@@ -72,6 +75,8 @@ function buildRow(docId: string, data: Record<string, unknown>) {
     data.optionC_imageUrl ?? optionMap.C?.imageUrl ?? "",
     data.optionD_text ?? optionMap.D?.text ?? "",
     data.optionD_imageUrl ?? optionMap.D?.imageUrl ?? "",
+    data.optionE_text ?? optionMap.E?.text ?? "",
+    data.optionE_imageUrl ?? optionMap.E?.imageUrl ?? "",
     data.correctOptionId ?? "",
     data.explanation ?? "",
     data.reference ?? "",
