@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import {
+  collection,
+  getCountFromServer,
+  getDocs,
+  query,
+  Timestamp,
+  where,
+} from "firebase/firestore";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { secondsFromUnknown } from "@/lib/dateValue";
 import { db } from "@/lib/firebase";
@@ -33,6 +40,17 @@ function getDayBucket(value: unknown) {
   ).padStart(2, "0")}`;
 }
 
+function buildLast7DayBuckets() {
+  const today = new Date();
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate()
+    ).padStart(2, "0")}`;
+  });
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [chartMode, setChartMode] = useState<ChartMode>("erros");
@@ -48,24 +66,35 @@ export default function AdminDashboardPage() {
     setErrorMsg(null);
 
     try {
-      const [questionsSnap, errorsSnap, studentsSnap] = await Promise.all([
-        getDocs(collection(db, "questionsBank")),
-        getDocs(collection(db, "erros_reportados")),
-        getDocs(query(collection(db, "users"), where("role", "==", "student"))),
-      ]);
+      const buckets = buildLast7DayBuckets();
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      startDate.setDate(startDate.getDate() - 6);
+      const startTimestamp = Timestamp.fromDate(startDate);
 
-      const today = new Date();
-      const buckets = Array.from({ length: 7 }, (_, index) => {
-        const date = new Date(today);
-        date.setDate(today.getDate() - (6 - index));
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-          date.getDate()
-        ).padStart(2, "0")}`;
-      });
+      const questionsCollection = collection(db, "questionsBank");
+      const errorsCollection = collection(db, "erros_reportados");
+      const studentsQuery = query(collection(db, "users"), where("role", "==", "student"));
+      const resolvedStatuses = ["resolvido", "Resolvido", "RESOLVIDO"];
+      const ignoredStatuses = ["ignorado", "Ignorado", "IGNORADO"];
+
+      const [questionsTotalSnap, studentsTotalSnap, errorsTotalSnap, errorsResolvedSnap, errorsIgnoredSnap] =
+        await Promise.all([
+          getCountFromServer(questionsCollection),
+          getCountFromServer(studentsQuery),
+          getCountFromServer(errorsCollection),
+          getCountFromServer(query(errorsCollection, where("status", "in", resolvedStatuses))),
+          getCountFromServer(query(errorsCollection, where("status", "in", ignoredStatuses))),
+        ]);
+
+      const [recentQuestionsSnap, recentErrorsSnap] = await Promise.all([
+        getDocs(query(questionsCollection, where("createdAt", ">=", startTimestamp))),
+        getDocs(query(errorsCollection, where("createdAt", ">=", startTimestamp))),
+      ]);
 
       const questionMap = new Map<string, number>();
       buckets.forEach((bucket) => questionMap.set(bucket, 0));
-      questionsSnap.docs.forEach((docSnap) => {
+      recentQuestionsSnap.docs.forEach((docSnap) => {
         const data = docSnap.data();
         const bucket = getDayBucket(data.createdAt ?? data.updatedAt);
         if (bucket && questionMap.has(bucket)) {
@@ -75,24 +104,23 @@ export default function AdminDashboardPage() {
 
       const errorMap = new Map<string, number>();
       buckets.forEach((bucket) => errorMap.set(bucket, 0));
-      let pendingErrors = 0;
-      errorsSnap.docs.forEach((docSnap) => {
+      recentErrorsSnap.docs.forEach((docSnap) => {
         const data = docSnap.data();
-        const status = String(data.status ?? "aberto").trim().toLowerCase();
-        if (status !== "resolvido" && status !== "ignorado") {
-          pendingErrors += 1;
-        }
-
         const bucket = getDayBucket(data.createdAt ?? data.updatedAt);
         if (bucket && errorMap.has(bucket)) {
           errorMap.set(bucket, Number(errorMap.get(bucket) ?? 0) + 1);
         }
       });
 
+      const pendingErrors =
+        errorsTotalSnap.data().count -
+        errorsResolvedSnap.data().count -
+        errorsIgnoredSnap.data().count;
+
       setStats({
-        questoesTotal: questionsSnap.size,
+        questoesTotal: questionsTotalSnap.data().count,
         errosPendentes: pendingErrors,
-        alunosTotal: studentsSnap.size,
+        alunosTotal: studentsTotalSnap.data().count,
       });
       setQuestionSeries(buckets.map((bucket) => Number(questionMap.get(bucket) ?? 0)));
       setErrorSeries(buckets.map((bucket) => Number(errorMap.get(bucket) ?? 0)));

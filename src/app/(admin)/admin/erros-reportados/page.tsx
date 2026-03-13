@@ -2,12 +2,12 @@
 
 import AdminShell from "@/components/AdminShell";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   collection,
+  documentId,
   doc,
   endBefore,
-  getDoc,
   getDocs,
   limit,
   limitToLast,
@@ -18,6 +18,7 @@ import {
   updateDoc,
   QueryDocumentSnapshot,
   DocumentData,
+  where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { buttonStyles } from "@/components/ui/Button";
@@ -185,6 +186,14 @@ function clip(s: string, max = 120) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
+function chunkArray<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size));
+  }
+  return chunks;
+}
+
 // -----------------------------------------------------------
 
 export default function ErrosReportadosPage() {
@@ -193,8 +202,14 @@ export default function ErrosReportadosPage() {
   const [items, setItems] = useState<Report[]>([]);
   const [cursorStack, setCursorStack] = useState<QueryDocumentSnapshot<DocumentData>[]>([]);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [nextPageCache, setNextPageCache] = useState<{
+    fromLastDocId: string;
+    rows: Report[];
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  } | null>(null);
 
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState<"todos" | ReportStatus>("aberto");
 
   // cache: users + questions
@@ -208,6 +223,32 @@ export default function ErrosReportadosPage() {
   // action loading
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const prefetchAfter = async (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
+    if (!cursor) {
+      setNextPageCache(null);
+      return;
+    }
+
+    try {
+      const qRef = query(
+        collection(db, "erros_reportados"),
+        orderBy("createdAt", "desc"),
+        startAfter(cursor),
+        limit(PAGE_SIZE)
+      );
+      const snap = await getDocs(qRef);
+      const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      setNextPageCache({
+        fromLastDocId: cursor.id,
+        rows,
+        lastDoc: snap.docs[snap.docs.length - 1] ?? null,
+      });
+      void warmCaches(rows);
+    } catch {
+      setNextPageCache(null);
+    }
+  };
+
   const fetchFirst = async () => {
     setLoading(true);
     try {
@@ -215,11 +256,13 @@ export default function ErrosReportadosPage() {
       const snap = await getDocs(qRef);
 
       const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
       setItems(rows);
-      setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
+      setLastDoc(nextLastDoc);
       setCursorStack([]);
 
       void warmCaches(rows);
+      void prefetchAfter(nextLastDoc);
     } finally {
       setLoading(false);
     }
@@ -227,6 +270,16 @@ export default function ErrosReportadosPage() {
 
   const fetchNext = async () => {
     if (!lastDoc) return;
+
+    if (nextPageCache && nextPageCache.fromLastDocId === lastDoc.id) {
+      setCursorStack((prev) => [...prev, lastDoc]);
+      setItems(nextPageCache.rows);
+      setLastDoc(nextPageCache.lastDoc);
+      void warmCaches(nextPageCache.rows);
+      void prefetchAfter(nextPageCache.lastDoc);
+      return;
+    }
+
     setLoading(true);
     try {
       const qRef = query(
@@ -238,11 +291,13 @@ export default function ErrosReportadosPage() {
       const snap = await getDocs(qRef);
 
       const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
       setCursorStack((prev) => [...prev, lastDoc]);
       setItems(rows);
-      setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
+      setLastDoc(nextLastDoc);
 
       void warmCaches(rows);
+      void prefetchAfter(nextLastDoc);
     } finally {
       setLoading(false);
     }
@@ -263,11 +318,13 @@ export default function ErrosReportadosPage() {
       const snap = await getDocs(qRef);
 
       const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
       setCursorStack((prev) => prev.slice(0, -1));
       setItems(rows);
-      setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
+      setLastDoc(nextLastDoc);
 
       void warmCaches(rows);
+      void prefetchAfter(nextLastDoc);
     } finally {
       setLoading(false);
     }
@@ -278,66 +335,69 @@ export default function ErrosReportadosPage() {
     const qIds = Array.from(new Set(rows.map((r) => getQuestionId(r)).filter(Boolean))) as string[];
     const uIds = Array.from(new Set(rows.map((r) => getUid(r)).filter(Boolean))) as string[];
 
-    const toFetchQ = qIds.filter((id) => !questionCache[id]).slice(0, 12);
-    const toFetchU = uIds.filter((id) => !userCache[id]).slice(0, 12);
+    const toFetchQ = qIds.filter((id) => !questionCache[id]).slice(0, 20);
+    const toFetchU = uIds.filter((id) => !userCache[id]).slice(0, 20);
 
     if (toFetchQ.length) {
-      const pairs = await Promise.all(
-        toFetchQ.map(async (qid) => {
-          // tenta questionsBank (principal)
-          const snapQB = await getDoc(doc(db, "questionsBank", qid));
-          if (snapQB.exists()) {
-            const d = snapQB.data() as any;
-            const mini: QuestionMini = {
-              id: snapQB.id,
-              prompt: d.prompt,
-              questionText: d.questionText,
-              statement: d.statement,
-            };
-            return [qid, mini] as const;
-          }
+      const nextQuestions: Record<string, QuestionMini> = {};
+      const foundQuestionIds = new Set<string>();
 
-          // fallback: collection "questoes" (se existir)
-          const snapQ = await getDoc(doc(db, "questoes", qid));
-          if (snapQ.exists()) {
-            const d = snapQ.data() as any;
-            const mini: QuestionMini = {
-              id: snapQ.id,
-              prompt: d.prompt,
-              questionText: d.questionText,
-              statement: d.statement ?? d.enunciado,
-            };
-            return [qid, mini] as const;
-          }
+      for (const idsChunk of chunkArray(toFetchQ, 10)) {
+        const snap = await getDocs(
+          query(collection(db, "questionsBank"), where(documentId(), "in", idsChunk))
+        );
+        snap.docs.forEach((docSnap) => {
+          const d = docSnap.data() as Record<string, unknown>;
+          nextQuestions[docSnap.id] = {
+            id: docSnap.id,
+            prompt: String(d.prompt ?? ""),
+            questionText: String(d.questionText ?? ""),
+            statement: String(d.statement ?? ""),
+          };
+          foundQuestionIds.add(docSnap.id);
+        });
+      }
 
-          return null;
-        })
-      );
+      const missingInQuestionsBank = toFetchQ.filter((id) => !foundQuestionIds.has(id));
+      for (const idsChunk of chunkArray(missingInQuestionsBank, 10)) {
+        const snap = await getDocs(
+          query(collection(db, "questoes"), where(documentId(), "in", idsChunk))
+        );
+        snap.docs.forEach((docSnap) => {
+          const d = docSnap.data() as Record<string, unknown>;
+          nextQuestions[docSnap.id] = {
+            id: docSnap.id,
+            prompt: String(d.prompt ?? ""),
+            questionText: String(d.questionText ?? ""),
+            statement: String(d.statement ?? d.enunciado ?? ""),
+          };
+        });
+      }
 
-      const next: Record<string, QuestionMini> = {};
-      pairs.filter(Boolean).forEach((p: any) => (next[p[0]] = p[1]));
-      if (Object.keys(next).length) setQuestionCache((prev) => ({ ...prev, ...next }));
+      if (Object.keys(nextQuestions).length) {
+        setQuestionCache((prev) => ({ ...prev, ...nextQuestions }));
+      }
     }
 
     if (toFetchU.length) {
-      const pairs = await Promise.all(
-        toFetchU.map(async (uid) => {
-          const snap = await getDoc(doc(db, "users", uid));
-          if (!snap.exists()) return null;
-          const d = snap.data() as any;
+      const nextUsers: Record<string, { name?: string; email?: string }> = {};
 
-          const mini = {
-            name: d?.name || d?.nome || d?.displayName || d?.alunoNome || "",
-            email: d?.email || "",
+      for (const idsChunk of chunkArray(toFetchU, 10)) {
+        const snap = await getDocs(
+          query(collection(db, "users"), where(documentId(), "in", idsChunk))
+        );
+        snap.docs.forEach((docSnap) => {
+          const d = docSnap.data() as Record<string, unknown>;
+          nextUsers[docSnap.id] = {
+            name: String(d.name ?? d.nome ?? d.displayName ?? d.alunoNome ?? "").trim(),
+            email: String(d.email ?? "").trim(),
           };
+        });
+      }
 
-          return [uid, mini] as const;
-        })
-      );
-
-      const next: Record<string, { name?: string; email?: string }> = {};
-      pairs.filter(Boolean).forEach((p: any) => (next[p[0]] = p[1]));
-      if (Object.keys(next).length) setUserCache((prev) => ({ ...prev, ...next }));
+      if (Object.keys(nextUsers).length) {
+        setUserCache((prev) => ({ ...prev, ...nextUsers }));
+      }
     }
   };
 
@@ -347,7 +407,7 @@ export default function ErrosReportadosPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    const s = search.trim().toLowerCase();
+    const s = deferredSearch.trim().toLowerCase();
 
     return items.filter((r) => {
       const st = getReportStatus(r);
@@ -374,7 +434,15 @@ export default function ErrosReportadosPage() {
         qPreviewSaved.includes(s)
       );
     });
-  }, [items, search, statusFilter, questionCache]);
+  }, [items, deferredSearch, statusFilter, questionCache]);
+
+  const hasNextPage = useMemo(() => {
+    if (!lastDoc) return false;
+    if (nextPageCache && nextPageCache.fromLastDocId === lastDoc.id) {
+      return nextPageCache.rows.length > 0;
+    }
+    return true;
+  }, [lastDoc, nextPageCache]);
 
   const openModal = (r: Report) => {
     setSelected(r);
@@ -648,7 +716,7 @@ export default function ErrosReportadosPage() {
             </button>
             <button
               onClick={fetchNext}
-              disabled={loading || !lastDoc}
+              disabled={loading || !hasNextPage}
               className={buttonStyles({ variant: "secondary", size: "sm" })}
             >
               Próxima

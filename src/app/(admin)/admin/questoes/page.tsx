@@ -2,7 +2,7 @@
 
 import AdminShell from "@/components/AdminShell";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   addDoc,
@@ -10,7 +10,6 @@ import {
   deleteDoc,
   doc,
   endBefore,
-  getDoc,
   getDocs,
   limit,
   limitToLast,
@@ -276,8 +275,14 @@ export default function BancoQuestoesPage() {
   const [items, setItems] = useState<QBQuestion[]>([]);
   const [cursorStack, setCursorStack] = useState<QueryDocumentSnapshot<DocumentData>[]>([]);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [nextPageCache, setNextPageCache] = useState<{
+    fromLastDocId: string;
+    rows: QBQuestion[];
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  } | null>(null);
 
   const [search, setSearch] = useState(() => searchParams.get("busca") ?? "");
+  const deferredSearch = useDeferredValue(search);
   const [status, setStatus] = useState<"todos" | "ativas" | "inativas">("todos");
   const [themeFilter, setThemeFilter] = useState<string | null>(null);
 
@@ -292,6 +297,31 @@ export default function BancoQuestoesPage() {
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const prefetchAfter = async (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
+    if (!cursor) {
+      setNextPageCache(null);
+      return;
+    }
+
+    try {
+      const qRef = query(
+        collection(db, "questionsBank"),
+        orderBy("createdAt", "desc"),
+        startAfter(cursor),
+        limit(PAGE_SIZE)
+      );
+      const snap = await getDocs(qRef);
+      const rows: QBQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      setNextPageCache({
+        fromLastDocId: cursor.id,
+        rows,
+        lastDoc: snap.docs[snap.docs.length - 1] ?? null,
+      });
+    } catch {
+      setNextPageCache(null);
+    }
+  };
+
   const fetchFirst = async () => {
     setLoading(true);
     try {
@@ -299,9 +329,11 @@ export default function BancoQuestoesPage() {
       const snap = await getDocs(qRef);
 
       const rows: QBQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
       setItems(rows);
-      setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
+      setLastDoc(nextLastDoc);
       setCursorStack([]);
+      void prefetchAfter(nextLastDoc);
     } finally {
       setLoading(false);
     }
@@ -309,6 +341,15 @@ export default function BancoQuestoesPage() {
 
   const fetchNext = async () => {
     if (!lastDoc) return;
+
+    if (nextPageCache && nextPageCache.fromLastDocId === lastDoc.id) {
+      setCursorStack((prev) => [...prev, lastDoc]);
+      setItems(nextPageCache.rows);
+      setLastDoc(nextPageCache.lastDoc);
+      void prefetchAfter(nextPageCache.lastDoc);
+      return;
+    }
+
     setLoading(true);
     try {
       const qRef = query(
@@ -319,10 +360,12 @@ export default function BancoQuestoesPage() {
       );
       const snap = await getDocs(qRef);
       const rows: QBQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
 
       setCursorStack((prev) => [...prev, lastDoc]);
       setItems(rows);
-      setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
+      setLastDoc(nextLastDoc);
+      void prefetchAfter(nextLastDoc);
     } finally {
       setLoading(false);
     }
@@ -342,10 +385,12 @@ export default function BancoQuestoesPage() {
       );
       const snap = await getDocs(qRef);
       const rows: QBQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
 
       setCursorStack((prev) => prev.slice(0, -1));
       setItems(rows);
-      setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
+      setLastDoc(nextLastDoc);
+      void prefetchAfter(nextLastDoc);
     } finally {
       setLoading(false);
     }
@@ -362,7 +407,7 @@ export default function BancoQuestoesPage() {
   }, [searchParams]);
 
   const filtered = useMemo(() => {
-    const s = search.trim().toLowerCase();
+    const s = deferredSearch.trim().toLowerCase();
 
     return items.filter((q) => {
       const activeOk =
@@ -384,7 +429,15 @@ export default function BancoQuestoesPage() {
 
       return idOk || stmtOk || examOk || themesOk;
     });
-  }, [items, search, status, themeFilter]);
+  }, [items, deferredSearch, status, themeFilter]);
+
+  const hasNextPage = useMemo(() => {
+    if (!lastDoc) return false;
+    if (nextPageCache && nextPageCache.fromLastDocId === lastDoc.id) {
+      return nextPageCache.rows.length > 0;
+    }
+    return true;
+  }, [lastDoc, nextPageCache]);
 
   const openImageModal = (q: QBQuestion) => {
     setSelected(q);
@@ -412,11 +465,7 @@ export default function BancoQuestoesPage() {
     setDuplicatingId(q.id);
 
     try {
-      // garantia: pega doc atual do Firestore (evita duplicar uma versão antiga que está só na UI)
-      const snap = await getDoc(doc(db, "questionsBank", q.id));
-      const data = snap.exists() ? ({ id: snap.id, ...(snap.data() as any) } as QBQuestion) : q;
-
-      const payload = sanitizeForCopy(data);
+      const payload = sanitizeForCopy(q);
       const newRef = await addDoc(collection(db, "questionsBank"), payload);
 
       // refresh (mantém simples e confiável)
@@ -727,7 +776,7 @@ export default function BancoQuestoesPage() {
             </button>
             <button
               onClick={fetchNext}
-              disabled={loading || !lastDoc}
+              disabled={loading || !hasNextPage}
               className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
             >
               Próxima
