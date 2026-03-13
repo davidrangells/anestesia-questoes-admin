@@ -726,8 +726,6 @@ async function findOrCreateBlingContact(
   const email = pickString(input.user.email) || pickString(input.entitlement.email);
   const contactPayload = buildContactPayload(input, address);
 
-  let path = settings.contactsEndpointPath;
-  const query = new URLSearchParams();
   const numericDocument = onlyDigits(document);
 
   if (numericDocument && numericDocument.length !== 11 && numericDocument.length !== 14) {
@@ -736,23 +734,34 @@ async function findOrCreateBlingContact(
     );
   }
 
-  if (numericDocument) {
-    query.set("numeroDocumento", numericDocument);
-  } else if (email) {
-    query.set("pesquisa", email);
-  } else {
+  if (!numericDocument && !email && !pickString(input.uid)) {
     throw new Error("Dados insuficientes para localizar o contato no Bling.");
   }
 
-  if (query.size) {
-    path += `?${query.toString()}`;
-  }
+  const lookupFirst = async (params: URLSearchParams) => {
+    const path = `${settings.contactsEndpointPath}?${params.toString()}`;
+    const lookup = (await blingRequest(settings, path, { method: "GET" })) as RecordData;
+    return Array.isArray(lookup.data) ? (lookup.data[0] as RecordData | undefined) : undefined;
+  };
 
-  const lookup = (await blingRequest(settings, path, {
-    method: "GET",
-  })) as RecordData;
+  const findExistingContact = async () => {
+    if (numericDocument) {
+      const byDocument = await lookupFirst(new URLSearchParams({ numeroDocumento: numericDocument }));
+      if (byDocument) return byDocument;
+    }
+    if (email) {
+      const byEmail = await lookupFirst(new URLSearchParams({ pesquisa: email }));
+      if (byEmail) return byEmail;
+    }
+    const uid = pickString(input.uid);
+    if (uid) {
+      const byUid = await lookupFirst(new URLSearchParams({ pesquisa: uid }));
+      if (byUid) return byUid;
+    }
+    return undefined;
+  };
 
-  const existing = Array.isArray(lookup.data) ? (lookup.data[0] as RecordData | undefined) : undefined;
+  const existing = await findExistingContact();
   const existingId = existing ? Number(existing.id) : NaN;
 
   if (Number.isFinite(existingId) && existingId > 0) {
@@ -775,20 +784,43 @@ async function findOrCreateBlingContact(
     };
   }
 
-  let created: RecordData;
-  try {
-    created = (await blingRequest(settings, settings.contactsEndpointPath, {
+  const createContact = async (payload: RecordData) => {
+    return (await blingRequest(settings, settings.contactsEndpointPath, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(contactPayload),
+      body: JSON.stringify(payload),
     })) as RecordData;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Não foi possível salvar o contato";
-    throw new Error(
-      `Não foi possível salvar o contato no Bling. ${message}`
-    );
+  };
+
+  let created: RecordData;
+  try {
+    created = await createContact(contactPayload);
+  } catch {
+    // Alguns ambientes do Bling retornam erro genérico quando o "codigo" já existe.
+    // Retry sem "codigo" e fallback para lookup para reduzir falso-negativos.
+    const retryPayload: RecordData = { ...contactPayload };
+    delete retryPayload.codigo;
+
+    try {
+      created = await createContact(retryPayload);
+    } catch (retryError) {
+      const recovered = await findExistingContact();
+      const recoveredId = recovered ? Number(recovered.id) : NaN;
+      if (Number.isFinite(recoveredId) && recoveredId > 0) {
+        return {
+          id: recoveredId,
+          nome: pickString(recovered?.nome) || pickString(contactPayload.nome),
+          numeroDocumento: numericDocument || pickString(recovered?.numeroDocumento),
+          email: email || pickString(recovered?.email),
+          payload: contactPayload,
+        };
+      }
+
+      const message = retryError instanceof Error ? retryError.message : "Não foi possível salvar o contato";
+      throw new Error(`Não foi possível salvar o contato no Bling. ${message}`);
+    }
   }
 
   const createdData =
