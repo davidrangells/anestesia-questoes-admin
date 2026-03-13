@@ -624,8 +624,9 @@ function buildContactPayload(
     pickString(input.profile.document) ||
     pickString(input.user.document) ||
     pickString(input.entitlement.document);
+  const numericDocument = onlyDigits(document);
   const email = pickString(input.user.email) || pickString(input.entitlement.email);
-  const type = document.length > 11 ? "J" : "F";
+  const type = numericDocument.length > 11 ? "J" : "F";
   const uf = toUf(address.state);
 
   ensureRequiredAddress(address);
@@ -637,7 +638,7 @@ function buildContactPayload(
     tipo: type,
     email,
     emailNotaFiscal: email || undefined,
-    numeroDocumento: onlyDigits(document),
+    numeroDocumento: numericDocument || undefined,
     telefone:
       pickString(input.profile.phone) ||
       pickString(input.profile.cellphone) ||
@@ -681,6 +682,12 @@ async function findOrCreateBlingContact(
   let path = settings.contactsEndpointPath;
   const query = new URLSearchParams();
   const numericDocument = onlyDigits(document);
+
+  if (numericDocument && numericDocument.length !== 11 && numericDocument.length !== 14) {
+    throw new Error(
+      "CPF/CNPJ inválido para emissão no Bling. Use 11 dígitos (CPF) ou 14 dígitos (CNPJ)."
+    );
+  }
 
   if (numericDocument) {
     query.set("numeroDocumento", numericDocument);
