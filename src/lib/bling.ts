@@ -205,6 +205,50 @@ function ensureRequiredAddress(address: ReturnType<typeof getAddressSource>) {
   }
 }
 
+function validateContactPayload(payload: RecordData) {
+  const nome = pickString(payload.nome);
+  const tipo = pickString(payload.tipo).toUpperCase();
+  const numeroDocumento = onlyDigits(pickString(payload.numeroDocumento));
+  const email = pickString(payload.email);
+  const endereco = typeof payload.endereco === "object" && payload.endereco !== null
+    ? (payload.endereco as RecordData)
+    : {};
+  const geral =
+    typeof endereco.geral === "object" && endereco.geral !== null
+      ? (endereco.geral as RecordData)
+      : {};
+  const cep = onlyDigits(pickString(geral.cep));
+  const uf = pickString(geral.uf).toUpperCase();
+  const cidade = pickString(geral.municipio);
+  const rua = pickString(geral.endereco);
+
+  if (!nome) {
+    throw new Error("Contato do Bling sem nome. Preencha o nome do aluno.");
+  }
+
+  if (tipo !== "F" && tipo !== "J") {
+    throw new Error("Tipo de contato inválido para o Bling. Use pessoa física ou jurídica.");
+  }
+
+  if (tipo === "F" && numeroDocumento.length !== 11) {
+    throw new Error("CPF inválido para o Bling. O contato precisa de 11 dígitos.");
+  }
+
+  if (tipo === "J" && numeroDocumento.length !== 14) {
+    throw new Error("CNPJ inválido para o Bling. O contato precisa de 14 dígitos.");
+  }
+
+  if (!email && !numeroDocumento) {
+    throw new Error("Contato do Bling sem identificador. Informe CPF/CNPJ ou e-mail.");
+  }
+
+  if (!rua || !cidade || !uf || cep.length !== 8) {
+    throw new Error(
+      "Endereço inválido para o contato no Bling. Verifique rua, cidade, UF e CEP com 8 dígitos."
+    );
+  }
+}
+
 async function readSettingsDoc() {
   const snap = await SETTINGS_DOC.get();
   const data = snap.exists ? (snap.data() as RecordData) : {};
@@ -631,7 +675,7 @@ function buildContactPayload(
 
   ensureRequiredAddress(address);
 
-  return {
+  const payload = {
     nome: customerName,
     codigo: input.uid,
     situacao: "A",
@@ -651,16 +695,19 @@ function buildContactPayload(
     endereco: {
       geral: {
         endereco: address.street,
-        numero: address.number,
+        numero: address.number || "S/N",
         complemento: address.complement,
         bairro: address.neighborhood,
         municipio: address.city,
         uf,
-        cep: address.zipCode,
+        cep: onlyDigits(address.zipCode),
       },
     },
     pais: address.country ? { nome: address.country } : undefined,
   };
+
+  validateContactPayload(payload);
+  return payload;
 }
 
 async function findOrCreateBlingContact(
@@ -728,13 +775,21 @@ async function findOrCreateBlingContact(
     };
   }
 
-  const created = (await blingRequest(settings, settings.contactsEndpointPath, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(contactPayload),
-  })) as RecordData;
+  let created: RecordData;
+  try {
+    created = (await blingRequest(settings, settings.contactsEndpointPath, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(contactPayload),
+    })) as RecordData;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Não foi possível salvar o contato";
+    throw new Error(
+      `Não foi possível salvar o contato no Bling. ${message}`
+    );
+  }
 
   const createdData =
     typeof created.data === "object" && created.data !== null ? (created.data as RecordData) : created;
