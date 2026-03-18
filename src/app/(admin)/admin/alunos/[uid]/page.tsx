@@ -172,6 +172,7 @@ export default function EditarAlunoPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [form, setForm] = useState<AlunoForm>({
@@ -354,12 +355,50 @@ export default function EditarAlunoPage() {
     }
   };
 
+  const onDelete = async () => {
+    const emailLabel = form.email.trim() || "este aluno";
+    const confirmed = window.confirm(
+      `Excluir ${emailLabel}?\n\nEssa ação remove autenticação e dados do aluno e não pode ser desfeita.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+      const res = await fetch(`/api/admin/alunos/${params.uid}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível excluir o aluno.");
+      }
+
+      router.replace("/admin/alunos");
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Erro ao excluir aluno.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <AdminShell
       title="Editar aluno"
       subtitle={form.email ? `Aluno ${form.email}` : "Carregando dados do aluno"}
       actions={
         <div className="flex gap-2">
+          <Button variant="danger" size="sm" onClick={onDelete} disabled={loading || saving || deleting}>
+            {deleting ? "Excluindo..." : "Excluir aluno"}
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => router.push("/admin/alunos")}>
             Voltar
           </Button>

@@ -57,6 +57,12 @@ function sanitizeBody(body: unknown) {
   };
 }
 
+function isAuthUserNotFound(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: unknown }).code;
+  return code === "auth/user-not-found";
+}
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ uid: string }> }
@@ -174,6 +180,65 @@ export async function PATCH(
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao salvar aluno.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ uid: string }> }
+) {
+  const authCheck = await requireAdmin(req);
+  if ("error" in authCheck) return authCheck.error;
+
+  const { uid } = await context.params;
+
+  try {
+    const userRef = adminDb.collection("users").doc(uid);
+    const [targetUserSnap, targetProfileSnap] = await Promise.all([
+      userRef.get(),
+      userRef.collection("profile").doc("main").get(),
+    ]);
+
+    if (!targetUserSnap.exists) {
+      return NextResponse.json({ ok: false, error: "Aluno não encontrado." }, { status: 404 });
+    }
+
+    const targetRole = String(targetUserSnap.data()?.role ?? "").trim();
+    if (targetRole !== "student") {
+      return NextResponse.json(
+        { ok: false, error: "Somente alunos podem ser excluídos por esta rota." },
+        { status: 400 }
+      );
+    }
+
+    const targetEmail =
+      pickString(targetUserSnap.data()?.email) ||
+      pickString(targetProfileSnap.data()?.email);
+
+    try {
+      await adminAuth.deleteUser(uid);
+    } catch (error) {
+      if (!isAuthUserNotFound(error)) {
+        throw error;
+      }
+    }
+
+    await Promise.all([
+      adminDb.collection("entitlements").doc(uid).delete().catch(() => undefined),
+      adminDb.recursiveDelete(userRef),
+    ]);
+
+    return NextResponse.json(
+      {
+        ok: true,
+        uid,
+        email: targetEmail || null,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao excluir aluno.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

@@ -35,6 +35,7 @@ export default function AlunosPage() {
   const [items, setItems] = useState<AlunoListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -73,6 +74,41 @@ export default function AlunosPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  const onDeleteAluno = async (item: AlunoListItem) => {
+    const ok = window.confirm(
+      `Excluir o aluno ${item.name} (${item.email})?\n\nEssa ação remove autenticação e dados do aluno e não pode ser desfeita.`
+    );
+    if (!ok) return;
+
+    setDeletingUid(item.uid);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+      const res = await fetch(`/api/admin/alunos/${item.uid}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível excluir o aluno.");
+      }
+
+      setItems((prev) => prev.filter((x) => x.uid !== item.uid));
+      setSuccessMsg(`Aluno ${item.name} excluído com sucesso.`);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Não foi possível excluir o aluno.");
+    } finally {
+      setDeletingUid(null);
+    }
+  };
 
   const syncEduzz = async () => {
     setSyncing(true);
@@ -286,6 +322,14 @@ export default function AlunosPage() {
                       >
                         Editar
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => void onDeleteAluno(item)}
+                        disabled={deletingUid === item.uid}
+                        className={buttonStyles({ variant: "danger", size: "sm" })}
+                      >
+                        {deletingUid === item.uid ? "Excluindo..." : "Excluir"}
+                      </button>
                     </div>
                   </td>
                 </tr>
