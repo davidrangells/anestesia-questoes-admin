@@ -76,10 +76,34 @@ function extractFromEnvelope(raw: any): {
   data: Record<string, unknown>;
   sentDate: string;
 } {
-  const envelopeId = pickFirstString(raw?.id, raw?.event_id, raw?.nsid, raw?.sid);
-  const event = pickFirstString(raw?.event, raw?.type, raw?.name).toLowerCase();
+  const envelopeId = pickFirstString(
+    raw?.id,
+    raw?.event_id,
+    raw?.nsid,
+    raw?.sid,
+    raw?.edz_evt_cod,
+    raw?.edz_event_id
+  );
+  const event = pickFirstString(
+    raw?.event,
+    raw?.type,
+    raw?.name,
+    raw?.event_name,
+    raw?.eventType,
+    raw?.edz_evt_name,
+    raw?.edz_event,
+    raw?.edz_evt_type
+  ).toLowerCase();
 
-  const data = (raw?.data && typeof raw.data === "object" ? raw.data : raw?.fields) as
+  const data = (
+    raw?.data && typeof raw.data === "object"
+      ? raw.data
+      : raw?.fields && typeof raw.fields === "object"
+        ? raw.fields
+        : raw && typeof raw === "object"
+          ? raw
+          : {}
+  ) as
     | Record<string, unknown>
     | undefined;
 
@@ -358,6 +382,7 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await readBody(req);
     const { envelopeId, event, data, sentDate } = extractFromEnvelope(rawBody);
+    const source: any = data && Object.keys(data).length > 0 ? data : rawBody;
 
     // 1) Validar secret (quando a Eduzz mandar)
     const receivedSecret = getSecretFromRequest(req, rawBody);
@@ -373,10 +398,10 @@ export async function POST(req: NextRequest) {
 
     const invoiceStatus =
       pickFirstString(
-        (data as any)?.invoice?.status,
-        (data as any)?.invoice_status,
-        (data as any)?.status,
-        (data as any)?.edz_fat_status
+        source?.invoice?.status,
+        source?.invoice_status,
+        source?.status,
+        source?.edz_fat_status
       ) || null;
     const action = mapEventToAction({ event, invoiceStatus });
     const db = adminDb;
@@ -405,12 +430,12 @@ export async function POST(req: NextRequest) {
 
     // --------- EXTRAÇÕES (email, plano, valor, vencimento, perfil) ---------
     const email = normalizeEmail(
-      (data as any)?.student?.email ??
-        (data as any)?.customer?.email ??
-        (data as any)?.buyer?.email ??
-        (data as any)?.client?.email ??
-        (data as any)?.email ??
-        (data as any)?.edz_cli_email
+      source?.student?.email ??
+        source?.customer?.email ??
+        source?.buyer?.email ??
+        source?.client?.email ??
+        source?.email ??
+        source?.edz_cli_email
     );
 
     if (!email) {
@@ -421,14 +446,14 @@ export async function POST(req: NextRequest) {
     }
 
     const invoiceId =
-      pickFirstString((data as any)?.invoice?.id, (data as any)?.invoice_id, (data as any)?.edz_fat_cod) || null;
+      pickFirstString(source?.invoice?.id, source?.invoice_id, source?.edz_fat_cod) || null;
 
     // Plano/produto (vários formatos)
     const productFromItems =
-      Array.isArray((data as any)?.items) && (data as any)?.items?.length ? (data as any)?.items?.[0] : null;
+      Array.isArray(source?.items) && source?.items?.length ? source?.items?.[0] : null;
     const productIdFromItemDiscount =
-      Array.isArray((data as any)?.items) && (data as any)?.items?.length
-        ? ((data as any).items as Array<any>)
+      Array.isArray(source?.items) && source?.items?.length
+        ? (source.items as Array<any>)
             .map((item) =>
               pickFirstString(
                 item?.price?.discount?.productId,
@@ -441,11 +466,11 @@ export async function POST(req: NextRequest) {
 
     const productId =
       pickFirstString(
-        (data as any)?.product?.id,
-        (data as any)?.product_id,
-        (data as any)?.offer?.id,
-        (data as any)?.offer_id,
-        (data as any)?.edz_cnt_cod,
+        source?.product?.id,
+        source?.product_id,
+        source?.offer?.id,
+        source?.offer_id,
+        source?.edz_cnt_cod,
         productFromItems?.productId,
         productFromItems?.id,
         productIdFromItemDiscount
@@ -453,36 +478,36 @@ export async function POST(req: NextRequest) {
 
     const productTitle =
       pickFirstString(
-        (data as any)?.product?.title,
-        (data as any)?.product_title,
-        (data as any)?.offer?.title,
-        (data as any)?.offer_title,
-        (data as any)?.edz_cnt_titulo,
+        source?.product?.title,
+        source?.product_title,
+        source?.offer?.title,
+        source?.offer_title,
+        source?.edz_cnt_titulo,
         productFromItems?.name
       ) || null;
 
     // Valor pago (quando existir)
     const currency =
       pickFirstString(
-        (data as any)?.price?.paid?.currency,
-        (data as any)?.price?.currency,
-        (data as any)?.currency
+        source?.price?.paid?.currency,
+        source?.price?.currency,
+        source?.currency
       ) || "BRL";
 
     const amountPaid =
-      (typeof (data as any)?.price?.paid?.value === "number" ? (data as any)?.price?.paid?.value : null) ??
-      (typeof (data as any)?.price?.value === "number" ? (data as any)?.price?.value : null) ??
+      (typeof source?.price?.paid?.value === "number" ? source?.price?.paid?.value : null) ??
+      (typeof source?.price?.value === "number" ? source?.price?.value : null) ??
       null;
     const paymentMethod =
       pickFirstString(
-        (data as any)?.paymentMethod,
-        (data as any)?.payment?.method,
-        (data as any)?.invoice?.paymentMethod
+        source?.paymentMethod,
+        source?.payment?.method,
+        source?.invoice?.paymentMethod
       ) || null;
 
     // Vencimento (até data X) – vem muito como contract.dueDate ou dueDate
-    const dueDateRaw = (data as any)?.dueDate || (data as any)?.contract?.dueDate || null;
-    const paidAtRaw = (data as any)?.paidAt || (data as any)?.payment?.paidAt || null;
+    const dueDateRaw = source?.dueDate || source?.contract?.dueDate || null;
+    const paidAtRaw = source?.paidAt || source?.payment?.paidAt || null;
 
     const paidAt = toDateOrNull(paidAtRaw);
     const dueDate = toDateOrNull(dueDateRaw);
@@ -493,9 +518,9 @@ export async function POST(req: NextRequest) {
         : null;
 
     // Perfil do aluno: prioriza student para identidade, mas usa fallback de endereço do buyer/customer
-    const studentProfile = (data as any)?.student || {};
-    const buyerProfile = (data as any)?.buyer || {};
-    const customerProfile = (data as any)?.customer || (data as any)?.client || {};
+    const studentProfile = source?.student || {};
+    const buyerProfile = source?.buyer || {};
+    const customerProfile = source?.customer || source?.client || {};
     const profileSource =
       Object.keys(studentProfile).length > 0
         ? studentProfile
@@ -506,11 +531,11 @@ export async function POST(req: NextRequest) {
       profileSource,
       buyerProfile,
       customerProfile,
-      (data as any)?.address as Record<string, unknown> | undefined
+      source?.address as Record<string, unknown> | undefined
     );
 
     const profilePayload = {
-      name: pickFirstString(profileSource?.name, (data as any)?.name) || null,
+      name: pickFirstString(profileSource?.name, source?.name) || null,
       phone: pickFirstString(
         profileSource?.phone,
         profileSource?.cellphone,
