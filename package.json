@@ -11,7 +11,11 @@
     "seed:planos": "node scripts/seed-catalog-planos.mjs",
     "backfill:eduzz-addresses": "node scripts/backfill-eduzz-addresses.mjs",
     "questions:sync": "node scripts/sync-questions-from-xlsx.mjs",
-    "questions:convert-recovered": "node scripts/convert-recovered-questions-xlsx.mjs"
+    "questions:convert-recovered": "node scripts/convert-recovered-questions-xlsx.mjs",
+    "questions:convert-generic": "node scripts/convert-questions-to-firebase-import.mjs",
+    "questions:fix-metadata": "node scripts/fix-questions-metadata.mjs",
+    "questions:backfill-content": "node scripts/backfill-question-content-from-xlsx.mjs",
+    "questions:normalize-prompts": "node scripts/normalize-question-prompts.mjs"
   },
   "dependencies": {
     "firebase": "^12.9.0",
