@@ -34,6 +34,22 @@ function safeJson(obj: unknown) {
   }
 }
 
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function getSecretFromRequest(req: NextRequest, body: any): string {
   const h =
     req.headers.get("x-eduzz-secret") ||
@@ -67,6 +83,10 @@ async function readBody(req: NextRequest): Promise<any> {
   fd.forEach((val, key) => {
     fields[key] = typeof val === "string" ? val : "";
   });
+  const parsedData = parseJsonObject(fields.data);
+  if (parsedData) {
+    fields.data = parsedData;
+  }
   return fields;
 }
 
@@ -383,6 +403,8 @@ export async function POST(req: NextRequest) {
     const rawBody = await readBody(req);
     const { envelopeId, event, data, sentDate } = extractFromEnvelope(rawBody);
     const source: any = data && Object.keys(data).length > 0 ? data : rawBody;
+    const nestedData = parseJsonObject(source?.data);
+    const sourceData = nestedData ?? source;
 
     // 1) Validar secret (quando a Eduzz mandar)
     const receivedSecret = getSecretFromRequest(req, rawBody);
@@ -398,10 +420,10 @@ export async function POST(req: NextRequest) {
 
     const invoiceStatus =
       pickFirstString(
-        source?.invoice?.status,
-        source?.invoice_status,
-        source?.status,
-        source?.edz_fat_status
+        sourceData?.invoice?.status,
+        sourceData?.invoice_status,
+        sourceData?.status,
+        sourceData?.edz_fat_status
       ) || null;
     const action = mapEventToAction({ event, invoiceStatus });
     const db = adminDb;
@@ -422,6 +444,13 @@ export async function POST(req: NextRequest) {
 
     // 3) Só processa entitlement/usuario no invoice_paid (e invoice_canceled pra desativar)
     if (action === "ignore") {
+      await db.collection("eduzz_events").doc(envelopeId).set(
+        {
+          processed: false,
+          reason: "ignored_event",
+        },
+        { merge: true }
+      );
       return NextResponse.json(
         { ok: true, processed: false, reason: "ignored_event", event },
         { status: 200 }
@@ -430,15 +459,25 @@ export async function POST(req: NextRequest) {
 
     // --------- EXTRAÇÕES (email, plano, valor, vencimento, perfil) ---------
     const email = normalizeEmail(
-      source?.student?.email ??
-        source?.customer?.email ??
-        source?.buyer?.email ??
-        source?.client?.email ??
-        source?.email ??
-        source?.edz_cli_email
+      sourceData?.student?.email ??
+        sourceData?.customer?.email ??
+        sourceData?.buyer?.email ??
+        sourceData?.client?.email ??
+        sourceData?.email ??
+        sourceData?.edz_cli_email ??
+        sourceData?.buyer_email ??
+        sourceData?.customer_email ??
+        sourceData?.client_email
     );
 
     if (!email) {
+      await db.collection("eduzz_events").doc(envelopeId).set(
+        {
+          processed: false,
+          reason: "missing_email",
+        },
+        { merge: true }
+      );
       return NextResponse.json(
         { ok: false, error: "Missing email", event, envelopeId },
         { status: 400 }
@@ -446,14 +485,14 @@ export async function POST(req: NextRequest) {
     }
 
     const invoiceId =
-      pickFirstString(source?.invoice?.id, source?.invoice_id, source?.edz_fat_cod) || null;
+      pickFirstString(sourceData?.invoice?.id, sourceData?.invoice_id, sourceData?.edz_fat_cod) || null;
 
     // Plano/produto (vários formatos)
     const productFromItems =
-      Array.isArray(source?.items) && source?.items?.length ? source?.items?.[0] : null;
+      Array.isArray(sourceData?.items) && sourceData?.items?.length ? sourceData?.items?.[0] : null;
     const productIdFromItemDiscount =
-      Array.isArray(source?.items) && source?.items?.length
-        ? (source.items as Array<any>)
+      Array.isArray(sourceData?.items) && sourceData?.items?.length
+        ? (sourceData.items as Array<any>)
             .map((item) =>
               pickFirstString(
                 item?.price?.discount?.productId,
@@ -466,11 +505,11 @@ export async function POST(req: NextRequest) {
 
     const productId =
       pickFirstString(
-        source?.product?.id,
-        source?.product_id,
-        source?.offer?.id,
-        source?.offer_id,
-        source?.edz_cnt_cod,
+        sourceData?.product?.id,
+        sourceData?.product_id,
+        sourceData?.offer?.id,
+        sourceData?.offer_id,
+        sourceData?.edz_cnt_cod,
         productFromItems?.productId,
         productFromItems?.id,
         productIdFromItemDiscount
@@ -478,36 +517,36 @@ export async function POST(req: NextRequest) {
 
     const productTitle =
       pickFirstString(
-        source?.product?.title,
-        source?.product_title,
-        source?.offer?.title,
-        source?.offer_title,
-        source?.edz_cnt_titulo,
+        sourceData?.product?.title,
+        sourceData?.product_title,
+        sourceData?.offer?.title,
+        sourceData?.offer_title,
+        sourceData?.edz_cnt_titulo,
         productFromItems?.name
       ) || null;
 
     // Valor pago (quando existir)
     const currency =
       pickFirstString(
-        source?.price?.paid?.currency,
-        source?.price?.currency,
-        source?.currency
+        sourceData?.price?.paid?.currency,
+        sourceData?.price?.currency,
+        sourceData?.currency
       ) || "BRL";
 
     const amountPaid =
-      (typeof source?.price?.paid?.value === "number" ? source?.price?.paid?.value : null) ??
-      (typeof source?.price?.value === "number" ? source?.price?.value : null) ??
+      (typeof sourceData?.price?.paid?.value === "number" ? sourceData?.price?.paid?.value : null) ??
+      (typeof sourceData?.price?.value === "number" ? sourceData?.price?.value : null) ??
       null;
     const paymentMethod =
       pickFirstString(
-        source?.paymentMethod,
-        source?.payment?.method,
-        source?.invoice?.paymentMethod
+        sourceData?.paymentMethod,
+        sourceData?.payment?.method,
+        sourceData?.invoice?.paymentMethod
       ) || null;
 
     // Vencimento (até data X) – vem muito como contract.dueDate ou dueDate
-    const dueDateRaw = source?.dueDate || source?.contract?.dueDate || null;
-    const paidAtRaw = source?.paidAt || source?.payment?.paidAt || null;
+    const dueDateRaw = sourceData?.dueDate || sourceData?.contract?.dueDate || null;
+    const paidAtRaw = sourceData?.paidAt || sourceData?.payment?.paidAt || null;
 
     const paidAt = toDateOrNull(paidAtRaw);
     const dueDate = toDateOrNull(dueDateRaw);
@@ -518,9 +557,9 @@ export async function POST(req: NextRequest) {
         : null;
 
     // Perfil do aluno: prioriza student para identidade, mas usa fallback de endereço do buyer/customer
-    const studentProfile = source?.student || {};
-    const buyerProfile = source?.buyer || {};
-    const customerProfile = source?.customer || source?.client || {};
+    const studentProfile = sourceData?.student || {};
+    const buyerProfile = sourceData?.buyer || {};
+    const customerProfile = sourceData?.customer || sourceData?.client || {};
     const profileSource =
       Object.keys(studentProfile).length > 0
         ? studentProfile
@@ -531,11 +570,11 @@ export async function POST(req: NextRequest) {
       profileSource,
       buyerProfile,
       customerProfile,
-      source?.address as Record<string, unknown> | undefined
+      sourceData?.address as Record<string, unknown> | undefined
     );
 
     const profilePayload = {
-      name: pickFirstString(profileSource?.name, source?.name) || null,
+      name: pickFirstString(profileSource?.name, sourceData?.name) || null,
       phone: pickFirstString(
         profileSource?.phone,
         profileSource?.cellphone,
@@ -684,6 +723,16 @@ export async function POST(req: NextRequest) {
         .doc("main")
         .set(profilePayload, { merge: true });
 
+      await db.collection("eduzz_events").doc(envelopeId).set(
+        {
+          processed: true,
+          reason: "activated",
+          uid,
+          email,
+        },
+        { merge: true }
+      );
+
       return NextResponse.json({ ok: true, processed: true, action: "activate", uid }, { status: 200 });
     }
 
@@ -709,6 +758,16 @@ export async function POST(req: NextRequest) {
         updatedAt: now,
         lastEvent: event,
         lastEventId: envelopeId,
+      },
+      { merge: true }
+    );
+
+    await db.collection("eduzz_events").doc(envelopeId).set(
+      {
+        processed: true,
+        reason: "deactivated",
+        uid,
+        email,
       },
       { merge: true }
     );
