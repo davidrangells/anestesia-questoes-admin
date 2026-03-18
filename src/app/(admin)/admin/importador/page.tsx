@@ -159,7 +159,9 @@ export default function ImportadorPage() {
 
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
               O importador usa o mesmo processo da sincronização manual, preserva `docId` como ID
-              do documento e ignora linhas inválidas.
+              do documento e ignora linhas inválidas. Padrão atual: no app do aluno as alternativas
+              devem aparecer em ordem fixa (`A, B, C, D, E`), sem embaralhar a exibição; a letra
+              correta varia entre questões pela ordem salva no banco.
             </div>
 
             {errorMsg ? (
