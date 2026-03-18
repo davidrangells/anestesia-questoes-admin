@@ -93,9 +93,67 @@ function extractFromEnvelope(raw: any): {
   };
 }
 
-function mapEventToAction(event: string): "activate" | "deactivate" | "ignore" {
-  if (event.includes("invoice_paid")) return "activate";
+function normalizeToken(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function isPaidLike(value: unknown): boolean {
+  const normalized = normalizeToken(value);
+  if (!normalized) return false;
+  return (
+    normalized.includes("paid") ||
+    normalized.includes("pago") ||
+    normalized.includes("approved") ||
+    normalized.includes("aprov") ||
+    normalized.includes("complete") ||
+    normalized.includes("conclu") ||
+    normalized.includes("success") ||
+    normalized.includes("sucesso") ||
+    normalized.includes("confirm") ||
+    normalized.includes("liberad") ||
+    normalized.includes("settled") ||
+    normalized.includes("liquid") ||
+    normalized.includes("authorized") ||
+    normalized.includes("autoriz") ||
+    normalized === "2"
+  );
+}
+
+function isCancelledLike(value: unknown): boolean {
+  const normalized = normalizeToken(value);
+  if (!normalized) return false;
+  return (
+    normalized.includes("cancel") ||
+    normalized.includes("refunded") ||
+    normalized.includes("reembols") ||
+    normalized.includes("chargeback") ||
+    normalized.includes("estorn") ||
+    normalized.includes("expired") ||
+    normalized.includes("expirad") ||
+    normalized.includes("overdue") ||
+    normalized.includes("vencid") ||
+    normalized === "3"
+  );
+}
+
+function mapEventToAction(params: {
+  event: string;
+  invoiceStatus: string | null;
+}): "activate" | "deactivate" | "ignore" {
+  const event = normalizeToken(params.event);
+  const invoiceStatus = normalizeToken(params.invoiceStatus);
+
+  if (event.includes("invoice_paid") || event.includes("invoice_approved")) return "activate";
   if (event.includes("invoice_canceled") || event.includes("invoice_cancelled")) return "deactivate";
+
+  if (event.includes("invoice") || event.includes("payment") || event.includes("sale")) {
+    if (isCancelledLike(event) || isCancelledLike(invoiceStatus)) return "deactivate";
+    if (isPaidLike(event) || isPaidLike(invoiceStatus)) return "activate";
+  }
+
+  if (isCancelledLike(invoiceStatus)) return "deactivate";
+  if (isPaidLike(invoiceStatus)) return "activate";
+
   return "ignore";
 }
 
@@ -313,7 +371,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const action = mapEventToAction(event);
+    const invoiceStatus =
+      pickFirstString(
+        (data as any)?.invoice?.status,
+        (data as any)?.invoice_status,
+        (data as any)?.status,
+        (data as any)?.edz_fat_status
+      ) || null;
+    const action = mapEventToAction({ event, invoiceStatus });
     const db = adminDb;
 
     // 2) Log do evento (sempre salva)
@@ -323,6 +388,7 @@ export async function POST(req: NextRequest) {
         sentDate,
         event,
         action,
+        invoiceStatus,
         secretPresent: hasSecret,
         raw: safeJson(rawBody),
       },
@@ -356,14 +422,6 @@ export async function POST(req: NextRequest) {
 
     const invoiceId =
       pickFirstString((data as any)?.invoice?.id, (data as any)?.invoice_id, (data as any)?.edz_fat_cod) || null;
-
-    const invoiceStatus =
-      pickFirstString(
-        (data as any)?.invoice?.status,
-        (data as any)?.invoice_status,
-        (data as any)?.status, // alguns payloads têm status no root
-        (data as any)?.edz_fat_status
-      ) || null;
 
     // Plano/produto (vários formatos)
     const productFromItems =
