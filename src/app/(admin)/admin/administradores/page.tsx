@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 type AdminItem = {
   uid: string;
@@ -31,15 +30,32 @@ export default function AdministradoresPage() {
 
       try {
         const currentUid = auth.currentUser?.uid ?? "";
-        const snap = await getDocs(query(collection(db, "users"), where("role", "==", "admin")));
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
-        const rows = snap.docs
-          .map((docSnap) => ({
-            uid: docSnap.id,
-            name: String(docSnap.data().name ?? "").trim() || "Administrador sem nome",
-            email: String(docSnap.data().email ?? "").trim() || "—",
-            sortName: String(docSnap.data().name ?? "").trim().toLowerCase(),
-            isCurrentUser: docSnap.id === currentUid,
+        const res = await fetch("/api/admin/administradores", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = (await res.json()) as {
+          ok: boolean;
+          error?: string;
+          items?: Array<{ uid: string; name: string; email: string }>;
+        };
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Não foi possível carregar os administradores.");
+        }
+
+        const rows = (Array.isArray(data.items) ? data.items : [])
+          .map((item) => ({
+            uid: item.uid,
+            name: String(item.name ?? "").trim() || "Administrador sem nome",
+            email: String(item.email ?? "").trim() || "—",
+            sortName: String(item.name ?? "").trim().toLowerCase(),
+            isCurrentUser: item.uid === currentUid,
           }))
           .sort((a, b) => a.sortName.localeCompare(b.sortName))
           .map((item, index) => ({

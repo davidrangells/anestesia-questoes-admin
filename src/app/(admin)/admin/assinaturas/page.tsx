@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
-import { dateFromUnknown, secondsFromUnknown } from "@/lib/dateValue";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 type AssinaturaItem = {
   uid: string;
@@ -28,18 +26,6 @@ type AssinaturaItem = {
 type AssinaturaItemWithSort = AssinaturaItem & {
   sortSeconds: number;
 };
-
-function formatDate(value: unknown) {
-  const parsed = dateFromUnknown(value);
-  if (!parsed) return "—";
-  return new Intl.DateTimeFormat("pt-BR").format(parsed);
-}
-
-function toDateInput(value: unknown) {
-  const parsed = dateFromUnknown(value);
-  if (!parsed) return "";
-  return parsed.toISOString().slice(0, 10);
-}
 
 function StatusBadge({ status }: { status: AssinaturaItem["status"] }) {
   const cls =
@@ -77,64 +63,46 @@ export default function AssinaturasPage() {
       setLoading(true);
       setErrorMsg(null);
       try {
-        const snap = await getDocs(query(collection(db, "users"), where("role", "==", "student")));
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
-        const rawRows: AssinaturaItemWithSort[] = await Promise.all(
-          snap.docs.map(async (userDoc) => {
-            const [profileSnap, entSnap] = await Promise.all([
-              getDoc(doc(db, "users", userDoc.id, "profile", "main")),
-              getDoc(doc(db, "entitlements", userDoc.id)),
-            ]);
+        const res = await fetch("/api/admin/assinaturas", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-            const userData = userDoc.data();
-            const profile = profileSnap.exists() ? profileSnap.data() : {};
-            const ent = entSnap.exists() ? entSnap.data() : {};
-            const status =
-              ent?.active === true ? "ativo" : ent?.pending === true ? "pendente" : "inativo";
-            const planId = String(ent?.planId ?? "").trim();
-            const productId = String(ent?.productId ?? "").trim();
-            const productTitle = String(ent?.productTitle ?? "").trim();
-            const origem = String(ent?.source ?? "admin").trim() || "admin";
-            const planoOrigem = planId
-              ? "catalogo"
-              : productTitle || productId
-                ? origem === "eduzz"
-                  ? "eduzz"
-                  : "manual"
-                : "sem-plano";
+        const data = (await res.json()) as {
+          ok: boolean;
+          error?: string;
+          items?: AssinaturaItemWithSort[];
+        };
 
-            return {
-              uid: userDoc.id,
-              aluno:
-                String(profile?.name ?? "").trim() ||
-                String(userData.name ?? "").trim() ||
-                "Aluno sem nome",
-              email: String(userData.email ?? ent?.email ?? "").trim() || "—",
-              origem,
-              plano: productTitle || "Sem plano",
-              planoOrigem,
-              status,
-              validade: formatDate(ent?.validUntil ?? null),
-              planId,
-              productId,
-              productTitle,
-              invoiceStatus: String(ent?.invoiceStatus ?? "").trim(),
-              amountPaid:
-                typeof ent?.amountPaid === "number" && Number.isFinite(ent.amountPaid)
-                  ? ent.amountPaid
-                  : null,
-              validUntilRaw: toDateInput(ent?.validUntil ?? null),
-              sortSeconds:
-                secondsFromUnknown(userData.updatedAt) || secondsFromUnknown(userData.createdAt),
-            } satisfies AssinaturaItemWithSort;
-          })
-        );
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Não foi possível carregar as assinaturas.");
+        }
 
-        const rows = rawRows
-          .sort((a, b) => b.sortSeconds - a.sortSeconds)
-          .map(({ sortSeconds: _sortSeconds, ...item }) => item) satisfies AssinaturaItem[];
-
-        if (active) setItems(rows);
+        if (active) {
+          const rows = Array.isArray(data.items)
+            ? data.items.map((item) => ({
+                uid: item.uid,
+                aluno: item.aluno,
+                email: item.email,
+                origem: item.origem,
+                plano: item.plano,
+                planoOrigem: item.planoOrigem,
+                status: item.status,
+                validade: item.validade,
+                planId: item.planId,
+                productId: item.productId,
+                productTitle: item.productTitle,
+                invoiceStatus: item.invoiceStatus,
+                amountPaid: item.amountPaid,
+                validUntilRaw: item.validUntilRaw,
+              }))
+            : [];
+          setItems(rows);
+        }
       } catch (error) {
         if (active) {
           setErrorMsg(

@@ -19,6 +19,27 @@ function sanitizeBody(body: unknown) {
   };
 }
 
+export async function GET(req: NextRequest) {
+  const authCheck = await requireAdmin(req);
+  if ("error" in authCheck) return authCheck.error;
+
+  try {
+    const snap = await adminDb.collection("users").where("role", "==", "admin").get();
+    const items = snap.docs
+      .map((docSnap) => ({
+        uid: docSnap.id,
+        name: String(docSnap.data().name ?? "").trim() || "Administrador sem nome",
+        email: String(docSnap.data().email ?? "").trim() || "—",
+      }))
+      .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
+    return NextResponse.json({ ok: true, items }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao carregar administradores.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const authCheck = await requireAdmin(req);
   if ("error" in authCheck) return authCheck.error;

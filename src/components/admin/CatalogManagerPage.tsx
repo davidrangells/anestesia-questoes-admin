@@ -1,22 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { dateFromUnknown } from "@/lib/dateValue";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 type EntityType = "provas" | "niveis" | "temas";
 
@@ -53,12 +42,6 @@ type LevelOption = {
   id: string;
   title: string;
   status: "ativo" | "inativo";
-};
-
-const COLLECTION_BY_ENTITY: Record<EntityType, string> = {
-  provas: "catalog_provas",
-  niveis: "catalog_niveis",
-  temas: "catalog_temas",
 };
 
 function formatDate(value?: unknown) {
@@ -137,38 +120,76 @@ export default function CatalogManagerPage({
     levelId: "",
   });
 
-  const collectionName = COLLECTION_BY_ENTITY[entity];
+  const getToken = useCallback(async () => {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      throw new Error("Sessão inválida. Faça login novamente.");
+    }
+    return token;
+  }, []);
 
-  const loadItems = async () => {
+  const authedRequest = useCallback(async (url: string, init?: RequestInit) => {
+    const token = await getToken();
+    return fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(init?.headers ?? {}),
+      },
+    });
+  }, [getToken]);
+
+  const loadItems = useCallback(async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
-      const snap = await getDocs(query(collection(db, collectionName), orderBy("createdAt", "desc")));
-      const rows = snap.docs.map((item) => ({
-        id: item.id,
-        ...(item.data() as Omit<CatalogDoc, "id">),
-      }));
+      const res = await authedRequest(`/api/admin/catalog/${entity}`);
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        items?: Array<Omit<CatalogDoc, "id"> & { id: string }>;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível carregar os dados.");
+      }
+      const rows = Array.isArray(data.items) ? data.items : [];
       setItems(rows);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os dados.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [authedRequest, entity]);
 
-  const loadLevels = async () => {
+  const loadLevels = useCallback(async () => {
     if (entity !== "temas") return;
 
-    const snap = await getDocs(query(collection(db, COLLECTION_BY_ENTITY.niveis), orderBy("title", "asc")));
-    const rows = snap.docs.map((item) => ({
-      id: item.id,
-      title: String(item.data().title ?? ""),
-      status: (item.data().status as LevelOption["status"]) ?? "ativo",
-    }));
-    setLevels(rows.filter((item) => item.status === "ativo"));
-  };
+    try {
+      const res = await authedRequest("/api/admin/catalog/niveis");
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        items?: Array<{ id: string; title?: string; status?: string }>;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível carregar os níveis.");
+      }
+      const rows = (Array.isArray(data.items) ? data.items : []).map((item) => ({
+        id: item.id,
+        title: String(item.title ?? ""),
+        status: item.status === "inativo" ? "inativo" : "ativo",
+      })) as LevelOption[];
+      setLevels(rows.filter((item) => item.status === "ativo"));
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os níveis.");
+    }
+  }, [authedRequest, entity]);
 
   useEffect(() => {
     void loadItems();
     void loadLevels();
-  }, [entity]);
+  }, [loadItems, loadLevels]);
 
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -268,16 +289,26 @@ export default function CatalogManagerPage({
         status: form.status,
         levelId: level?.id ?? null,
         levelLabel: level?.title ?? null,
-        updatedAt: serverTimestamp(),
       };
 
       if (editing) {
-        await updateDoc(doc(db, collectionName, editing.id), payload);
-      } else {
-        await addDoc(collection(db, collectionName), {
-          ...payload,
-          createdAt: serverTimestamp(),
+        const res = await authedRequest(`/api/admin/catalog/${entity}/${editing.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
         });
+        const data = (await res.json()) as { ok: boolean; error?: string };
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Não foi possível atualizar o cadastro.");
+        }
+      } else {
+        const res = await authedRequest(`/api/admin/catalog/${entity}`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        const data = (await res.json()) as { ok: boolean; error?: string };
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Não foi possível criar o cadastro.");
+        }
       }
 
       await loadItems();
@@ -304,7 +335,13 @@ export default function CatalogManagerPage({
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
-      await deleteDoc(doc(db, collectionName, item.id));
+      const res = await authedRequest(`/api/admin/catalog/${entity}/${item.id}`, {
+        method: "DELETE",
+      });
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível excluir o cadastro.");
+      }
       await loadItems();
       if (entity === "niveis" || entity === "temas") {
         await loadLevels();
