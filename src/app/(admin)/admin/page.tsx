@@ -3,17 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  collection,
-  getCountFromServer,
-  getDocs,
-  query,
-  Timestamp,
-  where,
-} from "firebase/firestore";
 import { Button, buttonStyles } from "@/components/ui/Button";
-import { secondsFromUnknown } from "@/lib/dateValue";
-import { db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 type ChartMode = "erros" | "questoes";
 
@@ -28,28 +19,6 @@ const EMPTY_STATS: DashboardStats = {
   errosPendentes: 0,
   alunosTotal: 0,
 };
-
-function getDayBucket(value: unknown) {
-  const seconds = secondsFromUnknown(value);
-
-  if (!seconds) return "";
-
-  const date = new Date(seconds * 1000);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
-}
-
-function buildLast7DayBuckets() {
-  const today = new Date();
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (6 - index));
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-      date.getDate()
-    ).padStart(2, "0")}`;
-  });
-}
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -66,64 +35,37 @@ export default function AdminDashboardPage() {
     setErrorMsg(null);
 
     try {
-      const buckets = buildLast7DayBuckets();
-      const startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      startDate.setDate(startDate.getDate() - 6);
-      const startTimestamp = Timestamp.fromDate(startDate);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
-      const questionsCollection = collection(db, "questionsBank");
-      const errorsCollection = collection(db, "erros_reportados");
-      const studentsQuery = query(collection(db, "users"), where("role", "==", "student"));
-      const resolvedStatuses = ["resolvido", "Resolvido", "RESOLVIDO"];
-      const ignoredStatuses = ["ignorado", "Ignorado", "IGNORADO"];
-
-      const [questionsTotalSnap, studentsTotalSnap, errorsTotalSnap, errorsResolvedSnap, errorsIgnoredSnap] =
-        await Promise.all([
-          getCountFromServer(questionsCollection),
-          getCountFromServer(studentsQuery),
-          getCountFromServer(errorsCollection),
-          getCountFromServer(query(errorsCollection, where("status", "in", resolvedStatuses))),
-          getCountFromServer(query(errorsCollection, where("status", "in", ignoredStatuses))),
-        ]);
-
-      const [recentQuestionsSnap, recentErrorsSnap] = await Promise.all([
-        getDocs(query(questionsCollection, where("createdAt", ">=", startTimestamp))),
-        getDocs(query(errorsCollection, where("createdAt", ">=", startTimestamp))),
-      ]);
-
-      const questionMap = new Map<string, number>();
-      buckets.forEach((bucket) => questionMap.set(bucket, 0));
-      recentQuestionsSnap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        const bucket = getDayBucket(data.createdAt ?? data.updatedAt);
-        if (bucket && questionMap.has(bucket)) {
-          questionMap.set(bucket, Number(questionMap.get(bucket) ?? 0) + 1);
-        }
+      const res = await fetch("/api/admin/dashboard/stats", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      const errorMap = new Map<string, number>();
-      buckets.forEach((bucket) => errorMap.set(bucket, 0));
-      recentErrorsSnap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        const bucket = getDayBucket(data.createdAt ?? data.updatedAt);
-        if (bucket && errorMap.has(bucket)) {
-          errorMap.set(bucket, Number(errorMap.get(bucket) ?? 0) + 1);
-        }
-      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        stats?: DashboardStats;
+        series?: {
+          buckets?: string[];
+          questoes?: number[];
+          erros?: number[];
+        };
+      };
 
-      const pendingErrors =
-        errorsTotalSnap.data().count -
-        errorsResolvedSnap.data().count -
-        errorsIgnoredSnap.data().count;
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível carregar os indicadores.");
+      }
 
-      setStats({
-        questoesTotal: questionsTotalSnap.data().count,
-        errosPendentes: pendingErrors,
-        alunosTotal: studentsTotalSnap.data().count,
-      });
-      setQuestionSeries(buckets.map((bucket) => Number(questionMap.get(bucket) ?? 0)));
-      setErrorSeries(buckets.map((bucket) => Number(errorMap.get(bucket) ?? 0)));
+      setStats(data.stats ?? EMPTY_STATS);
+      setQuestionSeries(
+        Array.isArray(data.series?.questoes) ? data.series?.questoes : [0, 0, 0, 0, 0, 0, 0]
+      );
+      setErrorSeries(
+        Array.isArray(data.series?.erros) ? data.series?.erros : [0, 0, 0, 0, 0, 0, 0]
+      );
     } catch (error) {
       setErrorMsg(
         error instanceof Error ? error.message : "Não foi possível carregar os indicadores."
