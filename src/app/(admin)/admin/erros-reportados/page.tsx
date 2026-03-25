@@ -147,7 +147,14 @@ function getMessage(r: Report) {
 
 function toDateLabel(ts: unknown) {
   try {
-    const d = ts?.toDate?.() ? ts.toDate() : null;
+    const withToDate =
+      typeof ts === "object" &&
+      ts !== null &&
+      "toDate" in ts &&
+      typeof (ts as { toDate?: unknown }).toDate === "function"
+        ? (ts as { toDate: () => Date })
+        : null;
+    const d = withToDate ? withToDate.toDate() : null;
     if (!d) return "—";
     return new Intl.DateTimeFormat("pt-BR", {
       dateStyle: "short",
