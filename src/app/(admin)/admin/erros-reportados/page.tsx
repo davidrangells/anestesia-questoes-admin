@@ -3,32 +3,15 @@
 import AdminShell from "@/components/AdminShell";
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  documentId,
-  doc,
-  endBefore,
-  getDocs,
-  limit,
-  limitToLast,
-  orderBy,
-  query,
-  serverTimestamp,
-  startAfter,
-  updateDoc,
-  QueryDocumentSnapshot,
-  DocumentData,
-  where,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { buttonStyles } from "@/components/ui/Button";
 
 type ReportStatus = "aberto" | "resolvido" | "ignorado";
 
 type Report = {
   id: string;
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 
   // status padronizado
   status?: ReportStatus | string;
@@ -63,7 +46,7 @@ type QuestionMini = {
   statement?: string;
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 300;
 
 function cn(...xs: Array<string | false | undefined | null>) {
   return xs.filter(Boolean).join(" ");
@@ -162,7 +145,7 @@ function getMessage(r: Report) {
   return (r.message || r.mensagem || r.details || "").trim();
 }
 
-function toDateLabel(ts: any) {
+function toDateLabel(ts: unknown) {
   try {
     const d = ts?.toDate?.() ? ts.toDate() : null;
     if (!d) return "—";
@@ -186,27 +169,12 @@ function clip(s: string, max = 120) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
-function chunkArray<T>(values: T[], size: number) {
-  const chunks: T[][] = [];
-  for (let i = 0; i < values.length; i += size) {
-    chunks.push(values.slice(i, i + size));
-  }
-  return chunks;
-}
-
 // -----------------------------------------------------------
 
 export default function ErrosReportadosPage() {
   const [loading, setLoading] = useState(true);
 
   const [items, setItems] = useState<Report[]>([]);
-  const [cursorStack, setCursorStack] = useState<QueryDocumentSnapshot<DocumentData>[]>([]);
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [nextPageCache, setNextPageCache] = useState<{
-    fromLastDocId: string;
-    rows: Report[];
-    lastDoc: QueryDocumentSnapshot<DocumentData> | null;
-  } | null>(null);
 
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
@@ -223,187 +191,47 @@ export default function ErrosReportadosPage() {
   // action loading
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const prefetchAfter = async (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
-    if (!cursor) {
-      setNextPageCache(null);
-      return;
-    }
-
-    try {
-      const qRef = query(
-        collection(db, "erros_reportados"),
-        orderBy("createdAt", "desc"),
-        startAfter(cursor),
-        limit(PAGE_SIZE)
-      );
-      const snap = await getDocs(qRef);
-      const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      setNextPageCache({
-        fromLastDocId: cursor.id,
-        rows,
-        lastDoc: snap.docs[snap.docs.length - 1] ?? null,
-      });
-      void warmCaches(rows);
-    } catch {
-      setNextPageCache(null);
-    }
-  };
-
   const fetchFirst = async () => {
     setLoading(true);
     try {
-      const qRef = query(collection(db, "erros_reportados"), orderBy("createdAt", "desc"), limit(PAGE_SIZE));
-      const snap = await getDocs(qRef);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
-      const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
-      setItems(rows);
-      setLastDoc(nextLastDoc);
-      setCursorStack([]);
+      const res = await fetch("/api/admin/erros-reportados", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      void warmCaches(rows);
-      void prefetchAfter(nextLastDoc);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        items?: Report[];
+        questionCache?: Record<string, QuestionMini>;
+        userCache?: Record<string, { name?: string; email?: string }>;
+      };
 
-  const fetchNext = async () => {
-    if (!lastDoc) return;
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível carregar erros reportados.");
+      }
 
-    if (nextPageCache && nextPageCache.fromLastDocId === lastDoc.id) {
-      setCursorStack((prev) => [...prev, lastDoc]);
-      setItems(nextPageCache.rows);
-      setLastDoc(nextPageCache.lastDoc);
-      void warmCaches(nextPageCache.rows);
-      void prefetchAfter(nextPageCache.lastDoc);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const qRef = query(
-        collection(db, "erros_reportados"),
-        orderBy("createdAt", "desc"),
-        startAfter(lastDoc),
-        limit(PAGE_SIZE)
+      setItems(Array.isArray(data.items) ? data.items : []);
+      setQuestionCache(
+        data.questionCache && typeof data.questionCache === "object" ? data.questionCache : {}
       );
-      const snap = await getDocs(qRef);
-
-      const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
-      setCursorStack((prev) => [...prev, lastDoc]);
-      setItems(rows);
-      setLastDoc(nextLastDoc);
-
-      void warmCaches(rows);
-      void prefetchAfter(nextLastDoc);
+      setUserCache(data.userCache && typeof data.userCache === "object" ? data.userCache : {});
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Não foi possível carregar erros reportados.");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchPrev = async () => {
-    const prevCursor = cursorStack[cursorStack.length - 1];
-    if (!prevCursor) return;
-
-    setLoading(true);
-    try {
-      const qRef = query(
-        collection(db, "erros_reportados"),
-        orderBy("createdAt", "desc"),
-        endBefore(prevCursor),
-        limitToLast(PAGE_SIZE)
-      );
-      const snap = await getDocs(qRef);
-
-      const rows: Report[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      const nextLastDoc = snap.docs[snap.docs.length - 1] ?? null;
-      setCursorStack((prev) => prev.slice(0, -1));
-      setItems(rows);
-      setLastDoc(nextLastDoc);
-
-      void warmCaches(rows);
-      void prefetchAfter(nextLastDoc);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const warmCaches = async (rows: Report[]) => {
-    // evita bater demais (prefetch leve)
-    const qIds = Array.from(new Set(rows.map((r) => getQuestionId(r)).filter(Boolean))) as string[];
-    const uIds = Array.from(new Set(rows.map((r) => getUid(r)).filter(Boolean))) as string[];
-
-    const toFetchQ = qIds.filter((id) => !questionCache[id]).slice(0, 20);
-    const toFetchU = uIds.filter((id) => !userCache[id]).slice(0, 20);
-
-    if (toFetchQ.length) {
-      const nextQuestions: Record<string, QuestionMini> = {};
-      const foundQuestionIds = new Set<string>();
-
-      for (const idsChunk of chunkArray(toFetchQ, 10)) {
-        const snap = await getDocs(
-          query(collection(db, "questionsBank"), where(documentId(), "in", idsChunk))
-        );
-        snap.docs.forEach((docSnap) => {
-          const d = docSnap.data() as Record<string, unknown>;
-          nextQuestions[docSnap.id] = {
-            id: docSnap.id,
-            prompt: String(d.prompt ?? ""),
-            questionText: String(d.questionText ?? ""),
-            statement: String(d.statement ?? ""),
-          };
-          foundQuestionIds.add(docSnap.id);
-        });
-      }
-
-      const missingInQuestionsBank = toFetchQ.filter((id) => !foundQuestionIds.has(id));
-      for (const idsChunk of chunkArray(missingInQuestionsBank, 10)) {
-        const snap = await getDocs(
-          query(collection(db, "questoes"), where(documentId(), "in", idsChunk))
-        );
-        snap.docs.forEach((docSnap) => {
-          const d = docSnap.data() as Record<string, unknown>;
-          nextQuestions[docSnap.id] = {
-            id: docSnap.id,
-            prompt: String(d.prompt ?? ""),
-            questionText: String(d.questionText ?? ""),
-            statement: String(d.statement ?? d.enunciado ?? ""),
-          };
-        });
-      }
-
-      if (Object.keys(nextQuestions).length) {
-        setQuestionCache((prev) => ({ ...prev, ...nextQuestions }));
-      }
-    }
-
-    if (toFetchU.length) {
-      const nextUsers: Record<string, { name?: string; email?: string }> = {};
-
-      for (const idsChunk of chunkArray(toFetchU, 10)) {
-        const snap = await getDocs(
-          query(collection(db, "users"), where(documentId(), "in", idsChunk))
-        );
-        snap.docs.forEach((docSnap) => {
-          const d = docSnap.data() as Record<string, unknown>;
-          nextUsers[docSnap.id] = {
-            name: String(d.name ?? d.nome ?? d.displayName ?? d.alunoNome ?? "").trim(),
-            email: String(d.email ?? "").trim(),
-          };
-        });
-      }
-
-      if (Object.keys(nextUsers).length) {
-        setUserCache((prev) => ({ ...prev, ...nextUsers }));
-      }
-    }
-  };
+  const fetchNext = async () => {};
+  const fetchPrev = async () => {};
 
   useEffect(() => {
-    fetchFirst();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void fetchFirst();
   }, []);
 
   const filtered = useMemo(() => {
@@ -436,18 +264,11 @@ export default function ErrosReportadosPage() {
     });
   }, [items, deferredSearch, statusFilter, questionCache]);
 
-  const hasNextPage = useMemo(() => {
-    if (!lastDoc) return false;
-    if (nextPageCache && nextPageCache.fromLastDocId === lastDoc.id) {
-      return nextPageCache.rows.length > 0;
-    }
-    return true;
-  }, [lastDoc, nextPageCache]);
+  const hasNextPage = false;
 
   const openModal = (r: Report) => {
     setSelected(r);
     setOpen(true);
-    void warmCaches([r]);
   };
 
   const setStatus = async (r: Report, nextStatus: ReportStatus) => {
@@ -457,12 +278,23 @@ export default function ErrosReportadosPage() {
     setItems((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: nextStatus } : x)));
 
     try {
-      await updateDoc(doc(db, "erros_reportados", r.id), {
-        status: nextStatus,
-        updatedAt: serverTimestamp(),
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+      const res = await fetch(`/api/admin/erros-reportados/${r.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: nextStatus }),
       });
-    } catch (error: any) {
-      alert(error?.message || "Não foi possível atualizar o status.");
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível atualizar o status.");
+      }
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
       await fetchFirst(); // rollback seguro
     } finally {
       setUpdatingId(null);
@@ -532,7 +364,7 @@ export default function ErrosReportadosPage() {
             <div className="text-xs font-semibold text-slate-600 mb-1">Status</div>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
+              onChange={(e) => setStatusFilter(e.target.value as "todos" | ReportStatus)}
               className="w-full rounded-xl border px-4 py-3 text-sm bg-white"
             >
               <option value="todos">Todos</option>
@@ -703,13 +535,13 @@ export default function ErrosReportadosPage() {
 
         <div className="px-5 py-4 border-t bg-white flex items-center justify-between">
           <div className="text-xs text-slate-500">
-            Página atual: <b>{cursorStack.length + 1}</b>
+            Página atual: <b>1</b>
           </div>
 
           <div className="flex gap-2">
             <button
               onClick={fetchPrev}
-              disabled={loading || cursorStack.length === 0}
+              disabled
               className={buttonStyles({ variant: "secondary", size: "sm" })}
             >
               Anterior
