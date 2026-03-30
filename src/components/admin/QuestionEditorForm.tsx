@@ -8,8 +8,7 @@ import {
   type QuestionGalleryItem,
 } from "@/lib/questionMedia";
 import { Button } from "@/components/ui/Button";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type QuestionOption = {
@@ -517,6 +516,7 @@ export function QuestionEditorForm({
   const [levels, setLevels] = useState<QuestionCatalogOption[]>([]);
   const [themeOptions, setThemeOptions] = useState<QuestionCatalogOption[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryItems, setGalleryItems] = useState<QuestionGalleryItem[]>([]);
   const [commentImageModalOpen, setCommentImageModalOpen] = useState(false);
@@ -530,43 +530,77 @@ export function QuestionEditorForm({
   useEffect(() => {
     let active = true;
 
+    const getToken = async () => {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Sessão inválida. Faça login novamente.");
+      }
+      return token;
+    };
+
+    const authedRequest = async (url: string) => {
+      const token = await getToken();
+      return fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    };
+
     const loadCatalogs = async () => {
       setCatalogLoading(true);
+      setCatalogError(null);
       try {
-        const [examSnap, levelSnap, themeSnap] = await Promise.all([
-          getDocs(query(collection(db, "catalog_provas"), orderBy("title", "asc"))),
-          getDocs(query(collection(db, "catalog_niveis"), orderBy("title", "asc"))),
-          getDocs(query(collection(db, "catalog_temas"), orderBy("title", "asc"))),
+        const [examRes, levelRes, themeRes] = await Promise.all([
+          authedRequest("/api/admin/catalog/provas"),
+          authedRequest("/api/admin/catalog/niveis"),
+          authedRequest("/api/admin/catalog/temas"),
         ]);
+
+        const [examJson, levelJson, themeJson] = await Promise.all([
+          examRes.json() as Promise<{ ok: boolean; error?: string; items?: Array<Record<string, unknown>> }>,
+          levelRes.json() as Promise<{ ok: boolean; error?: string; items?: Array<Record<string, unknown>> }>,
+          themeRes.json() as Promise<{ ok: boolean; error?: string; items?: Array<Record<string, unknown>> }>,
+        ]);
+
+        if (!examRes.ok || !examJson.ok) {
+          throw new Error(examJson.error || "Não foi possível carregar provas.");
+        }
+        if (!levelRes.ok || !levelJson.ok) {
+          throw new Error(levelJson.error || "Não foi possível carregar níveis.");
+        }
+        if (!themeRes.ok || !themeJson.ok) {
+          throw new Error(themeJson.error || "Não foi possível carregar temas.");
+        }
 
         if (!active) return;
 
-        const nextExams = examSnap.docs
+        const nextExams = (Array.isArray(examJson.items) ? examJson.items : [])
           .map((item) => ({
-            id: item.id,
-            title: String(item.data().title ?? ""),
-            code: String(item.data().code ?? ""),
-            status: (item.data().status as QuestionCatalogOption["status"]) ?? "ativo",
+            id: String(item.id ?? ""),
+            title: String(item.title ?? ""),
+            code: String(item.code ?? ""),
+            status: (item.status as QuestionCatalogOption["status"]) ?? "ativo",
           }))
           .filter((item) => item.status === "ativo");
 
-        const nextLevels = levelSnap.docs
+        const nextLevels = (Array.isArray(levelJson.items) ? levelJson.items : [])
           .map((item) => ({
-            id: item.id,
-            title: String(item.data().title ?? ""),
-            code: String(item.data().code ?? ""),
-            status: (item.data().status as QuestionCatalogOption["status"]) ?? "ativo",
+            id: String(item.id ?? ""),
+            title: String(item.title ?? ""),
+            code: String(item.code ?? ""),
+            status: (item.status as QuestionCatalogOption["status"]) ?? "ativo",
           }))
           .filter((item) => item.status === "ativo");
 
-        const nextThemes = themeSnap.docs
+        const nextThemes = (Array.isArray(themeJson.items) ? themeJson.items : [])
           .map((item) => ({
-            id: item.id,
-            title: String(item.data().title ?? ""),
-            code: String(item.data().code ?? ""),
-            status: (item.data().status as QuestionCatalogOption["status"]) ?? "ativo",
-            levelId: (item.data().levelId as string | null) ?? null,
-            levelLabel: (item.data().levelLabel as string | null) ?? null,
+            id: String(item.id ?? ""),
+            title: String(item.title ?? ""),
+            code: String(item.code ?? ""),
+            status: (item.status as QuestionCatalogOption["status"]) ?? "ativo",
+            levelId: (item.levelId as string | null) ?? null,
+            levelLabel: (item.levelLabel as string | null) ?? null,
           }))
           .filter((item) => item.status === "ativo");
 
@@ -612,6 +646,11 @@ export function QuestionEditorForm({
               .filter(Boolean),
           };
         });
+      } catch (error) {
+        if (!active) return;
+        const message =
+          error instanceof Error ? error.message : "Não foi possível carregar provas, níveis e temas.";
+        setCatalogError(message);
       } finally {
         if (active) setCatalogLoading(false);
       }
@@ -1002,6 +1041,11 @@ export function QuestionEditorForm({
             <div className="text-sm font-extrabold text-slate-900">Metadados</div>
 
             <div className="mt-3 space-y-3">
+              {catalogError ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  {catalogError}
+                </div>
+              ) : null}
               <div>
                 <div className="mb-1 text-xs font-semibold text-slate-600">Prova</div>
                 <select

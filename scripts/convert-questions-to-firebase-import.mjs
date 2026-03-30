@@ -30,6 +30,7 @@ const TARGET_HEADERS = [
 ];
 
 const TRUE_VALUES = new Set(["1", "true", "t", "yes", "y", "sim", "s", "v", "verdadeiro", "x", "active", "ativo"]);
+const ALLOWED_HTML_TAGS = new Set(["b", "strong", "u", "i", "em", "br", "p", "ul", "ol", "li", "sup", "sub"]);
 
 const FIELD_ALIASES = {
   docId: ["docId", "id", "ID", "uuid", "UUID", "codigo", "codigo_questao"],
@@ -44,6 +45,7 @@ const FIELD_ALIASES = {
     "questionText",
     "statement",
   ],
+  content: ["Conteúdo", "Conteudo", "content", "conteudo", "conteúdo"],
   prova: ["Prova", "prova", "examSource"],
   quiz: ["Quiz", "quiz"],
   provaTipo: ["prova_tipo", "examType", "tipo_prova"],
@@ -86,14 +88,158 @@ const FIELD_ALIASES = {
   corretoE: ["correto_E", "E_correta"],
 };
 
+const HTML_ENTITY_MAP = {
+  nbsp: " ",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  ccedil: "ç",
+  Ccedil: "Ç",
+  aacute: "á",
+  eacute: "é",
+  iacute: "í",
+  oacute: "ó",
+  uacute: "ú",
+  Aacute: "Á",
+  Eacute: "É",
+  Iacute: "Í",
+  Oacute: "Ó",
+  Uacute: "Ú",
+  agrave: "à",
+  egrave: "è",
+  igrave: "ì",
+  ograve: "ò",
+  ugrave: "ù",
+  atilde: "ã",
+  otilde: "õ",
+  Atilde: "Ã",
+  Otilde: "Õ",
+  acirc: "â",
+  ecirc: "ê",
+  icirc: "î",
+  ocirc: "ô",
+  ucirc: "û",
+  Acirc: "Â",
+  Ecirc: "Ê",
+  Ocirc: "Ô",
+  Ucirc: "Û",
+};
+
 function resolveArg(flag, fallback = "") {
   const entry = process.argv.slice(2).find((item) => item.startsWith(`${flag}=`));
   return entry ? entry.slice(flag.length + 1) : fallback;
 }
 
+function parseFlagBool(flag, fallback = false) {
+  const raw = resolveArg(flag, "");
+  if (!raw) return fallback;
+  return normalizeBool(raw, fallback);
+}
+
 function normalizeText(value) {
   if (value == null) return "";
   return String(value).trim();
+}
+
+function decodeHtmlEntities(value) {
+  return String(value ?? "")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const num = Number(code);
+      return Number.isFinite(num) ? String.fromCodePoint(num) : _;
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      const num = Number.parseInt(hex, 16);
+      return Number.isFinite(num) ? String.fromCodePoint(num) : _;
+    })
+    .replace(/&([a-zA-Z]+);/g, (full, key) => {
+      return Object.prototype.hasOwnProperty.call(HTML_ENTITY_MAP, key)
+        ? HTML_ENTITY_MAP[key]
+        : full;
+    });
+}
+
+function stripHtml(value) {
+  return String(value ?? "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+}
+
+function sanitizeAllowedHtml(value) {
+  let text = String(value ?? "");
+  if (!text) return "";
+
+  text = text
+    .replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, "")
+    .replace(/<\s*style[^>]*>[\s\S]*?<\s*\/\s*style\s*>/gi, "");
+
+  text = text.replace(/<\s*(\/?)\s*([a-zA-Z0-9]+)(?:\s[^>]*)?>/g, (_, slash, rawTag) => {
+    const tag = String(rawTag || "").toLowerCase();
+    if (!ALLOWED_HTML_TAGS.has(tag)) return "";
+    if (tag === "br") return "<br>";
+    return slash ? `</${tag}>` : `<${tag}>`;
+  });
+
+  return text;
+}
+
+function smartCapitalizeLine(line) {
+  const text = String(line ?? "");
+  const match = text.match(/^(\s*)([a-zà-ÿ])/i);
+  if (!match) return text;
+  const [, prefix, letter] = match;
+  return `${prefix}${letter.toLocaleUpperCase("pt-BR")}${text.slice(prefix.length + 1)}`;
+}
+
+function cleanText(value, options = {}) {
+  const preserveFormatting = options.preserveFormatting === true;
+  let text = normalizeText(value);
+  if (!text) return "";
+
+  text = decodeHtmlEntities(text);
+  text = preserveFormatting ? sanitizeAllowedHtml(text) : stripHtml(text);
+
+  text = text
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00A0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+  // força quebra de linha em listas do tipo "1 -", "2 -" quando vierem coladas no texto
+  text = text
+    .replace(/([:;])\s*(\d+\s*[-–]\s*)/g, "$1\n$2")
+    .replace(/\s+(\d+\s*[-–]\s*)/g, (full, listToken, idx, source) => {
+      if (idx <= 0) return full;
+      const prev = source[idx - 1];
+      if (prev === "\n") return full;
+      if (/[A-Za-zÀ-ÿ0-9)]/.test(prev)) return `\n${listToken}`;
+      return full;
+    });
+
+  if (preserveFormatting) {
+    text = text.trim();
+  } else {
+    text = text
+      .split("\n")
+      .map((line) => smartCapitalizeLine(line.trimEnd()))
+      .join("\n")
+      .trim();
+  }
+
+  return text;
+}
+
+function mergePromptAndContent(prompt, content, options = {}) {
+  const p = cleanText(prompt, options);
+  const c = cleanText(content, options);
+  if (!p) return c;
+  if (!c) return p;
+  if (p.includes(c)) return p;
+  return `${p}${options.preserveFormatting ? "<br><br>" : "\n\n"}${c}`.trim();
 }
 
 function normalizeKey(value) {
@@ -139,8 +285,8 @@ function findValue(row, aliases) {
   return undefined;
 }
 
-function resolveField(row, aliasKey) {
-  return normalizeText(findValue(row, FIELD_ALIASES[aliasKey] || []));
+function resolveField(row, aliasKey, options = {}) {
+  return cleanText(findValue(row, FIELD_ALIASES[aliasKey] || []), options);
 }
 
 function resolveCorrectOptionId(row) {
@@ -160,8 +306,8 @@ function resolveCorrectOptionId(row) {
   return "";
 }
 
-function splitAlternatives(rawValue) {
-  const raw = normalizeText(rawValue);
+function splitAlternatives(rawValue, options = {}) {
+  const raw = cleanText(rawValue, options);
   if (!raw) return [];
 
   return raw
@@ -272,6 +418,7 @@ function main() {
   const filePath = resolveFilePath(resolveArg("--file"));
   const sheetArg = resolveArg("--sheet");
   const outArg = resolveArg("--out");
+  const preserveFormatting = parseFlagBool("--preserveFormatting", false);
 
   const wb = xlsx.readFile(filePath, { raw: false, cellDates: false });
   const sheetName = detectSheetName(wb, sheetArg);
@@ -285,31 +432,41 @@ function main() {
   const issuesMultiCorrect = [];
 
   rows.forEach((row, idx) => {
-    const prompt = resolveField(row, "prompt");
+    const prompt = mergePromptAndContent(
+      resolveField(row, "prompt", { preserveFormatting }),
+      resolveField(row, "content", { preserveFormatting }),
+      { preserveFormatting }
+    );
     const parsedPromptMeta = parseExamMetaFromPrompt(prompt);
     const provaTipo = resolveField(row, "provaTipo") || parsedPromptMeta.examType;
     const provaAno = resolveField(row, "provaAno") || parsedPromptMeta.examYear;
     const prova = resolveField(row, "prova") || resolveField(row, "quiz");
     const nivel = resolveField(row, "nivel");
-    const themes = resolveField(row, "themes");
-    const explanation = resolveField(row, "explanation");
-    const reference = resolveField(row, "reference");
-    const internalNote = resolveField(row, "internalNote");
+    const themes = resolveField(row, "themes", { preserveFormatting });
+    const explanation = resolveField(row, "explanation", { preserveFormatting });
+    const reference = resolveField(row, "reference", { preserveFormatting });
+    const internalNote = resolveField(row, "internalNote", { preserveFormatting });
     const imageUrl = resolveField(row, "imageUrl");
     const isActive = normalizeBool(findValue(row, FIELD_ALIASES.isActive), true) ? "1" : "0";
     const shuffleOptions = normalizeBool(findValue(row, FIELD_ALIASES.shuffleOptions), true) ? "1" : "0";
 
-    let optionA = resolveField(row, "optionA_text");
-    let optionB = resolveField(row, "optionB_text");
-    let optionC = resolveField(row, "optionC_text");
-    let optionD = resolveField(row, "optionD_text");
-    let optionE = resolveField(row, "optionE_text");
+    let optionA = resolveField(row, "optionA_text", { preserveFormatting });
+    let optionB = resolveField(row, "optionB_text", { preserveFormatting });
+    let optionC = resolveField(row, "optionC_text", { preserveFormatting });
+    let optionD = resolveField(row, "optionD_text", { preserveFormatting });
+    let optionE = resolveField(row, "optionE_text", { preserveFormatting });
     let correctOptionId = resolveCorrectOptionId(row);
 
     // Suporte ao formato: uma coluna de corretas + uma coluna de incorretas separadas por "|".
     if (!optionA || !optionB || !optionC || !optionD || !correctOptionId) {
-      const correctList = splitAlternatives(findValue(row, FIELD_ALIASES.correctAlternatives));
-      const incorrectList = splitAlternatives(findValue(row, FIELD_ALIASES.incorrectAlternatives));
+      const correctList = splitAlternatives(
+        findValue(row, FIELD_ALIASES.correctAlternatives),
+        { preserveFormatting }
+      );
+      const incorrectList = splitAlternatives(
+        findValue(row, FIELD_ALIASES.incorrectAlternatives),
+        { preserveFormatting }
+      );
 
       if (correctList.length > 1) {
         correctOptionId = "__MULTI__";
@@ -422,6 +579,7 @@ function main() {
   console.log(`Issues sem correta: ${issuesNoCorrect.length}`);
   console.log(`Issues multiplas corretas: ${issuesMultiCorrect.length}`);
   console.log(`Saida: ${outFile}`);
+  console.log(`Preservar formatacao HTML: ${preserveFormatting ? "SIM" : "NAO"}`);
 }
 
 main();
