@@ -7,12 +7,66 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminRoute";
+import { adminDb } from "@/lib/firebaseAdmin";
 
 const execFileAsync = promisify(execFile);
 
 function parseMetric(output: string, label: string) {
   const match = output.match(new RegExp(`${label}:\\s*(\\d+)`, "i"));
   return match ? Number(match[1]) : null;
+}
+
+type ValidationSummary = {
+  totalQuestions: number;
+  missingExamId: number;
+  missingLevelId: number;
+  missingThemeIds: number;
+  invalidExamId: number;
+  invalidLevelId: number;
+  invalidThemeIds: number;
+};
+
+async function runPostImportValidation(): Promise<ValidationSummary> {
+  const [questionsSnap, provasSnap, niveisSnap, temasSnap] = await Promise.all([
+    adminDb.collection("questionsBank").get(),
+    adminDb.collection("catalog_provas").get(),
+    adminDb.collection("catalog_niveis").get(),
+    adminDb.collection("catalog_temas").get(),
+  ]);
+
+  const examIds = new Set(provasSnap.docs.map((docSnap) => docSnap.id));
+  const levelIds = new Set(niveisSnap.docs.map((docSnap) => docSnap.id));
+  const themeIds = new Set(temasSnap.docs.map((docSnap) => docSnap.id));
+
+  const validation: ValidationSummary = {
+    totalQuestions: questionsSnap.size,
+    missingExamId: 0,
+    missingLevelId: 0,
+    missingThemeIds: 0,
+    invalidExamId: 0,
+    invalidLevelId: 0,
+    invalidThemeIds: 0,
+  };
+
+  for (const docSnap of questionsSnap.docs) {
+    const data = docSnap.data() || {};
+    const examId = typeof data.examId === "string" ? data.examId.trim() : "";
+    const levelId = typeof data.levelId === "string" ? data.levelId.trim() : "";
+    const rowThemeIds = Array.isArray(data.themeIds)
+      ? data.themeIds.map((value) => String(value).trim()).filter(Boolean)
+      : [];
+
+    if (!examId) validation.missingExamId += 1;
+    else if (!examIds.has(examId)) validation.invalidExamId += 1;
+
+    if (!levelId) validation.missingLevelId += 1;
+    else if (!levelIds.has(levelId)) validation.invalidLevelId += 1;
+
+    if (!rowThemeIds.length) validation.missingThemeIds += 1;
+    else if (rowThemeIds.some((id) => !themeIds.has(id))) validation.invalidThemeIds += 1;
+  }
+
+  return validation;
 }
 
 export async function POST(req: NextRequest) {
@@ -49,6 +103,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     const combinedOutput = [stdout, stderr].filter(Boolean).join("\n").trim();
+    const validation = await runPostImportValidation();
 
     return NextResponse.json(
       {
@@ -61,6 +116,7 @@ export async function POST(req: NextRequest) {
           deleted: parseMetric(combinedOutput, "Excluídas"),
           warnings: parseMetric(combinedOutput, "Avisos"),
         },
+        validation,
         output: combinedOutput,
       },
       { status: 200 }

@@ -14,6 +14,16 @@ type ImportSummary = {
   warnings: number | null;
 };
 
+type ImportValidation = {
+  totalQuestions: number;
+  missingExamId: number;
+  missingLevelId: number;
+  missingThemeIds: number;
+  invalidExamId: number;
+  invalidLevelId: number;
+  invalidThemeIds: number;
+};
+
 function Metric({
   label,
   value,
@@ -36,15 +46,28 @@ export default function ImportadorPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [validation, setValidation] = useState<ImportValidation | null>(null);
   const [output, setOutput] = useState("");
 
   const hasSummary = useMemo(() => Boolean(summary), [summary]);
+  const hasValidationIssues = useMemo(() => {
+    if (!validation) return false;
+    const totalIssues =
+      validation.missingExamId +
+      validation.missingLevelId +
+      validation.missingThemeIds +
+      validation.invalidExamId +
+      validation.invalidLevelId +
+      validation.invalidThemeIds;
+    return totalIssues > 0;
+  }, [validation]);
 
   const handleImport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
     setSummary(null);
+    setValidation(null);
     setOutput("");
 
     if (!file) {
@@ -74,6 +97,7 @@ export default function ImportadorPage() {
         error?: string;
         output?: string;
         summary?: ImportSummary;
+        validation?: ImportValidation;
       };
 
       if (!res.ok || !data.ok) {
@@ -81,6 +105,7 @@ export default function ImportadorPage() {
       }
 
       setSummary(data.summary ?? null);
+      setValidation(data.validation ?? null);
       setOutput(data.output ?? "");
       setSuccessMsg("Importação concluída. As linhas inválidas continuam sendo ignoradas.");
     } catch (error) {
@@ -217,6 +242,33 @@ export default function ImportadorPage() {
             <Metric label="Excluídas" value={String(summary?.deleted ?? "—")} />
             <Metric label="Avisos" value={String(summary?.warnings ?? "—")} />
           </div>
+
+          {validation ? (
+            <div className="border-t border-slate-200 p-5">
+              <div className="mb-2 text-sm font-semibold text-slate-700">Validação pós-importação</div>
+              <div
+                className={
+                  hasValidationIssues
+                    ? "mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                    : "mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+                }
+              >
+                {hasValidationIssues
+                  ? "Importação concluída com pendências de vínculo (Prova/Nível/Tema)."
+                  : "Validação OK: todos os vínculos de Prova, Nível e Tema estão consistentes."}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
+                <Metric label="Total banco" value={String(validation.totalQuestions)} />
+                <Metric label="Sem prova" value={String(validation.missingExamId)} />
+                <Metric label="Sem nível" value={String(validation.missingLevelId)} />
+                <Metric label="Sem tema" value={String(validation.missingThemeIds)} />
+                <Metric label="Prova inválida" value={String(validation.invalidExamId)} />
+                <Metric label="Nível inválido" value={String(validation.invalidLevelId)} />
+                <Metric label="Tema inválido" value={String(validation.invalidThemeIds)} />
+              </div>
+            </div>
+          ) : null}
 
           {output ? (
             <div className="border-t border-slate-200 p-5">
