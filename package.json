@@ -15,7 +15,8 @@
     "questions:convert-generic": "node scripts/convert-questions-to-firebase-import.mjs",
     "questions:fix-metadata": "node scripts/fix-questions-metadata.mjs",
     "questions:backfill-content": "node scripts/backfill-question-content-from-xlsx.mjs",
-    "questions:normalize-prompts": "node scripts/normalize-question-prompts.mjs"
+    "questions:normalize-prompts": "node scripts/normalize-question-prompts.mjs",
+    "questions:sanitize-explanations": "node scripts/sanitize-explanations-no-option-letter.mjs"
   },
   "dependencies": {
     "firebase": "^12.9.0",

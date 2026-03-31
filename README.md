@@ -28,6 +28,41 @@ Padrão operacional definido:
 - Não embaralhar alternativas na renderização do simulado.
 - A variação de letra correta entre questões ocorre na ordem salva no banco/importação.
 
+## Limpeza automática de simulados vencidos
+
+Para reduzir espaço no Firestore, existe uma rotina automática que remove histórico de simulados de alunos com assinatura vencida há `N` dias:
+
+- Rota: `/api/maintenance/simulados-cleanup`
+- Cron (Vercel): diário às 04:00 (`vercel.json`)
+- Carência padrão: `30` dias (`graceDays=30`)
+- Remove:
+  - `users/{uid}/sessions/*` + `answers`
+  - `users/{uid}/attempts/*` + `answers`
+- Mantém cadastro e assinatura do aluno (`users`, `profile`, `entitlements`)
+
+### Segurança
+
+A rota aceita somente token por header:
+
+- `Authorization: Bearer <token>` ou `x-maintenance-key: <token>`
+- Variáveis aceitas:
+  - `SIMULADOS_CLEANUP_SECRET` (recomendado)
+  - `CRON_SECRET` (compatível com Vercel Cron)
+
+### Teste manual (dry-run)
+
+```bash
+curl -H "Authorization: Bearer SEU_TOKEN" \
+  "https://SEU_DOMINIO/api/maintenance/simulados-cleanup?graceDays=30&dryRun=1"
+```
+
+### Execução manual real
+
+```bash
+curl -X POST -H "Authorization: Bearer SEU_TOKEN" \
+  "https://SEU_DOMINIO/api/maintenance/simulados-cleanup?graceDays=30&dryRun=0"
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
