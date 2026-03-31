@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   title: "Anestesia Questões",
   description: "Painel administrativo e área do aluno do Anestesia Questões",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: [{ url: "/favicon.ico", type: "image/x-icon" }],
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
   },
 };
 
