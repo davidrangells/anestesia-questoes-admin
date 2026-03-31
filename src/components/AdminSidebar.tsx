@@ -113,7 +113,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 p-1.5 flex items-center justify-center">
             <img
-              src="/favicon.ico"
+              src="/logo-icon.png"
               alt="Logo Anestesia Questões"
               className="h-full w-full rounded-xl object-contain"
             />
