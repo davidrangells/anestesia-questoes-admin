@@ -56,8 +56,66 @@ function pickNumber(value: unknown) {
 }
 
 function normalizeStatus(value: string) {
-  const normalized = value.toLowerCase();
-  return normalized.includes("ativo") || normalized.includes("approved") ? "ativo" : "inativo";
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "inativo";
+
+  const inactiveFlags = [
+    "inativo",
+    "inactive",
+    "desativado",
+    "disabled",
+    "blocked",
+    "bloqueado",
+    "paused",
+    "cancel",
+    "canceled",
+    "cancelled",
+    "closed",
+  ];
+  if (inactiveFlags.some((flag) => normalized.includes(flag))) return "inativo";
+
+  const activeFlags = ["ativo", "active", "approved", "publicado", "enabled", "available"];
+  if (activeFlags.some((flag) => normalized.includes(flag))) return "ativo";
+
+  return "inativo";
+}
+
+function pickBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (!v) return null;
+    if (["true", "1", "yes", "sim", "active", "ativo", "enabled"].includes(v)) return true;
+    if (["false", "0", "no", "nao", "não", "inactive", "inativo", "disabled"].includes(v))
+      return false;
+  }
+  return null;
+}
+
+function extractEduzzStatus(item: Record<string, unknown>) {
+  const statusText = pickString(
+    item.status ??
+      item.productStatus ??
+      item.saleStatus ??
+      item.situation ??
+      item.state ??
+      item.currentStatus
+  );
+  if (statusText) return statusText;
+
+  const activeFlag = pickBoolean(
+    item.isActive ??
+      item.active ??
+      item.enabled ??
+      item.available ??
+      item.is_enabled ??
+      item.is_available
+  );
+
+  if (activeFlag === true) return "active";
+  if (activeFlag === false) return "inactive";
+  return "";
 }
 
 function normalizePaymentType(value: string) {
@@ -88,7 +146,7 @@ function mapProductsFromPayload(payload: Record<string, unknown>): EduzzProduct[
         (paymentNode.price as Record<string, unknown> | undefined) ??
         (item.price as Record<string, unknown> | undefined) ??
         {};
-      const status = pickString(item.status);
+      const status = extractEduzzStatus(item);
       const id = pickString(item.id);
       const name = pickString(item.name || item.title);
 
