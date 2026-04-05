@@ -387,6 +387,18 @@ function htmlEmail(params: { appName: string; createPasswordUrl: string; loginUr
   `;
 }
 
+function safeErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message.slice(0, 500);
+  return String(error ?? "erro desconhecido").slice(0, 500);
+}
+
+function resolveResendFrom(value: string) {
+  const from = value.trim();
+  if (!from) return "";
+  if (from.includes("<") && from.includes(">")) return from;
+  return `Anestesia Questões <${from}>`;
+}
+
 // ---------- handlers ----------
 export async function GET() {
   return NextResponse.json({ ok: true, service: "eduzz-delivery" }, { status: 200 });
@@ -646,6 +658,10 @@ export async function POST(req: NextRequest) {
       );
 
       // 5) E-mail 1x com link para criar senha (se configurado)
+      let welcomeEmailStatus:
+        | { status: "sent" | "skipped" | "failed"; reason?: string; error?: string }
+        | undefined;
+
       if (RESEND_API_KEY && RESEND_FROM_EMAIL && APP_URL) {
         try {
           const entSnap = await entRef.get();
@@ -669,7 +685,7 @@ export async function POST(req: NextRequest) {
               const resend = new Resend(RESEND_API_KEY);
 
               await resend.emails.send({
-                from: `Anestesia Questões <${RESEND_FROM_EMAIL}>`,
+                from: resolveResendFrom(RESEND_FROM_EMAIL),
                 to: email,
                 subject: "Seu acesso foi liberado — crie sua senha",
                 html: htmlEmail({
@@ -683,16 +699,49 @@ export async function POST(req: NextRequest) {
                 {
                   welcomeEmailSentAt: new Date(),
                   welcomeEmailTo: email,
+                  welcomeEmailStatus: "sent",
+                  welcomeEmailError: null,
                 },
                 { merge: true }
               );
+
+              welcomeEmailStatus = { status: "sent" };
             } catch (err) {
               console.error("ERROR sending email via Resend:", err);
+              await entRef.set(
+                {
+                  welcomeEmailStatus: "failed",
+                  welcomeEmailError: safeErrorMessage(err),
+                },
+                { merge: true }
+              );
+              welcomeEmailStatus = {
+                status: "failed",
+                reason: "resend_send_error",
+                error: safeErrorMessage(err),
+              };
             }
+          } else {
+            welcomeEmailStatus = { status: "skipped", reason: "already_sent" };
           }
         } catch (err) {
           console.error("EMAIL BLOCK ERROR:", err);
+          welcomeEmailStatus = {
+            status: "failed",
+            reason: "email_block_error",
+            error: safeErrorMessage(err),
+          };
         }
+      } else {
+        const missing = [
+          !RESEND_API_KEY ? "RESEND_API_KEY" : "",
+          !RESEND_FROM_EMAIL ? "RESEND_FROM_EMAIL" : "",
+          !APP_URL ? "APP_URL" : "",
+        ].filter(Boolean);
+        welcomeEmailStatus = {
+          status: "skipped",
+          reason: `missing_config:${missing.join(",")}`,
+        };
       }
 
       // 6) users/{uid} (portal aluno) + profile em subcoleção
@@ -729,6 +778,9 @@ export async function POST(req: NextRequest) {
           reason: "activated",
           uid,
           email,
+          welcomeEmailStatus: welcomeEmailStatus?.status ?? "skipped",
+          welcomeEmailReason: welcomeEmailStatus?.reason ?? null,
+          welcomeEmailError: welcomeEmailStatus?.error ?? null,
         },
         { merge: true }
       );

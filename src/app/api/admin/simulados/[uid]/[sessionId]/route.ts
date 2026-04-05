@@ -94,6 +94,17 @@ function uniqueStrings(values: unknown[]) {
   return Array.from(set);
 }
 
+function answersFromMap(input: unknown) {
+  if (!isRecord(input)) return [] as Array<{ questionId: string; data: Record<string, unknown> }>;
+
+  return Object.entries(input)
+    .map(([questionId, raw]) => {
+      if (!questionId || !isRecord(raw)) return null;
+      return { questionId: String(questionId).trim(), data: raw };
+    })
+    .filter((item): item is { questionId: string; data: Record<string, unknown> } => !!item);
+}
+
 function normalizeOptionId(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -268,10 +279,13 @@ export async function GET(
     const totalQuestions = normalizeQuestionCount(data);
     const score = normalizeScore(data, totalQuestions);
 
-    const answerRecords = answersSnap.docs.map((docSnap) => ({
+    const answerRecordsFromCollection = answersSnap.docs.map((docSnap) => ({
       questionId: docSnap.id,
       data: docSnap.data() as Record<string, unknown>,
     }));
+    const answerRecordsFromMap = answersFromMap(data.answersMap);
+    const answerRecords =
+      answerRecordsFromCollection.length > 0 ? answerRecordsFromCollection : answerRecordsFromMap;
 
     const sessionQuestionIds = [
       ...(Array.isArray(data.questionIds) ? data.questionIds : []),
