@@ -51,6 +51,32 @@ function hasBlockMarkup(value) {
   return /<(p|br|ul|ol|li|div|table|blockquote|h[1-6])\b/i.test(value);
 }
 
+const PARAGRAPH_MARGIN = "margin:0 0 1rem 0;";
+
+function ensureParagraphMarginStyle(html) {
+  return html.replace(/<p([^>]*)>/gi, (_full, attrs = "") => {
+    const rawAttrs = String(attrs || "");
+    const hasStyle = /\bstyle\s*=/i.test(rawAttrs);
+
+    if (!hasStyle) {
+      return `<p${rawAttrs} style="${PARAGRAPH_MARGIN}">`;
+    }
+
+    const updated = rawAttrs.replace(
+      /\bstyle\s*=\s*(['"])(.*?)\1/i,
+      (_m, quote, styleValue) => {
+        const current = String(styleValue || "").trim();
+        if (/margin\s*:/i.test(current)) {
+          return `style=${quote}${current}${quote}`;
+        }
+        const sep = current.endsWith(";") || !current ? "" : ";";
+        return `style=${quote}${current}${sep}${PARAGRAPH_MARGIN}${quote}`;
+      }
+    );
+    return `<p${updated}>`;
+  });
+}
+
 function normalizeSpacing(text) {
   return text
     .replace(/\r\n/g, "\n")
@@ -76,14 +102,14 @@ function normalizeExplanationParagraphs(value) {
 
   const raw = normalizeSpacing(value);
   if (!raw) return "";
-  if (hasBlockMarkup(raw)) return raw;
+  if (hasBlockMarkup(raw)) return ensureParagraphMarginStyle(raw);
 
   const withHints = raw.includes("\n") ? raw : splitByLikelySections(raw);
   const paragraphs = withHints
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => `<p>${part.replace(/\n/g, "<br />")}</p>`);
+    .map((part) => `<p style="${PARAGRAPH_MARGIN}">${part.replace(/\n/g, "<br />")}</p>`);
 
   if (!paragraphs.length) return raw;
   return paragraphs.join("\n");
@@ -186,4 +212,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-
