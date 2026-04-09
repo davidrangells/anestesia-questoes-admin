@@ -39,13 +39,23 @@ export async function GET(req: NextRequest) {
     const questionsCollection = adminDb.collection("questionsBank");
     const errorsCollection = adminDb.collection("erros_reportados");
     const studentsCollection = adminDb.collection("users").where("role", "==", "student");
+    const entitlementsCollection = adminDb.collection("entitlements");
     const resolvedStatuses = ["resolvido", "Resolvido", "RESOLVIDO"];
     const ignoredStatuses = ["ignorado", "Ignorado", "IGNORADO"];
 
-    const [questionsTotalAgg, studentsTotalAgg, errorsTotalAgg, errorsResolvedAgg, errorsIgnoredAgg] =
-      await Promise.all([
+    const [
+      questionsTotalAgg,
+      questionsWithCommentAgg,
+      studentsTotalAgg,
+      studentsActiveAgg,
+      errorsTotalAgg,
+      errorsResolvedAgg,
+      errorsIgnoredAgg,
+    ] = await Promise.all([
         questionsCollection.count().get(),
+        questionsCollection.where("explanation", ">", "").count().get(),
         studentsCollection.count().get(),
+        entitlementsCollection.where("active", "==", true).count().get(),
         errorsCollection.count().get(),
         errorsCollection.where("status", "in", resolvedStatuses).count().get(),
         errorsCollection.where("status", "in", ignoredStatuses).count().get(),
@@ -76,14 +86,20 @@ export async function GET(req: NextRequest) {
 
     const pendingErrors =
       errorsTotalAgg.data().count - errorsResolvedAgg.data().count - errorsIgnoredAgg.data().count;
+    const studentsTotal = studentsTotalAgg.data().count;
+    const studentsActive = Math.min(studentsActiveAgg.data().count, studentsTotal);
+    const studentsInactive = Math.max(studentsTotal - studentsActive, 0);
 
     return NextResponse.json(
       {
         ok: true,
         stats: {
           questoesTotal: questionsTotalAgg.data().count,
+          questoesComComentario: questionsWithCommentAgg.data().count,
           errosPendentes: pendingErrors,
-          alunosTotal: studentsTotalAgg.data().count,
+          alunosTotal: studentsTotal,
+          alunosAtivos: studentsActive,
+          alunosInativos: studentsInactive,
         },
         series: {
           buckets,

@@ -15,6 +15,7 @@ export type QuestionOption = {
   id: "A" | "B" | "C" | "D" | "E";
   text: string;
   imageUrl?: string | null;
+  imageWidth?: number | null;
 };
 
 export type QuestionAttachment = {
@@ -44,6 +45,7 @@ export type QuestionFormState = {
   themeIds: string[];
   isActive: boolean;
   imageUrl: string;
+  promptImageWidth: number;
   reference: string;
   internalNote: string;
   commentAttachments: QuestionAttachment[];
@@ -57,17 +59,23 @@ type QuestionDocLike = {
   prompt_text?: string;
   explanation?: string;
   imageUrl?: string | null;
+  promptImageWidth?: number | null;
   options?: QuestionOption[];
   optionA_text?: string;
   optionA_imageUrl?: string | null;
+  optionA_imageWidth?: number | null;
   optionB_text?: string;
   optionB_imageUrl?: string | null;
+  optionB_imageWidth?: number | null;
   optionC_text?: string;
   optionC_imageUrl?: string | null;
+  optionC_imageWidth?: number | null;
   optionD_text?: string;
   optionD_imageUrl?: string | null;
+  optionD_imageWidth?: number | null;
   optionE_text?: string;
   optionE_imageUrl?: string | null;
+  optionE_imageWidth?: number | null;
   correctOptionId?: QuestionOption["id"];
   shuffleOptions?: boolean;
   examId?: string | null;
@@ -129,8 +137,14 @@ export function buildProofLabel(examType: string, examYear: string) {
 
 const REQUIRED_OPTION_IDS = ["A", "B", "C", "D"] as const;
 
+function clampImageWidth(value: unknown, fallback = 100) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(100, Math.max(20, Math.round(parsed)));
+}
+
 function createBaseOptions(): QuestionOption[] {
-  return REQUIRED_OPTION_IDS.map((id) => ({ id, text: "", imageUrl: "" }));
+  return REQUIRED_OPTION_IDS.map((id) => ({ id, text: "", imageUrl: "", imageWidth: 100 }));
 }
 
 function normalizeQuestionOptions(
@@ -144,12 +158,13 @@ function normalizeQuestionOptions(
         id: option.id,
         text: String(option.text ?? ""),
         imageUrl: String(option.imageUrl ?? ""),
+        imageWidth: clampImageWidth(option.imageWidth, 100),
       },
     ])
   );
 
   const normalized = REQUIRED_OPTION_IDS.map(
-    (id) => optionMap.get(id) ?? { id, text: "", imageUrl: "" }
+    (id) => optionMap.get(id) ?? { id, text: "", imageUrl: "", imageWidth: 100 }
   );
 
   const optionalE = optionMap.get("E");
@@ -159,7 +174,7 @@ function normalizeQuestionOptions(
     correctOptionId === "E";
 
   if (shouldIncludeE) {
-    normalized.push(optionalE ?? { id: "E", text: "", imageUrl: "" });
+    normalized.push(optionalE ?? { id: "E", text: "", imageUrl: "", imageWidth: 100 });
   }
 
   return normalized;
@@ -178,6 +193,7 @@ export function createEmptyQuestionForm(): QuestionFormState {
     themeIds: [],
     isActive: true,
     imageUrl: "",
+    promptImageWidth: 100,
     reference: "",
     internalNote: "",
     commentAttachments: [],
@@ -202,13 +218,39 @@ export function questionDocToForm(data: QuestionDocLike): QuestionFormState {
           id: item.id,
           text: item.text ?? "",
           imageUrl: item.imageUrl ?? "",
+          imageWidth: clampImageWidth(item.imageWidth, 100),
         }))
       : [
-          { id: "A", text: String(data.optionA_text ?? ""), imageUrl: String(data.optionA_imageUrl ?? "") },
-          { id: "B", text: String(data.optionB_text ?? ""), imageUrl: String(data.optionB_imageUrl ?? "") },
-          { id: "C", text: String(data.optionC_text ?? ""), imageUrl: String(data.optionC_imageUrl ?? "") },
-          { id: "D", text: String(data.optionD_text ?? ""), imageUrl: String(data.optionD_imageUrl ?? "") },
-          { id: "E", text: String(data.optionE_text ?? ""), imageUrl: String(data.optionE_imageUrl ?? "") },
+          {
+            id: "A",
+            text: String(data.optionA_text ?? ""),
+            imageUrl: String(data.optionA_imageUrl ?? ""),
+            imageWidth: clampImageWidth(data.optionA_imageWidth, 100),
+          },
+          {
+            id: "B",
+            text: String(data.optionB_text ?? ""),
+            imageUrl: String(data.optionB_imageUrl ?? ""),
+            imageWidth: clampImageWidth(data.optionB_imageWidth, 100),
+          },
+          {
+            id: "C",
+            text: String(data.optionC_text ?? ""),
+            imageUrl: String(data.optionC_imageUrl ?? ""),
+            imageWidth: clampImageWidth(data.optionC_imageWidth, 100),
+          },
+          {
+            id: "D",
+            text: String(data.optionD_text ?? ""),
+            imageUrl: String(data.optionD_imageUrl ?? ""),
+            imageWidth: clampImageWidth(data.optionD_imageWidth, 100),
+          },
+          {
+            id: "E",
+            text: String(data.optionE_text ?? ""),
+            imageUrl: String(data.optionE_imageUrl ?? ""),
+            imageWidth: clampImageWidth(data.optionE_imageWidth, 100),
+          },
         ];
 
   const correctOptionId = (data.correctOptionId ?? "A") as QuestionOption["id"];
@@ -230,6 +272,7 @@ export function questionDocToForm(data: QuestionDocLike): QuestionFormState {
     themeIds: Array.isArray(data.themeIds) ? data.themeIds : [],
     isActive: data.isActive !== false,
     imageUrl: (data.imageUrl ?? "").toString(),
+    promptImageWidth: clampImageWidth(data.promptImageWidth, 100),
     reference: (data.reference ?? "").toString(),
     internalNote: (data.internalNote ?? "").toString(),
     commentAttachments: Array.isArray(data.commentAttachments) ? data.commentAttachments : [],
@@ -247,10 +290,14 @@ export function buildQuestionPayload(form: QuestionFormState) {
     id: option.id,
     text: option.text.trim(),
     imageUrl: option.imageUrl?.trim() ? option.imageUrl.trim() : null,
+    imageWidth: clampImageWidth(option.imageWidth, 100),
   }));
   const optionMap = Object.fromEntries(
     normalizedOptions.map((option) => [option.id, option])
-  ) as Record<QuestionOption["id"], { id: string; text: string; imageUrl: string | null }>;
+  ) as Record<
+    QuestionOption["id"],
+    { id: string; text: string; imageUrl: string | null; imageWidth: number }
+  >;
 
   return {
     prompt: form.prompt.trim(),
@@ -272,17 +319,23 @@ export function buildQuestionPayload(form: QuestionFormState) {
     isActive: form.isActive,
     status: form.isActive ? "ativo" : "inativo",
     imageUrl: form.imageUrl.trim() || null,
+    promptImageWidth: clampImageWidth(form.promptImageWidth, 100),
     options: normalizedOptions,
     optionA_text: optionMap.A?.text ?? "",
     optionA_imageUrl: optionMap.A?.imageUrl ?? null,
+    optionA_imageWidth: optionMap.A?.imageWidth ?? 100,
     optionB_text: optionMap.B?.text ?? "",
     optionB_imageUrl: optionMap.B?.imageUrl ?? null,
+    optionB_imageWidth: optionMap.B?.imageWidth ?? 100,
     optionC_text: optionMap.C?.text ?? "",
     optionC_imageUrl: optionMap.C?.imageUrl ?? null,
+    optionC_imageWidth: optionMap.C?.imageWidth ?? 100,
     optionD_text: optionMap.D?.text ?? "",
     optionD_imageUrl: optionMap.D?.imageUrl ?? null,
+    optionD_imageWidth: optionMap.D?.imageWidth ?? 100,
     optionE_text: optionMap.E?.text ?? "",
     optionE_imageUrl: optionMap.E?.imageUrl ?? null,
+    optionE_imageWidth: optionMap.E?.imageWidth ?? 100,
     correctOptionId: form.correctOptionId,
     shuffleOptions: form.shuffleOptions,
     reference: form.reference.trim(),
@@ -698,7 +751,7 @@ export function QuestionEditorForm({
       if (prev.options.some((option) => option.id === "E")) return prev;
       return {
         ...prev,
-        options: [...prev.options, { id: "E", text: "", imageUrl: "" }],
+        options: [...prev.options, { id: "E", text: "", imageUrl: "", imageWidth: 100 }],
       };
     });
   };
@@ -787,7 +840,24 @@ export function QuestionEditorForm({
     try {
       const { url, path } = await uploadQuestionAsset(file, "admin_uploads/questionsBank/prompt");
       setForm((prev) => ({ ...prev, imageUrl: url }));
-      await registerQuestionMedia({ url, path, origin: "questionsBank", kind: "prompt", label: "Enunciado" });
+      try {
+        await registerQuestionMedia({
+          url,
+          path,
+          origin: "questionsBank",
+          kind: "prompt",
+          label: "Enunciado",
+        });
+      } catch (error) {
+        console.warn("Falha ao registrar imagem no catálogo de mídias:", error);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao enviar imagem.";
+      alert(
+        message.includes("permission")
+          ? "Sem permissão para upload. Faça login novamente como admin e tente de novo."
+          : message
+      );
     } finally {
       setUploading(null);
     }
@@ -798,13 +868,24 @@ export function QuestionEditorForm({
     try {
       const { url, path } = await uploadQuestionAsset(file, `admin_uploads/questionsBank/options/${optionId}`);
       setOption(optionId, { imageUrl: url });
-      await registerQuestionMedia({
-        url,
-        path,
-        origin: "questionsBank",
-        kind: "option",
-        label: `Alternativa ${optionId}`,
-      });
+      try {
+        await registerQuestionMedia({
+          url,
+          path,
+          origin: "questionsBank",
+          kind: "option",
+          label: `Alternativa ${optionId}`,
+        });
+      } catch (error) {
+        console.warn("Falha ao registrar imagem no catálogo de mídias:", error);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao enviar imagem.";
+      alert(
+        message.includes("permission")
+          ? "Sem permissão para upload. Faça login novamente como admin e tente de novo."
+          : message
+      );
     } finally {
       setUploading(null);
     }
@@ -815,7 +896,20 @@ export function QuestionEditorForm({
     try {
       const { url, path } = await uploadQuestionAsset(file, "admin_uploads/questionsBank/attachments");
       addAttachment(file.name, url);
-      await registerQuestionMedia({ url, path, origin: "questionsBank", kind: "attachment", label: file.name });
+      try {
+        await registerQuestionMedia({
+          url,
+          path,
+          origin: "questionsBank",
+          kind: "attachment",
+          label: file.name,
+        });
+      } catch (error) {
+        console.warn("Falha ao registrar anexo no catálogo de mídias:", error);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao enviar arquivo.";
+      alert(message);
     } finally {
       setUploading(null);
     }
@@ -825,15 +919,22 @@ export function QuestionEditorForm({
     setUploading("comment-image");
     try {
       const { url, path } = await uploadQuestionAsset(file, "admin_uploads/questionsBank/comment-images");
-      await registerQuestionMedia({
-        url,
-        path,
-        origin: "questionsBank",
-        kind: "attachment",
-        label: `Comentário - ${file.name}`,
-      });
+      try {
+        await registerQuestionMedia({
+          url,
+          path,
+          origin: "questionsBank",
+          kind: "attachment",
+          label: `Comentário - ${file.name}`,
+        });
+      } catch (error) {
+        console.warn("Falha ao registrar imagem de comentário no catálogo de mídias:", error);
+      }
       await loadGalleryItems();
       insertCommentImage(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao enviar imagem.";
+      alert(message);
     } finally {
       setUploading(null);
     }
@@ -912,7 +1013,29 @@ export function QuestionEditorForm({
 
               {form.imageUrl ? (
                 <div className="mt-4 rounded-xl border bg-slate-50 p-3">
-                  <img src={form.imageUrl} alt="Preview" className="max-h-[300px] w-full object-contain" />
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold text-slate-600">Tamanho da imagem: {form.promptImageWidth}%</div>
+                    <input
+                      type="range"
+                      min={20}
+                      max={100}
+                      step={5}
+                      value={form.promptImageWidth}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          promptImageWidth: clampImageWidth(event.target.value, prev.promptImageWidth),
+                        }))
+                      }
+                      className="w-40 accent-blue-600"
+                    />
+                  </div>
+                  <img
+                    src={form.imageUrl}
+                    alt="Preview"
+                    className="max-h-[300px] object-contain"
+                    style={{ width: `${clampImageWidth(form.promptImageWidth, 100)}%` }}
+                  />
                 </div>
               ) : null}
             </div>
@@ -985,10 +1108,29 @@ export function QuestionEditorForm({
 
                       {option.imageUrl ? (
                         <div className="rounded-xl border bg-slate-50 p-3">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div className="text-xs font-semibold text-slate-600">
+                              Tamanho da imagem: {clampImageWidth(option.imageWidth, 100)}%
+                            </div>
+                            <input
+                              type="range"
+                              min={20}
+                              max={100}
+                              step={5}
+                              value={clampImageWidth(option.imageWidth, 100)}
+                              onChange={(event) =>
+                                setOption(option.id, {
+                                  imageWidth: clampImageWidth(event.target.value, option.imageWidth ?? 100),
+                                })
+                              }
+                              className="w-40 accent-blue-600"
+                            />
+                          </div>
                           <img
                             src={option.imageUrl}
                             alt={`Preview ${option.id}`}
-                            className="max-h-[250px] w-full object-contain"
+                            className="max-h-[250px] object-contain"
+                            style={{ width: `${clampImageWidth(option.imageWidth, 100)}%` }}
                           />
                         </div>
                       ) : null}

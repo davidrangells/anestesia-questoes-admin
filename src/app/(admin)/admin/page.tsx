@@ -10,14 +10,20 @@ type ChartMode = "erros" | "questoes";
 
 type DashboardStats = {
   questoesTotal: number;
+  questoesComComentario: number;
   errosPendentes: number;
   alunosTotal: number;
+  alunosAtivos: number;
+  alunosInativos: number;
 };
 
 const EMPTY_STATS: DashboardStats = {
   questoesTotal: 0,
+  questoesComComentario: 0,
   errosPendentes: 0,
   alunosTotal: 0,
+  alunosAtivos: 0,
+  alunosInativos: 0,
 };
 
 export default function AdminDashboardPage() {
@@ -173,13 +179,21 @@ export default function AdminDashboardPage() {
             ) : null}
 
             {/* KPI cards */}
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <KpiCard
                 icon="🧠"
                 title="Banco de Questões"
                 subtitle="Total cadastradas"
                 value={stats.questoesTotal}
                 pill={{ label: "Ativo", tone: "ok" }}
+              />
+
+              <KpiCard
+                icon="📝"
+                title="Questões com comentário"
+                subtitle="Comentário preenchido"
+                value={stats.questoesComComentario}
+                pill={{ label: "Didático", tone: "neutral" }}
               />
 
               <KpiCard
@@ -196,6 +210,22 @@ export default function AdminDashboardPage() {
                 subtitle="Total cadastrados"
                 value={stats.alunosTotal}
                 pill={{ label: "Geral", tone: "neutral" }}
+              />
+
+              <KpiCard
+                icon="✅"
+                title="Alunos ativos"
+                subtitle="Com acesso liberado"
+                value={stats.alunosAtivos}
+                pill={{ label: "Ativo", tone: "ok" }}
+              />
+
+              <KpiCard
+                icon="⏸️"
+                title="Alunos inativos"
+                subtitle="Sem acesso no momento"
+                value={stats.alunosInativos}
+                pill={{ label: "Inativo", tone: "warn" }}
               />
             </div>
 

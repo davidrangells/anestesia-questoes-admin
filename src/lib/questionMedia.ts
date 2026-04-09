@@ -1,6 +1,5 @@
-import { db, storage } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
 export type QuestionMediaKind = "prompt" | "option" | "attachment";
 
@@ -20,11 +19,39 @@ function safeExt(name: string) {
 
 export async function uploadQuestionAsset(file: File, folder: string) {
   const ext = safeExt(file.name);
-  const path = `${folder}/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  const url = await getDownloadURL(storageRef);
-  return { url, path };
+  const safeFile = new File([file], file.name.includes(".") ? file.name : `${file.name}.${ext}`, {
+    type: file.type || "application/octet-stream",
+  });
+
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) {
+    throw new Error("Sessão inválida. Faça login novamente.");
+  }
+
+  const formData = new FormData();
+  formData.append("file", safeFile);
+  formData.append("folder", folder);
+
+  const res = await fetch("/api/admin/questions/upload", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+    url?: string;
+    path?: string;
+  };
+
+  if (!res.ok || !data.ok || !data.url || !data.path) {
+    throw new Error(data.error || "Falha no upload da imagem.");
+  }
+
+  return { url: data.url, path: data.path };
 }
 
 export async function registerQuestionMedia(params: {
