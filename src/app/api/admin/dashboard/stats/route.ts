@@ -26,6 +26,22 @@ function getDayBucket(value: unknown) {
   ).padStart(2, "0")}`;
 }
 
+function explanationHasMeaningfulText(value: unknown) {
+  if (typeof value !== "string") return false;
+  const text = value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text.length > 0;
+}
+
 export async function GET(req: NextRequest) {
   const authCheck = await requireAdmin(req);
   if ("error" in authCheck) return authCheck.error;
@@ -45,15 +61,13 @@ export async function GET(req: NextRequest) {
 
     const [
       questionsTotalAgg,
-      questionsWithCommentAgg,
       studentsTotalAgg,
       studentsActiveAgg,
       errorsTotalAgg,
       errorsResolvedAgg,
       errorsIgnoredAgg,
     ] = await Promise.all([
-        questionsCollection.count().get(),
-        questionsCollection.where("explanation", ">", "").count().get(),
+      questionsCollection.count().get(),
         studentsCollection.count().get(),
         entitlementsCollection.where("active", "==", true).count().get(),
         errorsCollection.count().get(),
@@ -61,10 +75,18 @@ export async function GET(req: NextRequest) {
         errorsCollection.where("status", "in", ignoredStatuses).count().get(),
       ]);
 
-    const [recentQuestionsSnap, recentErrorsSnap] = await Promise.all([
+    const [allQuestionsSnap, recentQuestionsSnap, recentErrorsSnap] = await Promise.all([
+      questionsCollection.get(),
       questionsCollection.where("createdAt", ">=", startDate).get(),
       errorsCollection.where("createdAt", ">=", startDate).get(),
     ]);
+
+    let questionsWithCommentCount = 0;
+    allQuestionsSnap.docs.forEach((docSnap) => {
+      if (explanationHasMeaningfulText(docSnap.data()?.explanation)) {
+        questionsWithCommentCount += 1;
+      }
+    });
 
     const questionMap = new Map<string, number>();
     buckets.forEach((bucket) => questionMap.set(bucket, 0));
@@ -95,7 +117,7 @@ export async function GET(req: NextRequest) {
         ok: true,
         stats: {
           questoesTotal: questionsTotalAgg.data().count,
-          questoesComComentario: questionsWithCommentAgg.data().count,
+          questoesComComentario: questionsWithCommentCount,
           errosPendentes: pendingErrors,
           alunosTotal: studentsTotal,
           alunosAtivos: studentsActive,
