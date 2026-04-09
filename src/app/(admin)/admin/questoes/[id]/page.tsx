@@ -6,8 +6,8 @@ import {
   createEmptyQuestionForm,
   questionDocToForm,
 } from "@/components/admin/QuestionEditorForm";
-import { db } from "@/lib/firebase";
-import { deleteDoc, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -53,14 +53,37 @@ export default function EditarQuestaoPage() {
           initialValue={form}
           onCancel={() => router.push("/admin/questoes")}
           onSubmit={async (payload) => {
-            await updateDoc(doc(db, "questionsBank", id), {
-              ...payload,
-              updatedAt: serverTimestamp(),
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+            const res = await fetch(`/api/admin/questions/${id}`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(payload),
             });
+            const data = (await res.json()) as { ok?: boolean; error?: string };
+            if (!res.ok || !data.ok) {
+              throw new Error(data.error || "Não foi possível salvar a questão.");
+            }
           }}
           onDelete={async () => {
             if (!confirm("Tem certeza que deseja excluir esta questão?")) return;
-            await deleteDoc(doc(db, "questionsBank", id));
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) throw new Error("Sessão inválida. Faça login novamente.");
+
+            const res = await fetch(`/api/admin/questions/${id}`, {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            const data = (await res.json()) as { ok?: boolean; error?: string };
+            if (!res.ok || !data.ok) {
+              throw new Error(data.error || "Não foi possível excluir a questão.");
+            }
             router.replace("/admin/questoes");
           }}
         />
