@@ -62,18 +62,20 @@ export async function GET(req: NextRequest) {
     const [
       questionsTotalAgg,
       studentsTotalAgg,
-      studentsActiveAgg,
+      studentsSnap,
+      entitlementsActiveSnap,
       errorsTotalAgg,
       errorsResolvedAgg,
       errorsIgnoredAgg,
     ] = await Promise.all([
       questionsCollection.count().get(),
-        studentsCollection.count().get(),
-        entitlementsCollection.where("active", "==", true).count().get(),
-        errorsCollection.count().get(),
-        errorsCollection.where("status", "in", resolvedStatuses).count().get(),
-        errorsCollection.where("status", "in", ignoredStatuses).count().get(),
-      ]);
+      studentsCollection.count().get(),
+      studentsCollection.get(),
+      entitlementsCollection.where("active", "==", true).get(),
+      errorsCollection.count().get(),
+      errorsCollection.where("status", "in", resolvedStatuses).count().get(),
+      errorsCollection.where("status", "in", ignoredStatuses).count().get(),
+    ]);
 
     const [allQuestionsSnap, recentQuestionsSnap, recentErrorsSnap] = await Promise.all([
       questionsCollection.get(),
@@ -109,7 +111,11 @@ export async function GET(req: NextRequest) {
     const pendingErrors =
       errorsTotalAgg.data().count - errorsResolvedAgg.data().count - errorsIgnoredAgg.data().count;
     const studentsTotal = studentsTotalAgg.data().count;
-    const studentsActive = Math.min(studentsActiveAgg.data().count, studentsTotal);
+    const studentUids = new Set(studentsSnap.docs.map((docSnap) => docSnap.id));
+    const studentsActive = entitlementsActiveSnap.docs.reduce((count, docSnap) => {
+      if (studentUids.has(docSnap.id)) return count + 1;
+      return count;
+    }, 0);
     const studentsInactive = Math.max(studentsTotal - studentsActive, 0);
 
     return NextResponse.json(
