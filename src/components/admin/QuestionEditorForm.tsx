@@ -113,6 +113,7 @@ type RichTextEditorProps = {
   onRequestImage: () => void;
   pendingImageUrl?: string | null;
   onPendingImageHandled: () => void;
+  imageAlt?: string;
 };
 
 function escapeHtml(value: string) {
@@ -362,6 +363,7 @@ function RichTextEditor({
   onRequestImage,
   pendingImageUrl,
   onPendingImageHandled,
+  imageAlt,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [previewMode, setPreviewMode] = useState(false);
@@ -378,7 +380,7 @@ function RichTextEditor({
     document.execCommand(
       "insertHTML",
       false,
-      `<img src="${escapeHtml(pendingImageUrl)}" alt="Imagem adicionada no comentário" />`
+      `<img src="${escapeHtml(pendingImageUrl)}" alt="${escapeHtml(imageAlt || "Imagem adicionada")}" />`
     );
     onChange(editorRef.current.innerHTML ?? "");
     onPendingImageHandled();
@@ -573,7 +575,9 @@ export function QuestionEditorForm({
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryItems, setGalleryItems] = useState<QuestionGalleryItem[]>([]);
   const [commentImageModalOpen, setCommentImageModalOpen] = useState(false);
-  const [pendingEditorImageUrl, setPendingEditorImageUrl] = useState<string | null>(null);
+  const [richImageTarget, setRichImageTarget] = useState<"prompt" | "explanation">("explanation");
+  const [pendingPromptImageUrl, setPendingPromptImageUrl] = useState<string | null>(null);
+  const [pendingExplanationImageUrl, setPendingExplanationImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setForm(initialValue);
@@ -717,7 +721,7 @@ export function QuestionEditorForm({
   }, []);
 
   const canSave = useMemo(() => {
-    const hasPrompt = form.prompt.trim().length > 0;
+    const hasPrompt = stripHtml(form.prompt).length > 0;
     const hasOptions = REQUIRED_OPTION_IDS.every((optionId) =>
       form.options.find((option) => option.id === optionId)?.text.trim().length
     );
@@ -795,7 +799,8 @@ export function QuestionEditorForm({
     }
   };
 
-  const openCommentImageModal = async () => {
+  const openRichImageModal = async (target: "prompt" | "explanation") => {
+    setRichImageTarget(target);
     setCommentImageModalOpen(true);
     await loadGalleryItems();
   };
@@ -805,8 +810,12 @@ export function QuestionEditorForm({
     setCommentImageModalOpen(false);
   };
 
-  const insertCommentImage = (url: string) => {
-    setPendingEditorImageUrl(url);
+  const insertRichImage = (url: string) => {
+    if (richImageTarget === "prompt") {
+      setPendingPromptImageUrl(url);
+    } else {
+      setPendingExplanationImageUrl(url);
+    }
     setCommentImageModalOpen(false);
   };
 
@@ -931,7 +940,7 @@ export function QuestionEditorForm({
         console.warn("Falha ao registrar imagem de comentário no catálogo de mídias:", error);
       }
       await loadGalleryItems();
-      insertCommentImage(url);
+      insertRichImage(url);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao enviar imagem.";
       alert(message);
@@ -982,12 +991,19 @@ export function QuestionEditorForm({
               Campo principal da questão. Compatível com prompt e prompt_text.
             </div>
 
-            <textarea
-              value={form.prompt}
-              onChange={(event) => setForm((prev) => ({ ...prev, prompt: event.target.value }))}
-              placeholder="Digite o enunciado completo da questão..."
-              className="mt-3 min-h-[180px] w-full rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-            />
+            <div className="mt-3">
+              <RichTextEditor
+                label="Texto do enunciado"
+                helper="Campo salvo em `prompt` e `prompt_text` com HTML simples para formatação."
+                placeholder="Digite o enunciado completo da questão..."
+                value={form.prompt}
+                onRequestImage={() => void openRichImageModal("prompt")}
+                pendingImageUrl={pendingPromptImageUrl}
+                onPendingImageHandled={() => setPendingPromptImageUrl(null)}
+                onChange={(value) => setForm((prev) => ({ ...prev, prompt: value }))}
+                imageAlt="Imagem adicionada no enunciado"
+              />
+            </div>
 
             <div className="mt-4">
               <div className="mb-1 text-xs font-semibold text-slate-600">Imagem do enunciado (opcional)</div>
@@ -1157,10 +1173,11 @@ export function QuestionEditorForm({
               helper="Campo salvo em `explanation` com HTML simples para formatação."
               placeholder="Escreva o comentário interno/pedagógico da questão..."
               value={form.explanation}
-              onRequestImage={() => void openCommentImageModal()}
-              pendingImageUrl={pendingEditorImageUrl}
-              onPendingImageHandled={() => setPendingEditorImageUrl(null)}
+              onRequestImage={() => void openRichImageModal("explanation")}
+              pendingImageUrl={pendingExplanationImageUrl}
+              onPendingImageHandled={() => setPendingExplanationImageUrl(null)}
               onChange={(value) => setForm((prev) => ({ ...prev, explanation: value }))}
+              imageAlt="Imagem adicionada no comentário"
             />
           </div>
 
@@ -1478,7 +1495,7 @@ export function QuestionEditorForm({
 
       <Modal
         open={commentImageModalOpen}
-        title="Adicionar imagem ao comentário"
+        title={richImageTarget === "prompt" ? "Adicionar imagem ao enunciado" : "Adicionar imagem ao comentário"}
         onClose={closeCommentImageModal}
       >
         <div className="space-y-5">
@@ -1518,7 +1535,7 @@ export function QuestionEditorForm({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => insertCommentImage(item.url)}
+                    onClick={() => insertRichImage(item.url)}
                     className="overflow-hidden rounded-2xl border text-left transition hover:border-blue-300 hover:shadow-sm"
                   >
                     <img src={item.url} alt={item.label || "Imagem da galeria"} className="h-40 w-full object-cover" />
