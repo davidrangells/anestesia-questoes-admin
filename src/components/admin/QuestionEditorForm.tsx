@@ -133,17 +133,19 @@ function normalizePastedPlainText(text: string) {
   const normalized = text.replace(/\r\n?/g, "\n").trim();
   if (!normalized) return "";
 
+  const paragraphMargin = "margin:0 0 1rem 0;";
   const paragraphs = normalized
     .split(/\n{2,}/)
     .map((paragraph) =>
       paragraph
+        .replace(/\n{2,}/g, "\n")
         .split("\n")
         .map((line) => escapeHtml(line))
         .join("<br>")
     )
     .filter(Boolean);
 
-  return paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("");
+  return paragraphs.map((paragraph) => `<p style="${paragraphMargin}">${paragraph}</p>`).join("");
 }
 
 function hasBlockMarkup(value: string) {
