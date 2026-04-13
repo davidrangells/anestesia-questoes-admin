@@ -530,9 +530,20 @@ function RichTextEditor({
 
     const html = event.clipboardData.getData("text/html");
     const text = event.clipboardData.getData("text/plain");
-    const formattedHtml = html ? sanitizePastedHtml(html) : normalizePastedPlainText(text);
-    const safeFallback = text ? normalizePastedPlainText(text) : "";
-    const payload = formattedHtml || safeFallback;
+    const plainHasLineBreaks = /\r?\n/.test(text);
+    const htmlHasRichFormatting =
+      /<(strong|b|em|i|u|a|img|ul|ol|li|table|h[1-6]|blockquote|pre|code)\b/i.test(html);
+
+    let payload = "";
+    if (plainHasLineBreaks && !htmlHasRichFormatting) {
+      // Prioriza o texto puro quando vier de fontes como Bloco de Notas
+      // para preservar quebras/paragraphos de forma consistente.
+      payload = normalizePastedPlainText(text);
+    } else if (html) {
+      payload = sanitizePastedHtml(html);
+    } else if (text) {
+      payload = normalizePastedPlainText(text);
+    }
 
     if (payload) {
       document.execCommand("insertHTML", false, payload);
