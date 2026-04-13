@@ -18,6 +18,7 @@
     "questions:normalize-prompts": "node scripts/normalize-question-prompts.mjs",
     "questions:sanitize-explanations": "node scripts/sanitize-explanations-no-option-letter.mjs",
     "questions:normalize-explanations-paragraphs": "node scripts/normalize-explanations-paragraphs.mjs",
+    "questions:review-text-quality": "node scripts/review-question-text-quality.mjs",
     "students:reset-passwords": "node scripts/reset-student-passwords.mjs"
   },
   "dependencies": {

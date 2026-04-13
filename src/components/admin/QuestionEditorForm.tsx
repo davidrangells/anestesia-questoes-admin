@@ -129,6 +129,108 @@ function stripHtml(value: string) {
   return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function normalizePastedPlainText(text: string) {
+  const normalized = text.replace(/\r\n?/g, "\n").trim();
+  if (!normalized) return "";
+
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map((paragraph) =>
+      paragraph
+        .split("\n")
+        .map((line) => escapeHtml(line))
+        .join("<br>")
+    )
+    .filter(Boolean);
+
+  return paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("");
+}
+
+function sanitizePastedHtml(html: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const allowedTags = new Set([
+    "a",
+    "b",
+    "blockquote",
+    "br",
+    "code",
+    "em",
+    "h2",
+    "h3",
+    "hr",
+    "i",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "strong",
+    "u",
+    "ul",
+    "img",
+    "span",
+  ]);
+
+  const blockedTags = ["script", "style", "iframe", "object", "embed", "meta", "link"];
+  blockedTags.forEach((tag) => {
+    doc.querySelectorAll(tag).forEach((node) => node.remove());
+  });
+
+  const nodes = Array.from(doc.body.querySelectorAll("*"));
+  nodes.forEach((node) => {
+    const tag = node.tagName.toLowerCase();
+
+    if (!allowedTags.has(tag)) {
+      const fragment = doc.createDocumentFragment();
+      while (node.firstChild) {
+        fragment.appendChild(node.firstChild);
+      }
+      node.replaceWith(fragment);
+      return;
+    }
+
+    Array.from(node.attributes).forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on")) {
+        node.removeAttribute(attr.name);
+        return;
+      }
+      if (tag === "a" && name === "href") return;
+      if (tag === "img" && (name === "src" || name === "alt")) return;
+      if (name === "style") return;
+      node.removeAttribute(attr.name);
+    });
+
+    if (tag === "a") {
+      const href = (node.getAttribute("href") || "").trim();
+      const isSafeHref =
+        href.startsWith("http://") ||
+        href.startsWith("https://") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:");
+      if (!isSafeHref) {
+        node.removeAttribute("href");
+      } else {
+        node.setAttribute("target", "_blank");
+        node.setAttribute("rel", "noreferrer");
+      }
+    }
+
+    if (tag === "img") {
+      const src = (node.getAttribute("src") || "").trim();
+      const isSafeSrc =
+        src.startsWith("http://") ||
+        src.startsWith("https://") ||
+        src.startsWith("data:image/");
+      if (!isSafeSrc) {
+        node.remove();
+      }
+    }
+  });
+
+  return doc.body.innerHTML.trim();
+}
+
 export function buildProofLabel(examType: string, examYear: string) {
   const normalizedType = examType.trim();
   const normalizedYear = examYear.trim();
@@ -407,6 +509,21 @@ function RichTextEditor({
     );
   };
 
+  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const html = event.clipboardData.getData("text/html");
+    const text = event.clipboardData.getData("text/plain");
+    const formattedHtml = html ? sanitizePastedHtml(html) : normalizePastedPlainText(text);
+    const safeFallback = text ? normalizePastedPlainText(text) : "";
+    const payload = formattedHtml || safeFallback;
+
+    if (payload) {
+      document.execCommand("insertHTML", false, payload);
+      syncValue();
+    }
+  };
+
   return (
     <div className="min-w-0 overflow-hidden rounded-2xl border bg-white">
       <div className="border-b px-5 py-4">
@@ -514,6 +631,7 @@ function RichTextEditor({
               suppressContentEditableWarning
               onInput={syncValue}
               onBlur={syncValue}
+              onPaste={handlePaste}
               className="min-h-[220px] rounded-xl border p-4 text-sm outline-none focus-within:ring-2 focus-within:ring-blue-200 [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-slate-50 [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
             />
           </div>
