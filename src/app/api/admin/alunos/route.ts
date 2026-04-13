@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
 
         return {
           uid: userDoc.id,
-          createdAt: formatDate(userData.updatedAt ?? userData.createdAt),
+          createdAt: formatDate(userData.createdAt ?? userData.updatedAt),
           name:
             String(profile.name ?? "").trim() ||
             String(userData.name ?? "").trim() ||
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
             String(userData.email ?? entitlement.email ?? "").trim() || "—",
           active: entitlement.active === true,
           sortSeconds:
-            secondsFromUnknown(userData.updatedAt) || secondsFromUnknown(userData.createdAt),
+            secondsFromUnknown(userData.createdAt) || secondsFromUnknown(userData.updatedAt),
         };
       })
     );

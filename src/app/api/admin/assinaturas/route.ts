@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
         const ent = entSnap.exists ? entSnap.data() ?? {} : {};
         const status =
           ent.active === true ? "ativo" : ent.pending === true ? "pendente" : "inativo";
+        const validUntilSeconds = secondsFromUnknown(ent.validUntil);
         const planId = String(ent.planId ?? "").trim();
         const productId = String(ent.productId ?? "").trim();
         const productTitle = String(ent.productTitle ?? "").trim();
@@ -84,7 +85,10 @@ export async function GET(req: NextRequest) {
           amountPaid:
             typeof ent.amountPaid === "number" && Number.isFinite(ent.amountPaid) ? ent.amountPaid : null,
           validUntilRaw: toDateInput(ent.validUntil ?? null),
-          sortSeconds: secondsFromUnknown(userData.updatedAt) || secondsFromUnknown(userData.createdAt),
+          sortSeconds:
+            validUntilSeconds ||
+            secondsFromUnknown(userData.createdAt) ||
+            secondsFromUnknown(userData.updatedAt),
         } satisfies AssinaturaItem;
       })
     );
