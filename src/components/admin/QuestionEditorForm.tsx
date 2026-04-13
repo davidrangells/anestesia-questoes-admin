@@ -146,6 +146,10 @@ function normalizePastedPlainText(text: string) {
   return paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("");
 }
 
+function hasBlockMarkup(value: string) {
+  return /<(p|br|ul|ol|li|div|table|blockquote|h[1-6]|pre)\b/i.test(value);
+}
+
 function sanitizePastedHtml(html: string) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
@@ -228,7 +232,19 @@ function sanitizePastedHtml(html: string) {
     }
   });
 
-  return doc.body.innerHTML.trim();
+  const sanitizedHtml = doc.body.innerHTML.trim();
+
+  // Alguns apps (ex.: Bloco de Notas em certos navegadores) enviam "HTML"
+  // sem tags de bloco, só com quebras de linha no texto. Nesse caso, converte
+  // para parágrafos/linhas para não colar tudo junto.
+  if (!hasBlockMarkup(sanitizedHtml)) {
+    const textFromHtml = (doc.body.innerText || doc.body.textContent || "").trim();
+    if (textFromHtml) {
+      return normalizePastedPlainText(textFromHtml);
+    }
+  }
+
+  return sanitizedHtml;
 }
 
 export function buildProofLabel(examType: string, examYear: string) {
