@@ -13,6 +13,104 @@ function normalizeText(value: unknown) {
   return toSafeString(value).toLowerCase().trim();
 }
 
+function normalizeSearchValue(value: unknown) {
+  return toSafeString(value)
+    .replace(/<[^>]*>/g, " ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitSearchTokens(value: string) {
+  return normalizeSearchValue(value).split(" ").filter(Boolean);
+}
+
+type SearchFilters = {
+  generalTokens: string[];
+  yearTokens: string[];
+  examTokens: string[];
+  themeTokens: string[];
+  levelTokens: string[];
+  idTokens: string[];
+  promptTokens: string[];
+  explanationTokens: string[];
+};
+
+function createEmptySearchFilters(): SearchFilters {
+  return {
+    generalTokens: [],
+    yearTokens: [],
+    examTokens: [],
+    themeTokens: [],
+    levelTokens: [],
+    idTokens: [],
+    promptTokens: [],
+    explanationTokens: [],
+  };
+}
+
+function parseAdvancedSearch(raw: string): SearchFilters {
+  const filters = createEmptySearchFilters();
+  const rawTokens = raw.match(/"[^"]+"|\S+/g) ?? [];
+
+  const expandAndPush = (target: string[], value: string) => {
+    const tokens = splitSearchTokens(value);
+    for (const token of tokens) target.push(token);
+  };
+
+  for (const rawToken of rawTokens) {
+    const token = rawToken.trim();
+    if (!token) continue;
+
+    const separatorIndex = token.indexOf(":");
+    if (separatorIndex <= 0) {
+      expandAndPush(filters.generalTokens, token);
+      continue;
+    }
+
+    const field = normalizeSearchValue(token.slice(0, separatorIndex));
+    const value = token.slice(separatorIndex + 1).replace(/^"|"$/g, "");
+    if (!value.trim()) continue;
+
+    if (field === "ano" || field === "year") {
+      expandAndPush(filters.yearTokens, value);
+      continue;
+    }
+    if (field === "prova" || field === "exam" || field === "tipo") {
+      expandAndPush(filters.examTokens, value);
+      continue;
+    }
+    if (field === "tema" || field === "topico" || field === "topico") {
+      expandAndPush(filters.themeTokens, value);
+      continue;
+    }
+    if (field === "nivel" || field === "nivel") {
+      expandAndPush(filters.levelTokens, value);
+      continue;
+    }
+    if (field === "id" || field === "codigo" || field === "cod") {
+      expandAndPush(filters.idTokens, value);
+      continue;
+    }
+    if (field === "enunciado" || field === "texto" || field === "prompt") {
+      expandAndPush(filters.promptTokens, value);
+      continue;
+    }
+    if (field === "comentario" || field === "explicacao" || field === "explanation") {
+      expandAndPush(filters.explanationTokens, value);
+      continue;
+    }
+
+    // Prefixo desconhecido entra como busca geral.
+    expandAndPush(filters.generalTokens, token);
+  }
+
+  return filters;
+}
+
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
@@ -45,7 +143,12 @@ function getQuestionSearchText(id: string, data: Record<string, unknown>) {
   const level = toSafeString(data.level ?? data.nivel);
   const themes = getQuestionThemes(data).join(" ");
 
-  return normalizeText([id, prompt, examType, examYear, examSource, level, themes].join(" "));
+  return normalizeSearchValue([id, prompt, examType, examYear, examSource, level, themes].join(" "));
+}
+
+function includesAllTokens(haystack: string, tokens: string[]) {
+  if (!tokens.length) return true;
+  return tokens.every((token) => haystack.includes(token));
 }
 
 function explanationHasMeaningfulText(value: unknown) {
@@ -83,7 +186,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const searchParams = req.nextUrl.searchParams;
-    const search = normalizeText(searchParams.get("search"));
+    const searchRaw = toSafeString(searchParams.get("search"));
+    const search = normalizeText(searchRaw);
+    const searchFilters = parseAdvancedSearch(searchRaw);
     const status = normalizeText(searchParams.get("status"));
     const theme = toSafeString(searchParams.get("theme")).trim();
     const page = parsePositiveInt(searchParams.get("page"), 1);
@@ -130,8 +235,26 @@ export async function GET(req: NextRequest) {
       }
 
       if (!search) return true;
-      const haystack = getQuestionSearchText(item.id, item.data);
-      return haystack.includes(search);
+      const promptText = normalizeSearchValue(getQuestionPrompt(item.data));
+      const explanationText = normalizeSearchValue(toSafeString(item.data.explanation));
+      const examText = normalizeSearchValue(
+        `${toSafeString(item.data.examType ?? item.data.prova_tipo)} ${toSafeString(item.data.examSource ?? item.data.Prova)} ${String(item.data.examYear ?? item.data.prova_ano ?? "")}`
+      );
+      const yearText = normalizeSearchValue(String(item.data.examYear ?? item.data.prova_ano ?? ""));
+      const levelText = normalizeSearchValue(toSafeString(item.data.level ?? item.data.nivel));
+      const themeText = normalizeSearchValue(getQuestionThemes(item.data).join(" "));
+      const idText = normalizeSearchValue(item.id);
+      const generalHaystack = getQuestionSearchText(item.id, item.data);
+
+      if (!includesAllTokens(generalHaystack, searchFilters.generalTokens)) return false;
+      if (!includesAllTokens(yearText, searchFilters.yearTokens)) return false;
+      if (!includesAllTokens(examText, searchFilters.examTokens)) return false;
+      if (!includesAllTokens(themeText, searchFilters.themeTokens)) return false;
+      if (!includesAllTokens(levelText, searchFilters.levelTokens)) return false;
+      if (!includesAllTokens(idText, searchFilters.idTokens)) return false;
+      if (!includesAllTokens(promptText, searchFilters.promptTokens)) return false;
+      if (!includesAllTokens(explanationText, searchFilters.explanationTokens)) return false;
+      return true;
     });
 
     const totalFiltered = filtered.length;

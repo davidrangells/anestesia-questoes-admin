@@ -477,9 +477,12 @@ export default function BancoQuestoesPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="ID, enunciado, prova, ano, nível, tema..."
+              placeholder='Busca livre ou avançada: ano:2017 prova:ME1 tema:pediatria nivel:R1 id:673'
               className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
             />
+            <div className="mt-1 text-[11px] text-slate-500">
+              Dica: combine filtros na busca. Ex.: <span className="font-semibold">prova:ME1 ano:2017 tema:pediatria</span>
+            </div>
           </div>
 
           <div>
