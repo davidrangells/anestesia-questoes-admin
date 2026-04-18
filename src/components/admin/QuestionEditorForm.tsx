@@ -474,6 +474,13 @@ function normalizeThemeKey(value: string) {
     .toLowerCase();
 }
 
+function formatCatalogOptionLabel(option: QuestionCatalogOption) {
+  if (option.status === "inativo") {
+    return `${option.title} (inativo)`;
+  }
+  return option.title;
+}
+
 function RichTextEditor({
   label,
   helper,
@@ -785,8 +792,7 @@ export function QuestionEditorForm({
             title: String(item.title ?? ""),
             code: String(item.code ?? ""),
             status: (item.status as QuestionCatalogOption["status"]) ?? "ativo",
-          }))
-          .filter((item) => item.status === "ativo");
+          }));
 
         const nextLevels = (Array.isArray(levelJson.items) ? levelJson.items : [])
           .map((item) => ({
@@ -794,8 +800,7 @@ export function QuestionEditorForm({
             title: String(item.title ?? ""),
             code: String(item.code ?? ""),
             status: (item.status as QuestionCatalogOption["status"]) ?? "ativo",
-          }))
-          .filter((item) => item.status === "ativo");
+          }));
 
         const nextThemes = (Array.isArray(themeJson.items) ? themeJson.items : [])
           .map((item) => ({
@@ -805,8 +810,7 @@ export function QuestionEditorForm({
             status: (item.status as QuestionCatalogOption["status"]) ?? "ativo",
             levelId: (item.levelId as string | null) ?? null,
             levelLabel: (item.levelLabel as string | null) ?? null,
-          }))
-          .filter((item) => item.status === "ativo");
+          }));
 
         setExams(nextExams);
         setLevels(nextLevels);
@@ -872,7 +876,7 @@ export function QuestionEditorForm({
     const hasOptions = REQUIRED_OPTION_IDS.every((optionId) =>
       form.options.find((option) => option.id === optionId)?.text.trim().length
     );
-    const hasTheme = form.themes.length > 0;
+    const hasTheme = form.themeIds.length > 0 || form.themes.length > 0;
     const hasExam = form.examId.trim().length > 0;
     const hasLevel = form.levelId.trim().length > 0;
     return hasPrompt && hasOptions && hasTheme && hasExam && hasLevel && !saving;
@@ -1369,7 +1373,7 @@ export function QuestionEditorForm({
                   {catalogLoading && exams.length === 0 ? <option value="">Carregando...</option> : null}
                   {exams.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {option.title}
+                      {formatCatalogOptionLabel(option)}
                     </option>
                   ))}
                 </select>
@@ -1410,7 +1414,7 @@ export function QuestionEditorForm({
                   {catalogLoading && levels.length === 0 ? <option value="">Carregando...</option> : null}
                   {levels.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {option.title}
+                      {formatCatalogOptionLabel(option)}
                     </option>
                   ))}
                 </select>
@@ -1478,7 +1482,7 @@ export function QuestionEditorForm({
                 <option value="">Selecione um tema</option>
                 {availableThemes.map((theme) => (
                   <option key={theme.id} value={theme.id}>
-                    {theme.title}
+                    {formatCatalogOptionLabel(theme)}
                   </option>
                 ))}
               </select>
@@ -1516,12 +1520,12 @@ export function QuestionEditorForm({
                             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                         )}
                       >
-                        {theme.title}
+                        {formatCatalogOptionLabel(theme)}
                       </button>
                     );
                   })
                 ) : (
-                  <div className="text-xs text-slate-500">Nenhum tema ativo para este nível.</div>
+                  <div className="text-xs text-slate-500">Nenhum tema cadastrado para este nível.</div>
                 )}
               </div>
             </div>
