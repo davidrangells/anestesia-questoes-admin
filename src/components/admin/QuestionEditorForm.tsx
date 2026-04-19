@@ -886,11 +886,12 @@ export function QuestionEditorForm({
     if (!themeOptions.length) return [];
     if (!form.levelId) return themeOptions;
 
-    const exactMatches = themeOptions.filter((item) => item.levelId === form.levelId);
-    if (exactMatches.length) return exactMatches;
-
-    return themeOptions.filter((item) => item.levelLabel === form.level || !item.levelId);
-  }, [form.level, form.levelId, themeOptions]);
+    // Mostra TODOS os temas, mas ordena: nível atual primeiro, depois os demais.
+    // Nunca esconde temas — o usuário pode precisar de qualquer um, ativo ou inativo.
+    const forLevel = themeOptions.filter((item) => item.levelId === form.levelId);
+    const others   = themeOptions.filter((item) => item.levelId !== form.levelId);
+    return [...forLevel, ...others];
+  }, [form.levelId, themeOptions]);
 
   const setOption = (optionId: QuestionOption["id"], patch: Partial<QuestionOption>) => {
     setForm((prev) => ({
@@ -1480,11 +1481,38 @@ export function QuestionEditorForm({
                 className="min-w-0 flex-1 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
               >
                 <option value="">Selecione um tema</option>
-                {availableThemes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {formatCatalogOptionLabel(theme)}
-                  </option>
-                ))}
+                {form.levelId ? (
+                  <>
+                    {availableThemes.filter((t) => t.levelId === form.levelId).length > 0 && (
+                      <optgroup label="── Deste nível ──">
+                        {availableThemes
+                          .filter((t) => t.levelId === form.levelId)
+                          .map((theme) => (
+                            <option key={theme.id} value={theme.id}>
+                              {formatCatalogOptionLabel(theme)}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    {availableThemes.filter((t) => t.levelId !== form.levelId).length > 0 && (
+                      <optgroup label="── Outros níveis ──">
+                        {availableThemes
+                          .filter((t) => t.levelId !== form.levelId)
+                          .map((theme) => (
+                            <option key={theme.id} value={theme.id}>
+                              {formatCatalogOptionLabel(theme)}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                  </>
+                ) : (
+                  availableThemes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {formatCatalogOptionLabel(theme)}
+                    </option>
+                  ))
+                )}
               </select>
               <Button
                 type="button"
@@ -1503,20 +1531,33 @@ export function QuestionEditorForm({
             </div>
 
             <div className="mt-3">
-              <div className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Temas cadastrados para o nível selecionado</div>
+              <div className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Seleção rápida
+                {form.levelId && availableThemes.filter((t) => t.levelId === form.levelId).length > 0 && (
+                  <span className="ml-1 font-normal text-slate-400 dark:text-slate-500">
+                    (negrito = deste nível)
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {availableThemes.length ? (
                   availableThemes.map((theme) => {
-                    const selected = form.themeIds.includes(theme.id);
+                    const selected  = form.themeIds.includes(theme.id);
+                    const forLevel  = form.levelId && theme.levelId === form.levelId;
+                    const inactive  = theme.status === "inativo";
                     return (
                       <button
                         key={theme.id}
                         type="button"
+                        title={inactive ? "Tema inativo — ainda pode ser usado" : undefined}
                         onClick={() => (selected ? removeTheme(theme.title) : addThemeFromCatalog(theme))}
                         className={cn(
-                          "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                          "rounded-full border px-3 py-1 text-xs transition",
+                          forLevel ? "font-extrabold" : "font-semibold opacity-70",
                           selected
-                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                            : inactive
+                            ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400 hover:opacity-90"
                             : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                         )}
                       >
@@ -1525,7 +1566,7 @@ export function QuestionEditorForm({
                     );
                   })
                 ) : (
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum tema cadastrado para este nível.</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum tema cadastrado.</div>
                 )}
               </div>
             </div>
