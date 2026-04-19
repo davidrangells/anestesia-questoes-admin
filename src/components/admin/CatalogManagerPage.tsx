@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, type LucideIcon } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, FileText, BookOpen, Tags } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -33,6 +33,12 @@ type CatalogForm = {
   levelId: string;
 };
 
+const ENTITY_ICONS = {
+  provas: FileText,
+  niveis: BookOpen,
+  temas: Tags,
+} as const;
+
 type CatalogManagerPageProps = {
   entity: EntityType;
   title: string;
@@ -41,7 +47,6 @@ type CatalogManagerPageProps = {
   searchPlaceholder: string;
   createLabel: string;
   emptyMessage: string;
-  emptyIcon?: LucideIcon;
   showLevelColumn?: boolean;
 };
 
@@ -65,9 +70,9 @@ export default function CatalogManagerPage({
   searchPlaceholder,
   createLabel,
   emptyMessage,
-  emptyIcon,
   showLevelColumn = false,
 }: CatalogManagerPageProps) {
+  const emptyIcon = ENTITY_ICONS[entity];
   const [items, setItems] = useState<CatalogDoc[]>([]);
   const [levels, setLevels] = useState<LevelOption[]>([]);
   const [loading, setLoading] = useState(true);

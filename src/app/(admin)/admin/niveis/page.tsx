@@ -1,4 +1,3 @@
-import { BookOpen } from "lucide-react";
 import CatalogManagerPage from "@/components/admin/CatalogManagerPage";
 
 export default function NiveisPage() {
@@ -11,7 +10,6 @@ export default function NiveisPage() {
       searchPlaceholder="Filtrar níveis..."
       createLabel="Criar nível"
       emptyMessage="Nenhum nível cadastrado."
-      emptyIcon={BookOpen}
     />
   );
 }
