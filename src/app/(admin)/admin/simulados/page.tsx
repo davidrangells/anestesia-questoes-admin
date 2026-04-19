@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { api } from "@/lib/apiClient";
 
 type SimuladoListItem = {
   uid: string;
@@ -45,24 +45,7 @@ export default function SimuladosPage() {
       setErrorMsg(null);
 
       try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-        const res = await fetch("/api/admin/simulados", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = (await res.json()) as {
-          ok: boolean;
-          error?: string;
-          items?: SimuladoListItem[];
-        };
-
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Não foi possível carregar os simulados.");
-        }
+        const data = await api.get<{ items?: SimuladoListItem[] }>("/api/admin/simulados");
 
         if (active) {
           setItems(data.items ?? []);
@@ -102,20 +85,7 @@ export default function SimuladosPage() {
     setErrorMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch(`/api/admin/simulados/${item.uid}/${item.sessionId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível excluir o simulado.");
-      }
+      await api.delete(`/api/admin/simulados/${item.uid}/${item.sessionId}`);
 
       setItems((prev) => prev.filter((current) => current.sessionId !== item.sessionId));
     } catch (error) {

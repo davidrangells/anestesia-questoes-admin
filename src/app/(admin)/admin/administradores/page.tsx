@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { auth } from "@/lib/firebase";
+import { api } from "@/lib/apiClient";
 
 type AdminItem = {
   uid: string;
@@ -30,24 +31,10 @@ export default function AdministradoresPage() {
 
       try {
         const currentUid = auth.currentUser?.uid ?? "";
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
-        const res = await fetch("/api/admin/administradores", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = (await res.json()) as {
-          ok: boolean;
-          error?: string;
-          items?: Array<{ uid: string; name: string; email: string }>;
-        };
-
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Não foi possível carregar os administradores.");
-        }
+        const data = await api.get<{ items?: Array<{ uid: string; name: string; email: string }> }>(
+          "/api/admin/administradores"
+        );
 
         const rows = (Array.isArray(data.items) ? data.items : [])
           .map((item) => ({
@@ -98,20 +85,7 @@ export default function AdministradoresPage() {
     setErrorMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch(`/api/admin/administradores/${item.uid}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível excluir o administrador.");
-      }
+      await api.delete(`/api/admin/administradores/${item.uid}`);
 
       setItems((prev) => prev.filter((current) => current.uid !== item.uid));
     } catch (error) {

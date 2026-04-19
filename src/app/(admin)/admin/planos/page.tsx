@@ -3,8 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import { dateFromUnknown } from "@/lib/dateValue";
 import { auth } from "@/lib/firebase";
+import { Modal } from "@/components/ui/Modal";
 
 type Plano = {
   id: string;
@@ -79,37 +82,6 @@ function StatusBadge({
       >
         {source === "eduzz" ? "Sincronizado" : "Manual"}
       </span>
-    </div>
-  );
-}
-
-function Modal({
-  open,
-  title,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-slate-900/35 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-            <div className="text-lg font-black text-slate-900">{title}</div>
-            <Button variant="secondary" size="sm" onClick={onClose}>
-              Fechar
-            </Button>
-          </div>
-          <div className="max-h-[80vh] overflow-auto p-5">{children}</div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -330,11 +302,11 @@ export default function PlanosPage() {
             <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
               ⌕
             </span>
-            <input
+            <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filtrar planos..."
-              className="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-200"
+              className="pl-11"
             />
           </div>
           <Button variant="secondary" onClick={() => void syncEduzz()} disabled={syncing}>
@@ -444,10 +416,9 @@ export default function PlanosPage() {
               <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 Código
               </div>
-              <input
+              <Input
                 value={form.code}
                 onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
             <div>
@@ -492,10 +463,9 @@ export default function PlanosPage() {
             <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
               Produto
             </div>
-            <input
+            <Input
               value={form.title}
               onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
 
@@ -503,11 +473,10 @@ export default function PlanosPage() {
             <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
               Descrição
             </div>
-            <textarea
+            <Textarea
               value={form.description}
               onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
               rows={3}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
 
@@ -516,22 +485,20 @@ export default function PlanosPage() {
               <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 ID produto/oferta Eduzz
               </div>
-              <input
+              <Input
                 value={form.productId}
                 onChange={(e) => setForm((prev) => ({ ...prev, productId: e.target.value }))}
                 placeholder="Ex.: P567"
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
             <div>
               <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 Valor
               </div>
-              <input
+              <Input
                 value={form.price}
                 onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
                 placeholder="0,00"
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
           </div>
@@ -541,33 +508,30 @@ export default function PlanosPage() {
               <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 Moderação
               </div>
-              <input
+              <Input
                 value={form.moderation}
                 onChange={(e) => setForm((prev) => ({ ...prev, moderation: e.target.value }))}
                 placeholder="Aprovado"
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
             <div>
               <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 Tipo de cobrança
               </div>
-              <input
+              <Input
                 value={form.paymentType}
                 onChange={(e) => setForm((prev) => ({ ...prev, paymentType: e.target.value }))}
                 placeholder="Pagamento único"
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
             <div>
               <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 URL da imagem
               </div>
-              <input
+              <Input
                 value={form.imageUrl}
                 onChange={(e) => setForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
                 placeholder="https://..."
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
           </div>

@@ -48,6 +48,7 @@ function Item({
     <Link
       href={href}
       onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
         active
@@ -55,7 +56,7 @@ function Item({
           : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-white",
       )}
     >
-      <span className="text-base">{icon}</span>
+      <span className="text-base" aria-hidden="true">{icon}</span>
       <span className="truncate">{label}</span>
     </Link>
   );
@@ -192,7 +193,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
           <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
             Tema
           </div>
-          <div className="grid grid-cols-2 gap-1">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => onThemeChange("light")}
@@ -273,14 +274,14 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[88vw] max-w-[320px] flex-col overflow-hidden border-r border-slate-200/70 bg-white shadow-2xl transition-transform lg:hidden",
+          "fixed inset-y-0 left-0 z-40 flex w-[88vw] max-w-[320px] flex-col overflow-hidden border-r border-slate-200/70 bg-white shadow-2xl transition-transform lg:hidden dark:border-slate-800 dark:bg-slate-950",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {sidebarContent}
       </aside>
 
-      <aside className="hidden h-[100dvh] min-h-0 w-[320px] shrink-0 overflow-hidden border-r border-slate-200/70 bg-white sticky top-0 lg:flex lg:flex-col">
+      <aside className="hidden h-[100dvh] min-h-0 w-[320px] shrink-0 overflow-hidden border-r border-slate-200/70 bg-white sticky top-0 lg:flex lg:flex-col dark:border-slate-800 dark:bg-slate-950">
         {sidebarContent}
       </aside>
     </>

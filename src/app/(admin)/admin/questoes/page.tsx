@@ -7,6 +7,8 @@ import { useSearchParams } from "next/navigation";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { auth } from "@/lib/firebase";
+import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 
 type Option = { id: string; text?: string; imageUrl?: string | null };
 
@@ -60,77 +62,6 @@ type QuestionsResponse = {
     inactive: number;
   };
 };
-
-function Badge({
-  children,
-  tone,
-  onClick,
-  title,
-}: {
-  children: React.ReactNode;
-  tone: "blue" | "green" | "slate" | "amber" | "red";
-  onClick?: () => void;
-  title?: string;
-}) {
-  const cls =
-    tone === "blue"
-      ? "border-[#bfdbfe] bg-[#dbeafe] text-[#1e3a8a]"
-      : tone === "green"
-      ? "border-[#86efac] bg-[#dcfce7] text-[#14532d]"
-      : tone === "amber"
-      ? "border-[#f59e0b] bg-[#fef3c7] text-[#78350f]"
-      : tone === "red"
-      ? "border-[#fecdd3] bg-[#ffe4e6] text-[#881337]"
-      : "border-[#cbd5e1] bg-[#e2e8f0] text-[#0f172a]";
-
-  const clickable = !!onClick;
-  return (
-    <span
-      onClick={onClick}
-      title={title}
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold select-none",
-        cls,
-        clickable ? "cursor-pointer hover:opacity-90" : ""
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Modal({
-  open,
-  title,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-4xl overflow-hidden rounded-2xl border bg-white shadow-xl">
-          <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-extrabold text-slate-900">{title}</div>
-              <div className="text-xs text-slate-500">Clique fora para fechar</div>
-            </div>
-            <Button onClick={onClose} variant="secondary" size="sm">
-              Fechar
-            </Button>
-          </div>
-          <div className="max-h-[75vh] overflow-auto p-5">{children}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function hasAnyImage(q: QBQuestion) {
   const questionHas = !!q.imageUrl;

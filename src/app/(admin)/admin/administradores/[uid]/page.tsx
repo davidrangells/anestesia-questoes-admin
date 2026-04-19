@@ -4,7 +4,8 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { Input } from "@/components/ui/Input";
+import { api } from "@/lib/apiClient";
 
 type AdminDetails = {
   uid: string;
@@ -36,23 +37,11 @@ export default function EditarAdministradorPage({
 
       try {
         const { uid } = await params;
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
-        const res = await fetch(`/api/admin/administradores/${uid}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const data = await api.get<{ admin?: AdminDetails }>(`/api/admin/administradores/${uid}`);
 
-        const data = (await res.json()) as {
-          ok: boolean;
-          error?: string;
-          admin?: AdminDetails;
-        };
-
-        if (!res.ok || !data.ok || !data.admin) {
-          throw new Error(data.error || "Não foi possível carregar o administrador.");
+        if (!data.admin) {
+          throw new Error("Não foi possível carregar o administrador.");
         }
 
         if (active) {
@@ -106,26 +95,7 @@ export default function EditarAdministradorPage({
     setSaving(true);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch(`/api/admin/administradores/${admin.uid}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
-      });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível salvar o administrador.");
-      }
+      await api.patch(`/api/admin/administradores/${admin.uid}`, { name, email, password });
 
       setSuccessMsg("Dados salvos com sucesso.");
       setPassword("");
@@ -158,23 +128,21 @@ export default function EditarAdministradorPage({
         <div className="grid gap-5 p-5 md:grid-cols-2">
           <label className="block md:col-span-2">
             <div className="mb-2 text-sm font-semibold text-slate-700">Nome</div>
-            <input
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={loading}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"
               placeholder="Nome do administrador"
             />
           </label>
 
           <label className="block">
             <div className="mb-2 text-sm font-semibold text-slate-700">E-mail</div>
-            <input
+            <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               disabled={loading}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"
               placeholder="admin@empresa.com"
             />
           </label>
@@ -183,24 +151,22 @@ export default function EditarAdministradorPage({
 
           <label className="block">
             <div className="mb-2 text-sm font-semibold text-slate-700">Nova senha</div>
-            <input
+            <Input
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
               disabled={loading}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"
               placeholder="Deixe em branco para manter"
             />
           </label>
 
           <label className="block">
             <div className="mb-2 text-sm font-semibold text-slate-700">Confirmar nova senha</div>
-            <input
+            <Input
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               type="password"
               disabled={loading}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"
               placeholder="Repita a nova senha"
             />
           </label>

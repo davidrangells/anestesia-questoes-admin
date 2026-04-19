@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { Input } from "@/components/ui/Input";
+import { api } from "@/lib/apiClient";
 
 type AlunoForm = {
   email: string;
@@ -76,12 +77,11 @@ function Field({
       <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
         {label}
       </div>
-      <input
+      <Input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-200"
       />
     </div>
   );
@@ -164,35 +164,18 @@ export default function NovoAlunoPage() {
     setErrorMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
-        throw new Error("Sessão inválida. Faça login novamente.");
-      }
-
-      const res = await fetch("/api/admin/alunos", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const data = await api.post<{ uid?: string }>("/api/admin/alunos", {
+        email: form.email,
+        password: form.password,
+        active: form.active,
+        profile: {
+          name: form.profile.name,
+          document: form.profile.document,
+          phone: form.profile.phone,
+          cellphone: form.profile.cellphone,
+          address: form.profile.address,
         },
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-          active: form.active,
-          profile: {
-            name: form.profile.name,
-            document: form.profile.document,
-            phone: form.profile.phone,
-            cellphone: form.profile.cellphone,
-            address: form.profile.address,
-          },
-        }),
       });
-
-      const data = (await res.json()) as { ok: boolean; error?: string; uid?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível criar o aluno.");
-      }
 
       router.push(data.uid ? `/admin/alunos/${data.uid}` : "/admin/alunos");
     } catch (error) {

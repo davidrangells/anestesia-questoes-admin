@@ -3,8 +3,10 @@
 import AdminShell from "@/components/AdminShell";
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { auth } from "@/lib/firebase";
+import { api } from "@/lib/apiClient";
 import { buttonStyles } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 
 type ReportStatus = "aberto" | "resolvido" | "ignorado";
 
@@ -50,78 +52,6 @@ const PAGE_SIZE = 300;
 
 function cn(...xs: Array<string | false | undefined | null>) {
   return xs.filter(Boolean).join(" ");
-}
-
-function Badge({
-  children,
-  tone,
-  onClick,
-}: {
-  children: React.ReactNode;
-  tone: "blue" | "green" | "slate" | "amber" | "red";
-  onClick?: () => void;
-}) {
-  const cls =
-    tone === "blue"
-      ? "bg-blue-50 text-blue-700 border-blue-100"
-      : tone === "green"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-      : tone === "amber"
-      ? "bg-amber-50 text-amber-700 border-amber-100"
-      : tone === "red"
-      ? "bg-rose-50 text-rose-700 border-rose-100"
-      : "bg-slate-50 text-slate-700 border-slate-100";
-
-  return (
-    <span
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold select-none",
-        cls,
-        onClick ? "cursor-pointer hover:opacity-90" : ""
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Modal({
-  open,
-  title,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-5xl rounded-2xl border bg-white shadow-xl overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b">
-            <div className="min-w-0">
-              <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
-              <div className="text-xs text-slate-500">Clique fora para fechar</div>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
-            >
-              Fechar
-            </button>
-          </div>
-
-          <div className="p-5 max-h-[78vh] overflow-auto">{children}</div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ---------- Helpers (robustos para campos legados) ----------
@@ -201,26 +131,11 @@ export default function ErrosReportadosPage() {
   const fetchFirst = async () => {
     setLoading(true);
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch("/api/admin/erros-reportados", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
+      const data = await api.get<{
         items?: Report[];
         questionCache?: Record<string, QuestionMini>;
         userCache?: Record<string, { name?: string; email?: string }>;
-      };
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível carregar erros reportados.");
-      }
+      }>("/api/admin/erros-reportados");
 
       setItems(Array.isArray(data.items) ? data.items : []);
       setQuestionCache(
@@ -285,21 +200,7 @@ export default function ErrosReportadosPage() {
     setItems((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: nextStatus } : x)));
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch(`/api/admin/erros-reportados/${r.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível atualizar o status.");
-      }
+      await api.patch(`/api/admin/erros-reportados/${r.id}`, { status: nextStatus });
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
       await fetchFirst(); // rollback seguro

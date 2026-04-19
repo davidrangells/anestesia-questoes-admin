@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { api } from "@/lib/apiClient";
 
 type AssinaturaItem = {
   uid: string;
@@ -63,24 +63,7 @@ export default function AssinaturasPage() {
       setLoading(true);
       setErrorMsg(null);
       try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-        const res = await fetch("/api/admin/assinaturas", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = (await res.json()) as {
-          ok: boolean;
-          error?: string;
-          items?: AssinaturaItemWithSort[];
-        };
-
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Não foi possível carregar as assinaturas.");
-        }
+        const data = await api.get<{ items?: AssinaturaItemWithSort[] }>("/api/admin/assinaturas");
 
         if (active) {
           const rows = Array.isArray(data.items)
@@ -137,32 +120,17 @@ export default function AssinaturasPage() {
     setErrorMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch(`/api/admin/assinaturas/${item.uid}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          email: item.email === "—" ? "" : item.email,
-          active: nextStatus === "ativo",
-          pending: nextStatus === "pendente",
-          planId: item.planId,
-          productId: item.productId,
-          productTitle: item.productTitle,
-          invoiceStatus: item.invoiceStatus,
-          amountPaid: item.amountPaid,
-          validUntil: item.validUntilRaw,
-        }),
+      await api.patch(`/api/admin/assinaturas/${item.uid}`, {
+        email: item.email === "—" ? "" : item.email,
+        active: nextStatus === "ativo",
+        pending: nextStatus === "pendente",
+        planId: item.planId,
+        productId: item.productId,
+        productTitle: item.productTitle,
+        invoiceStatus: item.invoiceStatus,
+        amountPaid: item.amountPaid,
+        validUntil: item.validUntilRaw,
       });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível atualizar a assinatura.");
-      }
 
       setItems((prev) =>
         prev.map((current) =>

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { Input } from "@/components/ui/Input";
+import { api } from "@/lib/apiClient";
 
 type AlunoForm = {
   uid: string;
@@ -145,12 +146,11 @@ function Field({
       <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
         {label}
       </div>
-      <input
+      <Input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-200"
       />
     </div>
   );
@@ -205,29 +205,16 @@ export default function EditarAlunoPage() {
       setErrorMsg(null);
 
       try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) {
-          throw new Error("Sessão inválida. Faça login novamente.");
-        }
-
-        const res = await fetch(`/api/admin/alunos/${params.uid}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = (await res.json()) as {
-          ok: boolean;
-          error?: string;
+        const data = await api.get<{
           aluno?: {
             uid: string;
             user?: Record<string, unknown>;
             profile?: Record<string, unknown>;
           };
-        };
+        }>(`/api/admin/alunos/${params.uid}`);
 
-        if (!res.ok || !data.ok || !data.aluno) {
-          throw new Error(data.error || "Não foi possível carregar o aluno.");
+        if (!data.aluno) {
+          throw new Error("Não foi possível carregar o aluno.");
         }
 
         const user = data.aluno.user ?? {};
@@ -313,34 +300,17 @@ export default function EditarAlunoPage() {
     setSuccessMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
-        throw new Error("Sessão inválida. Faça login novamente.");
-      }
-
-      const res = await fetch(`/api/admin/alunos/${params.uid}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      await api.patch(`/api/admin/alunos/${params.uid}`, {
+        email: form.email,
+        password: form.password,
+        profile: {
+          name: form.profile.name,
+          document: cpfDigits(form.profile.document),
+          phone: form.profile.phone,
+          cellphone: form.profile.cellphone,
+          address: form.profile.address,
         },
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-          profile: {
-            name: form.profile.name,
-            document: cpfDigits(form.profile.document),
-            phone: form.profile.phone,
-            cellphone: form.profile.cellphone,
-            address: form.profile.address,
-          },
-        }),
       });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível salvar o aluno.");
-      }
 
       setForm((prev) => ({
         ...prev,
@@ -367,20 +337,7 @@ export default function EditarAlunoPage() {
     setSuccessMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch(`/api/admin/alunos/${params.uid}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível excluir o aluno.");
-      }
+      await api.delete(`/api/admin/alunos/${params.uid}`);
 
       router.replace("/admin/alunos");
     } catch (error) {
