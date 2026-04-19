@@ -1,4 +1,3 @@
-import { FileText } from "lucide-react";
 import CatalogManagerPage from "@/components/admin/CatalogManagerPage";
 
 export default function ProvasPage() {
@@ -11,7 +10,6 @@ export default function ProvasPage() {
       searchPlaceholder="Filtrar provas..."
       createLabel="Criar prova"
       emptyMessage="Nenhuma prova cadastrada."
-      emptyIcon={FileText}
     />
   );
 }

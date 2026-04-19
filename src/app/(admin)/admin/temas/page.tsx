@@ -1,4 +1,3 @@
-import { Tags } from "lucide-react";
 import CatalogManagerPage from "@/components/admin/CatalogManagerPage";
 
 export default function TemasPage() {
@@ -11,7 +10,6 @@ export default function TemasPage() {
       searchPlaceholder="Filtrar temas..."
       createLabel="Criar tema"
       emptyMessage="Nenhum tema cadastrado."
-      emptyIcon={Tags}
       showLevelColumn
     />
   );
