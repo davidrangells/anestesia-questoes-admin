@@ -4,7 +4,8 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { Input } from "@/components/ui/Input";
+import { api } from "@/lib/apiClient";
 
 export default function NovoAdministradorPage() {
   const [name, setName] = useState("");
@@ -43,26 +44,7 @@ export default function NovoAdministradorPage() {
     setSaving(true);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch("/api/admin/administradores", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
-      });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível criar o administrador.");
-      }
+      await api.post("/api/admin/administradores", { name, email, password });
 
       setSuccessMsg("Cadastro criado com sucesso.");
       setName("");
@@ -97,21 +79,19 @@ export default function NovoAdministradorPage() {
         <div className="grid gap-5 p-5 md:grid-cols-2">
           <label className="block md:col-span-2">
             <div className="mb-2 text-sm font-semibold text-slate-700">Nome</div>
-            <input
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
               placeholder="Nome do administrador"
             />
           </label>
 
           <label className="block">
             <div className="mb-2 text-sm font-semibold text-slate-700">E-mail</div>
-            <input
+            <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
               placeholder="admin@empresa.com"
             />
           </label>
@@ -120,22 +100,20 @@ export default function NovoAdministradorPage() {
 
           <label className="block">
             <div className="mb-2 text-sm font-semibold text-slate-700">Senha</div>
-            <input
+            <Input
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
               placeholder="Mínimo de 6 caracteres"
             />
           </label>
 
           <label className="block">
             <div className="mb-2 text-sm font-semibold text-slate-700">Confirmar senha</div>
-            <input
+            <Input
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               type="password"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
               placeholder="Repita a senha"
             />
           </label>

@@ -561,19 +561,19 @@ function RichTextEditor({
   };
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border bg-white">
-      <div className="border-b px-5 py-4">
-        <div className="text-sm font-extrabold text-slate-900">{label}</div>
-        {helper ? <div className="mt-1 text-xs text-slate-500">{helper}</div> : null}
+    <div className="min-w-0 overflow-hidden rounded-2xl border bg-white dark:bg-slate-900 dark:border-slate-700">
+      <div className="border-b dark:border-slate-700 px-5 py-4">
+        <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">{label}</div>
+        {helper ? <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helper}</div> : null}
       </div>
 
-      <div className="overflow-x-auto border-b bg-slate-50/70 px-3">
-        <div className="flex flex-wrap gap-x-1 gap-y-1 text-sm font-medium text-slate-700">
+      <div className="overflow-x-auto border-b dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 px-3">
+        <div className="flex flex-wrap gap-x-1 gap-y-1 text-sm font-medium text-slate-700 dark:text-slate-300">
           {["Editar", "Inserir", "Visualizar", "Formatar", "Tabela", "Ferramentas"].map((item) => (
             <button
               key={item}
               type="button"
-              className="rounded-xl px-3 py-3 transition hover:bg-white hover:text-slate-900"
+              className="rounded-xl px-3 py-3 transition hover:bg-white dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100"
             >
               {item}
             </button>
@@ -581,7 +581,7 @@ function RichTextEditor({
         </div>
       </div>
 
-      <div className="overflow-x-auto border-b bg-white px-3 py-3">
+      <div className="overflow-x-auto border-b dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("undo")}>
             ↶
@@ -592,7 +592,7 @@ function RichTextEditor({
           <select
             defaultValue="P"
             onChange={(event) => runCommand("formatBlock", event.target.value)}
-            className="min-h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+            className="min-h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
           >
             <option value="P">Parágrafo</option>
             <option value="H2">Título</option>
@@ -649,7 +649,7 @@ function RichTextEditor({
       <div className="p-5">
         {previewMode ? (
           <div
-            className="min-h-[220px] rounded-xl border bg-slate-50 p-4 text-sm [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-white [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
+            className="min-h-[220px] rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 text-sm [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-white [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
             dangerouslySetInnerHTML={{
               __html: value || `<p class="text-slate-400">${escapeHtml(placeholder || "Sem conteúdo.")}</p>`,
             }}
@@ -657,7 +657,7 @@ function RichTextEditor({
         ) : (
           <div className="relative">
             {!stripHtml(value) ? (
-              <div className="pointer-events-none absolute left-4 top-4 text-sm text-slate-400">
+              <div className="pointer-events-none absolute left-4 top-4 text-sm text-slate-400 dark:text-slate-500">
                 {placeholder || "Digite aqui..."}
               </div>
             ) : null}
@@ -668,7 +668,7 @@ function RichTextEditor({
               onInput={syncValue}
               onBlur={syncValue}
               onPaste={handlePaste}
-              className="min-h-[220px] rounded-xl border p-4 text-sm outline-none focus-within:ring-2 focus-within:ring-blue-200 [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-slate-50 [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
+              className="min-h-[220px] rounded-xl border dark:border-slate-700 p-4 text-sm dark:text-slate-100 outline-none focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-500/30 dark:bg-slate-900 [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-slate-50 [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
             />
           </div>
         )}
@@ -694,9 +694,9 @@ function Modal({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-slate-900/35 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-            <div className="text-lg font-black text-slate-900">{title}</div>
+        <div className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <div className="text-lg font-black text-slate-900 dark:text-slate-100">{title}</div>
             <Button type="button" variant="secondary" size="sm" onClick={onClose}>
               Fechar
             </Button>
@@ -1136,9 +1136,9 @@ export function QuestionEditorForm({
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
         <div className="min-w-0 space-y-6">
-          <div className="min-w-0 rounded-2xl border bg-white p-6">
-            <div className="text-sm font-bold text-slate-900">Enunciado</div>
-            <div className="mt-1 break-words text-xs text-slate-500">
+          <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100">Enunciado</div>
+            <div className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">
               Campo principal da questão. Compatível com prompt e prompt_text.
             </div>
 
@@ -1157,15 +1157,15 @@ export function QuestionEditorForm({
             </div>
 
             <div className="mt-4">
-              <div className="mb-1 text-xs font-semibold text-slate-600">Imagem do enunciado (opcional)</div>
+              <div className="mb-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Imagem do enunciado (opcional)</div>
               <input
                 value={form.imageUrl}
                 onChange={(event) => setForm((prev) => ({ ...prev, imageUrl: event.target.value }))}
                 placeholder="URL da imagem"
-                className="w-full rounded-xl border px-4 py-3 text-sm"
+                className="w-full rounded-xl border dark:border-slate-700 px-4 py-3 text-sm dark:bg-slate-900 dark:text-slate-100"
               />
 
-              <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+              <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800">
                 {uploading === "prompt" ? "Enviando..." : "Enviar imagem"}
                 <input
                   type="file"
@@ -1179,9 +1179,9 @@ export function QuestionEditorForm({
               </label>
 
               {form.imageUrl ? (
-                <div className="mt-4 rounded-xl border bg-slate-50 p-3">
+                <div className="mt-4 rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <div className="text-xs font-semibold text-slate-600">Tamanho da imagem: {form.promptImageWidth}%</div>
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Tamanho da imagem: {form.promptImageWidth}%</div>
                     <input
                       type="range"
                       min={20}
@@ -1208,9 +1208,9 @@ export function QuestionEditorForm({
             </div>
           </div>
 
-          <div className="min-w-0 rounded-2xl border bg-white p-6">
-            <div className="text-sm font-bold text-slate-900">Alternativas</div>
-            <div className="mt-1 text-xs text-slate-500">
+          <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100">Alternativas</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Cadastre as respostas e marque a correta. O formulário salva em estrutura aninhada e nas colunas A-D da importação.
             </div>
 
@@ -1219,9 +1219,9 @@ export function QuestionEditorForm({
                 const isCorrect = form.correctOptionId === option.id;
                 const isOptionalE = option.id === "E";
                 return (
-                  <div key={option.id} className="rounded-xl border p-4">
+                  <div key={option.id} className="rounded-xl border dark:border-slate-700 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="font-semibold">Alternativa {option.id}</div>
+                      <div className="font-semibold dark:text-slate-100">Alternativa {option.id}</div>
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         {isOptionalE ? (
                           <button
@@ -1237,7 +1237,7 @@ export function QuestionEditorForm({
                           onClick={() => setForm((prev) => ({ ...prev, correctOptionId: option.id }))}
                           className={cn(
                             "rounded-full px-3 py-1 text-xs font-bold",
-                            isCorrect ? "bg-emerald-600 text-white" : "bg-slate-100"
+                            isCorrect ? "bg-emerald-600 text-white" : "bg-slate-100 dark:bg-slate-700 dark:text-slate-100"
                           )}
                         >
                           {isCorrect ? "Correta" : "Marcar correta"}
@@ -1249,7 +1249,7 @@ export function QuestionEditorForm({
                       value={option.text}
                       onChange={(event) => setOption(option.id, { text: event.target.value })}
                       placeholder={`Texto da alternativa ${option.id}`}
-                      className="mt-3 min-h-[90px] w-full rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                      className="mt-3 min-h-[90px] w-full rounded-xl border dark:border-slate-700 p-3 text-sm dark:bg-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
                     />
 
                     <div className="mt-3 flex flex-col gap-3">
@@ -1257,10 +1257,10 @@ export function QuestionEditorForm({
                         value={option.imageUrl || ""}
                         onChange={(event) => setOption(option.id, { imageUrl: event.target.value })}
                         placeholder="URL da imagem da alternativa"
-                        className="rounded-xl border px-4 py-3 text-sm"
+                        className="rounded-xl border dark:border-slate-700 px-4 py-3 text-sm dark:bg-slate-900 dark:text-slate-100"
                       />
 
-                      <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                      <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800">
                         {uploading === option.id ? "Enviando..." : "Enviar imagem"}
                         <input
                           type="file"
@@ -1274,9 +1274,9 @@ export function QuestionEditorForm({
                       </label>
 
                       {option.imageUrl ? (
-                        <div className="rounded-xl border bg-slate-50 p-3">
+                        <div className="rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
                           <div className="mb-2 flex items-center justify-between gap-3">
-                            <div className="text-xs font-semibold text-slate-600">
+                            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                               Tamanho da imagem: {clampImageWidth(option.imageWidth, 100)}%
                             </div>
                             <input
@@ -1311,7 +1311,7 @@ export function QuestionEditorForm({
               <button
                 type="button"
                 onClick={addOptionalOptionE}
-                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Adicionar alternativa E
               </button>
@@ -1332,23 +1332,23 @@ export function QuestionEditorForm({
             />
           </div>
 
-          <div className="min-w-0 rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Referência</div>
-            <div className="mt-1 text-xs text-slate-500">
+          <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
+            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Referência</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Campo bibliográfico para rastrear a origem da questão.
             </div>
             <textarea
               value={form.reference}
               onChange={(event) => setForm((prev) => ({ ...prev, reference: event.target.value }))}
               placeholder="Livro, capítulo, artigo, banca, legislação..."
-              className="mt-3 min-h-[110px] w-full rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+              className="mt-3 min-h-[110px] w-full rounded-xl border dark:border-slate-700 p-3 text-sm dark:bg-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
             />
           </div>
         </div>
 
         <div className="min-w-0 space-y-6">
-          <div className="min-w-0 rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Metadados</div>
+          <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
+            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Metadados</div>
 
             <div className="mt-3 space-y-3">
               {catalogError ? (
@@ -1357,7 +1357,7 @@ export function QuestionEditorForm({
                 </div>
               ) : null}
               <div>
-                <div className="mb-1 text-xs font-semibold text-slate-600">Prova</div>
+                <div className="mb-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Prova</div>
                 <select
                   value={form.examId}
                   onChange={(event) => {
@@ -1368,7 +1368,7 @@ export function QuestionEditorForm({
                       examType: nextExam?.title || prev.examType,
                     }));
                   }}
-                  className="w-full rounded-xl border px-4 py-3 text-sm bg-white"
+                  className="w-full rounded-xl border px-4 py-3 text-sm bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
                 >
                   {catalogLoading && exams.length === 0 ? <option value="">Carregando...</option> : null}
                   {exams.map((option) => (
@@ -1380,7 +1380,7 @@ export function QuestionEditorForm({
               </div>
 
               <div>
-                <div className="mb-1 text-xs font-semibold text-slate-600">Ano da prova</div>
+                <div className="mb-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Ano da prova</div>
                 <input
                   value={form.examYear}
                   onChange={(event) =>
@@ -1390,12 +1390,12 @@ export function QuestionEditorForm({
                     }))
                   }
                   placeholder="2026"
-                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                  className="w-full rounded-xl border dark:border-slate-700 px-4 py-3 text-sm dark:bg-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
                 />
               </div>
 
               <div>
-                <div className="mb-1 text-xs font-semibold text-slate-600">Nível</div>
+                <div className="mb-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Nível</div>
                 <select
                   value={form.levelId}
                   onChange={(event) => {
@@ -1409,7 +1409,7 @@ export function QuestionEditorForm({
                       themes: [],
                     }));
                   }}
-                  className="w-full rounded-xl border px-4 py-3 text-sm bg-white"
+                  className="w-full rounded-xl border px-4 py-3 text-sm bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
                 >
                   {catalogLoading && levels.length === 0 ? <option value="">Carregando...</option> : null}
                   {levels.map((option) => (
@@ -1420,17 +1420,17 @@ export function QuestionEditorForm({
                 </select>
               </div>
 
-              <div className="rounded-2xl border bg-slate-50 p-4">
-                <div className="text-xs font-semibold text-slate-600">Rótulo gerado</div>
-                <div className="mt-1 text-sm font-bold text-slate-900">
+              <div className="rounded-2xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Rótulo gerado</div>
+                <div className="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">
                   {buildProofLabel(form.examType, form.examYear)}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-2xl border bg-slate-50 p-4">
+              <div className="flex items-center justify-between rounded-2xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
                 <div>
-                  <div className="text-sm font-extrabold text-slate-900">Status</div>
-                  <div className="text-xs text-slate-500">{form.isActive ? "Ativo" : "Inativo"}</div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Status</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{form.isActive ? "Ativo" : "Inativo"}</div>
                 </div>
                 <button
                   type="button"
@@ -1446,10 +1446,10 @@ export function QuestionEditorForm({
                 </button>
               </div>
 
-              <div className="flex items-center justify-between rounded-2xl border bg-slate-50 p-4">
+              <div className="flex items-center justify-between rounded-2xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
                 <div>
-                  <div className="text-sm font-extrabold text-slate-900">Alternativas embaralhadas</div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Alternativas embaralhadas</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
                     Ligado por padrão. Desative apenas para questões com ordem fixa.
                   </div>
                 </div>
@@ -1460,7 +1460,7 @@ export function QuestionEditorForm({
                     "rounded-full border px-3 py-2 text-xs font-extrabold",
                     form.shuffleOptions
                       ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-white text-slate-700"
+                      : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
                   )}
                 >
                   {form.shuffleOptions ? "● Ligado" : "○ Desligado"}
@@ -1469,15 +1469,15 @@ export function QuestionEditorForm({
             </div>
           </div>
 
-          <div className="min-w-0 rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Tema</div>
-            <div className="mt-1 text-xs text-slate-500">Selecione apenas temas já cadastrados.</div>
+          <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
+            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Tema</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Selecione apenas temas já cadastrados.</div>
 
             <div className="mt-3 flex min-w-0 gap-2">
               <select
                 value={selectedThemeId}
                 onChange={(event) => setSelectedThemeId(event.target.value)}
-                className="min-w-0 flex-1 rounded-xl border bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                className="min-w-0 flex-1 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
               >
                 <option value="">Selecione um tema</option>
                 {availableThemes.map((theme) => (
@@ -1503,7 +1503,7 @@ export function QuestionEditorForm({
             </div>
 
             <div className="mt-3">
-              <div className="mb-2 text-xs font-semibold text-slate-600">Temas cadastrados para o nível selecionado</div>
+              <div className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Temas cadastrados para o nível selecionado</div>
               <div className="flex flex-wrap gap-2">
                 {availableThemes.length ? (
                   availableThemes.map((theme) => {
@@ -1517,7 +1517,7 @@ export function QuestionEditorForm({
                           "rounded-full border px-3 py-1 text-xs font-semibold transition",
                           selected
                             ? "border-blue-200 bg-blue-50 text-blue-700"
-                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                         )}
                       >
                         {formatCatalogOptionLabel(theme)}
@@ -1525,7 +1525,7 @@ export function QuestionEditorForm({
                     );
                   })
                 ) : (
-                  <div className="text-xs text-slate-500">Nenhum tema cadastrado para este nível.</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum tema cadastrado para este nível.</div>
                 )}
               </div>
             </div>
@@ -1537,34 +1537,34 @@ export function QuestionEditorForm({
                     key={theme}
                     type="button"
                     onClick={() => removeTheme(theme)}
-                    className="rounded-full border bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    className="rounded-full border dark:border-slate-600 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                     title="Remover tema"
                   >
                     {theme} ✕
                   </button>
                 ))
               ) : (
-                <div className="text-xs text-slate-500">Nenhum tema adicionado.</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum tema adicionado.</div>
               )}
             </div>
           </div>
 
-          <div className="min-w-0 rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Nota interna</div>
-            <div className="mt-1 text-xs text-slate-500">
+          <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
+            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Nota interna</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Visível apenas internamente, não destinada ao aluno final.
             </div>
             <textarea
               value={form.internalNote}
               onChange={(event) => setForm((prev) => ({ ...prev, internalNote: event.target.value }))}
               placeholder="Observações do time, pendências, avisos..."
-              className="mt-3 min-h-[110px] w-full rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+              className="mt-3 min-h-[110px] w-full rounded-xl border dark:border-slate-700 p-3 text-sm dark:bg-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
             />
           </div>
 
-          <div className="min-w-0 rounded-2xl border bg-white p-5">
-            <div className="text-sm font-extrabold text-slate-900">Anexos do comentário</div>
-            <div className="mt-1 text-xs text-slate-500">
+          <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
+            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Anexos do comentário</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Use links ou envie arquivos para guardar material de apoio interno.
             </div>
 
@@ -1583,7 +1583,7 @@ export function QuestionEditorForm({
                 Adicionar link
               </Button>
 
-              <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+              <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800">
                 {uploading === "attachment" ? "Enviando..." : "Enviar arquivo"}
                 <input
                   type="file"
@@ -1601,7 +1601,7 @@ export function QuestionEditorForm({
                 form.commentAttachments.map((attachment) => (
                   <div
                     key={attachment.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2"
+                    className="flex items-center justify-between gap-3 rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2"
                   >
                     <a
                       href={attachment.url}
@@ -1622,7 +1622,7 @@ export function QuestionEditorForm({
                   </div>
                 ))
               ) : (
-                <div className="text-xs text-slate-500">Nenhum anexo adicionado.</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum anexo adicionado.</div>
               )}
             </div>
           </div>
@@ -1677,9 +1677,9 @@ export function QuestionEditorForm({
           />
 
           <div>
-            <div className="mb-3 text-base font-bold text-slate-900">Galeria de imagens</div>
+            <div className="mb-3 text-base font-bold text-slate-900 dark:text-slate-100">Galeria de imagens</div>
             {galleryLoading ? (
-              <div className="rounded-2xl border bg-slate-50 p-4 text-sm text-slate-500">Carregando galeria...</div>
+              <div className="rounded-2xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 text-sm text-slate-500 dark:text-slate-400">Carregando galeria...</div>
             ) : galleryItems.length ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {galleryItems.map((item) => (
@@ -1687,17 +1687,17 @@ export function QuestionEditorForm({
                     key={item.id}
                     type="button"
                     onClick={() => insertRichImage(item.url)}
-                    className="overflow-hidden rounded-2xl border text-left transition hover:border-blue-300 hover:shadow-sm"
+                    className="overflow-hidden rounded-2xl border dark:border-slate-700 text-left transition hover:border-blue-300 hover:shadow-sm dark:bg-slate-800"
                   >
                     <img src={item.url} alt={item.label || "Imagem da galeria"} className="h-40 w-full object-cover" />
-                    <div className="truncate px-3 py-2 text-sm font-medium text-slate-700">
+                    <div className="truncate px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                       {item.label || item.name || "Imagem"}
                     </div>
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl border bg-slate-50 p-4 text-sm text-slate-500">
+              <div className="rounded-2xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 text-sm text-slate-500 dark:text-slate-400">
                 Nenhuma imagem encontrada na galeria.
               </div>
             )}

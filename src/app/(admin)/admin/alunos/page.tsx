@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { buttonStyles } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { api } from "@/lib/apiClient";
 
 type AlunoListItem = {
   uid: string;
@@ -44,25 +44,7 @@ export default function AlunosPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch("/api/admin/alunos", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        items?: AlunoListItem[];
-      };
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível carregar os alunos.");
-      }
-
+      const data = await api.get<{ items?: AlunoListItem[] }>("/api/admin/alunos");
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os alunos.");
@@ -86,21 +68,7 @@ export default function AlunosPage() {
     setSuccessMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch(`/api/admin/alunos/${item.uid}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível excluir o aluno.");
-      }
-
+      await api.delete(`/api/admin/alunos/${item.uid}`);
       setItems((prev) => prev.filter((x) => x.uid !== item.uid));
       setSuccessMsg(`Aluno ${item.name} excluído com sucesso.`);
     } catch (error) {
@@ -116,24 +84,7 @@ export default function AlunosPage() {
     setSuccessMsg(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-      const res = await fetch("/api/admin/alunos/sync-eduzz", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          startDate: "2025-01-01T00:00:00.000Z",
-          endDate: new Date().toISOString(),
-        }),
-      });
-
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
+      const data = await api.post<{
         scanned?: number;
         imported?: number;
         createdUsers?: number;
@@ -168,11 +119,10 @@ export default function AlunosPage() {
             computedValidUntil?: string | null;
           } | null;
         };
-      };
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível sincronizar os alunos da Eduzz.");
-      }
+      }>("/api/admin/alunos/sync-eduzz", {
+        startDate: "2025-01-01T00:00:00.000Z",
+        endDate: new Date().toISOString(),
+      });
 
       const reasonParts = [
         (data.reasons?.blockedStatus ?? 0) > 0

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { buttonStyles } from "@/components/ui/Button";
-import { auth } from "@/lib/firebase";
+import { api } from "@/lib/apiClient";
 
 type FaturaItem = {
   uid: string;
@@ -54,24 +54,7 @@ export default function FaturasPage() {
       setErrorMsg(null);
 
       try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) throw new Error("Sessão inválida. Faça login novamente.");
-
-        const res = await fetch("/api/admin/faturas", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = (await res.json()) as {
-          ok: boolean;
-          error?: string;
-          items?: FaturaItem[];
-        };
-
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Não foi possível carregar as faturas.");
-        }
+        const data = await api.get<{ items?: FaturaItem[] }>("/api/admin/faturas");
 
         if (active) setItems(data.items ?? []);
       } catch (error) {
