@@ -1,3 +1,4 @@
+import { BookOpen } from "lucide-react";
 import CatalogManagerPage from "@/components/admin/CatalogManagerPage";
 
 export default function NiveisPage() {
@@ -9,7 +10,8 @@ export default function NiveisPage() {
       subtitle="Cadastre os níveis acadêmicos usados na classificação das questões."
       searchPlaceholder="Filtrar níveis..."
       createLabel="Criar nível"
-      emptyMessage="Nenhum nível encontrado."
+      emptyMessage="Nenhum nível cadastrado."
+      emptyIcon={BookOpen}
     />
   );
 }

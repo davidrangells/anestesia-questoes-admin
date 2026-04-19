@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -20,7 +21,7 @@ const variantStyles: Record<ButtonVariant, string> = {
   ghost:
     "border border-transparent bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50",
   danger:
-    "border border-rose-600 bg-rose-600 text-white hover:bg-rose-700 hover:border-rose-700",
+    "border border-rose-600 bg-rose-600 text-white hover:bg-rose-700 hover:border-rose-700 dark:border-rose-500 dark:bg-rose-600 dark:hover:bg-rose-700",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -43,21 +44,26 @@ export function buttonStyles({
 }
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
-  ButtonStyleOptions;
+  ButtonStyleOptions & {
+    loading?: boolean;
+  };
 
-export function Button({
-  className,
-  variant,
-  size,
-  block,
-  type = "button",
-  ...props
-}: ButtonProps) {
-  return (
-    <button
-      type={type}
-      className={cn(buttonStyles({ variant, size, block }), className)}
-      {...props}
-    />
-  );
-}
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  function Button(
+    { className, variant, size, block, loading, disabled, type = "button", children, ...props },
+    ref
+  ) {
+    return (
+      <button
+        ref={ref}
+        type={type}
+        disabled={disabled || loading}
+        className={cn(buttonStyles({ variant, size, block }), className)}
+        {...props}
+      >
+        {loading && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+        {children}
+      </button>
+    );
+  }
+);

@@ -31,10 +31,12 @@
     "@tiptap/starter-kit": "^3.22.4",
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",
+    "lucide-react": "^1.8.0",
     "next": "^15.5.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "resend": "^6.9.2",
+    "sonner": "^2.0.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
