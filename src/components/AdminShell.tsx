@@ -3,10 +3,12 @@
 
 import React from "react";
 import { cn } from "@/lib/cn";
+import { Breadcrumb, type BreadcrumbItem } from "@/components/ui/Breadcrumb";
 
 type AdminShellProps = {
   title?: string;
   subtitle?: string;
+  breadcrumb?: BreadcrumbItem[];
   actions?: React.ReactNode;
   children: React.ReactNode;
 };
@@ -14,6 +16,7 @@ type AdminShellProps = {
 export default function AdminShell({
   title,
   subtitle,
+  breadcrumb,
   actions,
   children,
 }: AdminShellProps) {
@@ -22,6 +25,9 @@ export default function AdminShell({
       {/* Topbar */}
       <div className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/80 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/80">
         <div className="px-4 py-4 pl-24 sm:px-6 sm:pl-24 lg:px-10 lg:pl-10">
+          {breadcrumb && breadcrumb.length > 0 && (
+            <Breadcrumb items={breadcrumb} className="mb-2" />
+          )}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               {title ? (
@@ -48,7 +54,6 @@ export default function AdminShell({
 
       {/* Conteúdo */}
       <div className="overflow-x-hidden px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
-        {/* Esse container é o “segredo” para não colar no sidebar e não esticar demais em telas grandes */}
         <div className="w-full max-w-[1200px] min-w-0">
           {children}
         </div>

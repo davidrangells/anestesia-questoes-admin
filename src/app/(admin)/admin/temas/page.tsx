@@ -1,3 +1,4 @@
+import { Tags } from "lucide-react";
 import CatalogManagerPage from "@/components/admin/CatalogManagerPage";
 
 export default function TemasPage() {
@@ -6,10 +7,11 @@ export default function TemasPage() {
       entity="temas"
       title="Temas"
       singularLabel="tema"
-      subtitle="Cadastre os temas que serão usados nas questões e relacione-os com um nível."
+      subtitle="Cadastre os temas das questões e relacione-os com um nível."
       searchPlaceholder="Filtrar temas..."
       createLabel="Criar tema"
-      emptyMessage="Nenhum tema encontrado."
+      emptyMessage="Nenhum tema cadastrado."
+      emptyIcon={Tags}
       showLevelColumn
     />
   );

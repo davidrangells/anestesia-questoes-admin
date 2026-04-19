@@ -2,8 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Plus, RefreshCw, Search, Pencil, Trash2, Users } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
-import { buttonStyles } from "@/components/ui/Button";
+import { Button, buttonStyles } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { TableRowSkeleton } from "@/components/ui/Skeleton";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { api } from "@/lib/apiClient";
 
 type AlunoListItem = {
@@ -17,62 +23,44 @@ type AlunoListItem = {
   active: boolean;
 };
 
-function StatusBadge({ active }: { active: boolean }) {
-  return (
-    <span
-      className={
-        active
-          ? "inline-flex rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-800 dark:border-emerald-200/90 dark:bg-emerald-200 dark:text-emerald-950"
-          : "inline-flex rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-800 dark:border-amber-200/90 dark:bg-amber-200 dark:text-amber-950"
-      }
-    >
-      {active ? "ativo" : "pendente"}
-    </span>
-  );
-}
-
 export default function AlunosPage() {
   const [items, setItems] = useState<AlunoListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const { dialog: confirmDialog, confirm } = useConfirm();
 
   const load = async () => {
     setLoading(true);
-    setErrorMsg(null);
     try {
       const data = await api.get<{ items?: AlunoListItem[] }>("/api/admin/alunos");
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Não foi possível carregar os alunos.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível carregar os alunos.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    void load();
-  }, []);
+  useEffect(() => { void load(); }, []);
 
   const onDeleteAluno = async (item: AlunoListItem) => {
-    const ok = window.confirm(
-      `Excluir o aluno ${item.name} (${item.email})?\n\nEssa ação remove autenticação e dados do aluno e não pode ser desfeita.`
-    );
+    const ok = await confirm({
+      title: `Excluir aluno "${item.name}"?`,
+      description: "Essa ação remove autenticação e todos os dados do aluno e não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      variant: "danger",
+    });
     if (!ok) return;
 
     setDeletingUid(item.uid);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
     try {
       await api.delete(`/api/admin/alunos/${item.uid}`);
       setItems((prev) => prev.filter((x) => x.uid !== item.uid));
-      setSuccessMsg(`Aluno ${item.name} excluído com sucesso.`);
+      toast.success(`Aluno ${item.name} excluído com sucesso.`);
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Não foi possível excluir o aluno.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível excluir o aluno.");
     } finally {
       setDeletingUid(null);
     }
@@ -80,84 +68,23 @@ export default function AlunosPage() {
 
   const syncEduzz = async () => {
     setSyncing(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
+    const toastId = toast.loading("Sincronizando com Eduzz...");
     try {
       const data = await api.post<{
-        scanned?: number;
-        imported?: number;
-        createdUsers?: number;
-        updatedUsers?: number;
-        skipped?: number;
-        reasons?: {
-          blockedStatus?: number;
-          withoutPaidInvoice?: number;
-          expired?: number;
-          withoutDate?: number;
-          usedSubscriptionDateFallback?: number;
-        };
-        addressCoverage?: {
-          withAddress?: number;
-          withoutAddress?: number;
-          sampleWithoutAddressEmails?: string[];
-        };
-        debug?: {
-          firstExpired?: {
-            subscriptionId?: string | null;
-            subscriptionStatus?: string | null;
-            subscriptionCreatedAt?: string | null;
-            subscriptionUpdatedAt?: string | null;
-            subscriptionExplicitValidUntil?: string | null;
-            latestPaidId?: string | null;
-            latestPaidStatus?: string | null;
-            latestPaidAt?: string | null;
-            latestInvoiceCreatedAt?: string | null;
-            latestInvoiceDueAt?: string | null;
-            latestInvoiceAmountPaid?: number | null;
-            computedBaseDate?: string | null;
-            computedValidUntil?: string | null;
-          } | null;
-        };
+        imported?: number; createdUsers?: number; updatedUsers?: number; skipped?: number;
+        reasons?: { blockedStatus?: number; withoutPaidInvoice?: number; expired?: number; withoutDate?: number };
       }>("/api/admin/alunos/sync-eduzz", {
         startDate: "2025-01-01T00:00:00.000Z",
         endDate: new Date().toISOString(),
       });
 
-      const reasonParts = [
-        (data.reasons?.blockedStatus ?? 0) > 0
-          ? `${data.reasons?.blockedStatus ?? 0} bloqueado(s) por estorno/chargeback`
-          : null,
-        (data.reasons?.withoutPaidInvoice ?? 0) > 0
-          ? `${data.reasons?.withoutPaidInvoice ?? 0} sem fatura paga reconhecida`
-          : null,
-        (data.reasons?.expired ?? 0) > 0
-          ? `${data.reasons?.expired ?? 0} vencido(s)`
-          : null,
-        (data.reasons?.withoutDate ?? 0) > 0
-          ? `${data.reasons?.withoutDate ?? 0} sem data base`
-          : null,
-        (data.reasons?.usedSubscriptionDateFallback ?? 0) > 0
-          ? `${data.reasons?.usedSubscriptionDateFallback ?? 0} usando data da assinatura`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" | ");
-
-      const firstExpired = data.debug?.firstExpired;
-      const debugPart =
-        firstExpired && (data.reasons?.expired ?? 0) > 0
-          ? ` Exemplo vencido: assinatura ${firstExpired.subscriptionId ?? "—"} (status ${firstExpired.subscriptionStatus ?? "—"}), base ${firstExpired.computedBaseDate ?? "—"}, validade ${firstExpired.computedValidUntil ?? "—"}, última fatura ${firstExpired.latestPaidStatus ?? "—"} em ${firstExpired.latestPaidAt ?? firstExpired.latestInvoiceCreatedAt ?? firstExpired.latestInvoiceDueAt ?? "—"}.`
-          : "";
-
-      setSuccessMsg(
-        `Sincronização concluída com sucesso. ${data.imported ?? 0} aluno(s) importado(s), ${data.createdUsers ?? 0} criado(s), ${data.updatedUsers ?? 0} atualizado(s), ${data.skipped ?? 0} ignorado(s).${reasonParts ? ` Motivos: ${reasonParts}.` : ""}${debugPart}${(data.addressCoverage?.withoutAddress ?? 0) > 0 ? ` Endereço: ${data.addressCoverage?.withAddress ?? 0} com endereço, ${data.addressCoverage?.withoutAddress ?? 0} sem endereço${(data.addressCoverage?.sampleWithoutAddressEmails?.length ?? 0) > 0 ? ` (ex.: ${(data.addressCoverage?.sampleWithoutAddressEmails ?? []).join(", ")})` : ""}.` : ""}`
+      toast.success(
+        `${data.imported ?? 0} importado(s) · ${data.createdUsers ?? 0} criado(s) · ${data.updatedUsers ?? 0} atualizado(s) · ${data.skipped ?? 0} ignorado(s)`,
+        { id: toastId, description: "Sincronização Eduzz concluída" }
       );
       await load();
     } catch (error) {
-      setErrorMsg(
-        error instanceof Error ? error.message : "Não foi possível sincronizar os alunos da Eduzz."
-      );
+      toast.error(error instanceof Error ? error.message : "Não foi possível sincronizar com Eduzz.", { id: toastId });
     } finally {
       setSyncing(false);
     }
@@ -166,124 +93,105 @@ export default function AlunosPage() {
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     if (!s) return items;
-
     return items.filter((item) =>
-      [item.code, item.name, item.cpf, item.cellphone, item.email]
-        .join(" ")
-        .toLowerCase()
-        .includes(s)
+      [item.code, item.name, item.cpf, item.cellphone, item.email].join(" ").toLowerCase().includes(s)
     );
   }, [items, search]);
 
   return (
     <AdminShell
       title="Alunos"
-      subtitle="Listagem dos alunos sincronizados via Eduzz e dados complementares do portal."
+      subtitle={`${loading ? "Carregando..." : `${items.length.toLocaleString("pt-BR")} aluno(s) cadastrado(s)`}`}
       actions={
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
-          <div className="relative w-full md:w-[340px]">
-            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              ⌕
-            </span>
+          {/* Search */}
+          <div className="relative w-full md:w-72">
+            <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filtrar resultados..."
-              className="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-200"
+              placeholder="Filtrar por nome, CPF, e-mail..."
+              aria-label="Filtrar alunos"
+              className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-600 dark:focus:ring-blue-900"
             />
           </div>
 
-          <button
-            type="button"
-            onClick={() => void syncEduzz()}
-            disabled={syncing}
-            className={buttonStyles({ variant: "secondary" })}
-          >
-            {syncing ? "Sincronizando..." : "Sincronizar Eduzz"}
-          </button>
+          <Button variant="secondary" onClick={() => void syncEduzz()} loading={syncing}>
+            <RefreshCw size={15} aria-hidden="true" />
+            Sincronizar Eduzz
+          </Button>
 
           <Link href="/admin/alunos/novo" className={buttonStyles({ variant: "primary" })}>
-            Criar
+            <Plus size={15} aria-hidden="true" /> Criar aluno
           </Link>
         </div>
       }
     >
-      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-5">
-          <div className="text-2xl font-black text-slate-900">Alunos</div>
-          <div className="mt-1 text-sm text-slate-500">
-            {loading
-              ? "Carregando..."
-              : `${filtered.length} ${filtered.length === 1 ? "aluno encontrado" : "alunos encontrados"}`}
-          </div>
-          {errorMsg ? (
-            <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {errorMsg}
-            </div>
-          ) : null}
-          {successMsg ? (
-            <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              {successMsg}
-            </div>
-          ) : null}
-        </div>
+      {confirmDialog}
 
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="overflow-x-auto">
-          <table className="min-w-[920px] w-full text-sm">
-            <thead className="border-b bg-slate-100/80 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+          <table className="min-w-[860px] w-full text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
               <tr>
-                <th className="px-5 py-4 text-left">Cód.</th>
-                <th className="px-5 py-4 text-left">Criado em</th>
-                <th className="px-5 py-4 text-left">Nome</th>
-                <th className="px-5 py-4 text-left">CPF</th>
-                <th className="px-5 py-4 text-left">Celular</th>
-                <th className="px-5 py-4 text-left">Status</th>
-                <th className="px-5 py-4 text-right">Ações</th>
+                {["Cód.", "Criado em", "Nome / E-mail", "CPF", "Celular", "Status", ""].map((h) => (
+                  <th key={h} className={`px-5 py-3.5 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 ${h === "" ? "text-right" : "text-left"}`}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-200">
-              {!loading && filtered.length === 0 ? (
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {loading ? (
+                <TableRowSkeleton cols={7} rows={6} />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
-                    Nenhum aluno encontrado.
+                  <td colSpan={7}>
+                    <EmptyState
+                      icon={Users}
+                      title={search ? "Nenhum aluno encontrado" : "Nenhum aluno cadastrado"}
+                      description={search ? "Tente outros termos de busca." : "Crie o primeiro aluno para começar."}
+                      action={
+                        !search
+                          ? <Link href="/admin/alunos/novo" className={buttonStyles({ variant: "primary", size: "sm" })}><Plus size={13} /> Criar aluno</Link>
+                          : undefined
+                      }
+                    />
                   </td>
                 </tr>
-              ) : null}
-
-              {filtered.map((item) => (
-                <tr key={item.uid} className="hover:bg-slate-50/70">
-                  <td className="px-5 py-5 text-lg font-semibold text-slate-600">{item.code}</td>
-                  <td className="px-5 py-5 text-slate-500">{item.createdAt}</td>
-                  <td className="px-5 py-5">
-                    <div className="font-semibold text-slate-800">{item.name}</div>
-                    <div className="mt-1 text-xs text-slate-500">{item.email}</div>
-                  </td>
-                  <td className="px-5 py-5 text-slate-600">{item.cpf}</td>
-                  <td className="px-5 py-5 text-slate-600">{item.cellphone}</td>
-                  <td className="px-5 py-5">
-                    <StatusBadge active={item.active} />
-                  </td>
-                  <td className="px-5 py-5">
-                    <div className="flex justify-end gap-2">
-                      <Link
-                        href={`/admin/alunos/${item.uid}`}
-                        className={buttonStyles({ variant: "primary", size: "sm" })}
-                      >
-                        Editar
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => void onDeleteAluno(item)}
-                        disabled={deletingUid === item.uid}
-                        className={buttonStyles({ variant: "danger", size: "sm" })}
-                      >
-                        {deletingUid === item.uid ? "Excluindo..." : "Excluir"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              ) : (
+                filtered.map((item) => (
+                  <tr key={item.uid} className="transition hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                    <td className="px-5 py-4 font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">{item.code}</td>
+                    <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{item.createdAt}</td>
+                    <td className="px-5 py-4">
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">{item.email}</div>
+                    </td>
+                    <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{item.cpf}</td>
+                    <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{item.cellphone}</td>
+                    <td className="px-5 py-4">
+                      <Badge tone={item.active ? "emerald" : "amber"}>{item.active ? "ativo" : "pendente"}</Badge>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/admin/alunos/${item.uid}`} className={buttonStyles({ variant: "secondary", size: "sm" })}>
+                          <Pencil size={13} aria-hidden="true" /> Editar
+                        </Link>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => void onDeleteAluno(item)}
+                          loading={deletingUid === item.uid}
+                        >
+                          <Trash2 size={13} aria-hidden="true" /> Excluir
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
