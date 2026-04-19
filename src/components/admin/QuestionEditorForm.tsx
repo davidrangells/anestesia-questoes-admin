@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { auth } from "@/lib/firebase";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RichTextEditor } from "@/components/admin/RichTextEditor";
 
 export type QuestionOption = {
   id: "A" | "B" | "C" | "D" | "E";
@@ -104,150 +105,11 @@ type QuestionEditorFormProps = {
   onDelete?: () => Promise<void> | void;
 };
 
-type RichTextEditorProps = {
-  label: string;
-  helper?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (value: string) => void;
-  onRequestImage: () => void;
-  pendingImageUrl?: string | null;
-  onPendingImageHandled: () => void;
-  imageAlt?: string;
-};
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 function stripHtml(value: string) {
   return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function normalizePastedPlainText(text: string) {
-  const normalized = text.replace(/\r\n?/g, "\n").trim();
-  if (!normalized) return "";
 
-  const paragraphMargin = "margin:0 0 1rem 0;";
-  const paragraphs = normalized
-    .split(/\n{2,}/)
-    .map((paragraph) =>
-      paragraph
-        .replace(/\n{2,}/g, "\n")
-        .split("\n")
-        .map((line) => escapeHtml(line))
-        .join("<br>")
-    )
-    .filter(Boolean);
-
-  return paragraphs.map((paragraph) => `<p style="${paragraphMargin}">${paragraph}</p>`).join("");
-}
-
-function hasBlockMarkup(value: string) {
-  return /<(p|br|ul|ol|li|div|table|blockquote|h[1-6]|pre)\b/i.test(value);
-}
-
-function sanitizePastedHtml(html: string) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const allowedTags = new Set([
-    "a",
-    "b",
-    "blockquote",
-    "br",
-    "code",
-    "em",
-    "h2",
-    "h3",
-    "hr",
-    "i",
-    "li",
-    "ol",
-    "p",
-    "pre",
-    "strong",
-    "u",
-    "ul",
-    "img",
-    "span",
-  ]);
-
-  const blockedTags = ["script", "style", "iframe", "object", "embed", "meta", "link"];
-  blockedTags.forEach((tag) => {
-    doc.querySelectorAll(tag).forEach((node) => node.remove());
-  });
-
-  const nodes = Array.from(doc.body.querySelectorAll("*"));
-  nodes.forEach((node) => {
-    const tag = node.tagName.toLowerCase();
-
-    if (!allowedTags.has(tag)) {
-      const fragment = doc.createDocumentFragment();
-      while (node.firstChild) {
-        fragment.appendChild(node.firstChild);
-      }
-      node.replaceWith(fragment);
-      return;
-    }
-
-    Array.from(node.attributes).forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      if (name.startsWith("on")) {
-        node.removeAttribute(attr.name);
-        return;
-      }
-      if (tag === "a" && name === "href") return;
-      if (tag === "img" && (name === "src" || name === "alt")) return;
-      if (name === "style") return;
-      node.removeAttribute(attr.name);
-    });
-
-    if (tag === "a") {
-      const href = (node.getAttribute("href") || "").trim();
-      const isSafeHref =
-        href.startsWith("http://") ||
-        href.startsWith("https://") ||
-        href.startsWith("mailto:") ||
-        href.startsWith("tel:");
-      if (!isSafeHref) {
-        node.removeAttribute("href");
-      } else {
-        node.setAttribute("target", "_blank");
-        node.setAttribute("rel", "noreferrer");
-      }
-    }
-
-    if (tag === "img") {
-      const src = (node.getAttribute("src") || "").trim();
-      const isSafeSrc =
-        src.startsWith("http://") ||
-        src.startsWith("https://") ||
-        src.startsWith("data:image/");
-      if (!isSafeSrc) {
-        node.remove();
-      }
-    }
-  });
-
-  const sanitizedHtml = doc.body.innerHTML.trim();
-
-  // Alguns apps (ex.: Bloco de Notas em certos navegadores) enviam "HTML"
-  // sem tags de bloco, só com quebras de linha no texto. Nesse caso, converte
-  // para parágrafos/linhas para não colar tudo junto.
-  if (!hasBlockMarkup(sanitizedHtml)) {
-    const textFromHtml = (doc.body.innerText || doc.body.textContent || "").trim();
-    if (textFromHtml) {
-      return normalizePastedPlainText(textFromHtml);
-    }
-  }
-
-  return sanitizedHtml;
-}
 
 export function buildProofLabel(examType: string, examYear: string) {
   const normalizedType = examType.trim();
@@ -479,202 +341,6 @@ function formatCatalogOptionLabel(option: QuestionCatalogOption) {
     return `${option.title} (inativo)`;
   }
   return option.title;
-}
-
-function RichTextEditor({
-  label,
-  helper,
-  placeholder,
-  value,
-  onChange,
-  onRequestImage,
-  pendingImageUrl,
-  onPendingImageHandled,
-  imageAlt,
-}: RichTextEditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const [previewMode, setPreviewMode] = useState(false);
-
-  useEffect(() => {
-    if (!editorRef.current) return;
-    if (editorRef.current.innerHTML === value) return;
-    editorRef.current.innerHTML = value;
-  }, [value]);
-
-  useEffect(() => {
-    if (!pendingImageUrl || !editorRef.current) return;
-    editorRef.current.focus();
-    document.execCommand(
-      "insertHTML",
-      false,
-      `<img src="${escapeHtml(pendingImageUrl)}" alt="${escapeHtml(imageAlt || "Imagem adicionada")}" />`
-    );
-    onChange(editorRef.current.innerHTML ?? "");
-    onPendingImageHandled();
-  }, [onChange, onPendingImageHandled, pendingImageUrl]);
-
-  const syncValue = () => {
-    onChange(editorRef.current?.innerHTML ?? "");
-  };
-
-  const runCommand = (command: string, commandValue?: string) => {
-    editorRef.current?.focus();
-    document.execCommand(command, false, commandValue);
-    syncValue();
-  };
-
-  const insertLink = () => {
-    const url = window.prompt("Cole a URL do link");
-    if (!url?.trim()) return;
-
-    const labelText = window.prompt("Texto do link (opcional)")?.trim() || url.trim();
-    runCommand(
-      "insertHTML",
-      `<a href="${escapeHtml(url.trim())}" target="_blank" rel="noreferrer">${escapeHtml(labelText)}</a>`
-    );
-  };
-
-  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
-    event.preventDefault();
-
-    const html = event.clipboardData.getData("text/html");
-    const text = event.clipboardData.getData("text/plain");
-    const plainHasLineBreaks = /\r?\n/.test(text);
-    const htmlHasRichFormatting =
-      /<(strong|b|em|i|u|a|img|ul|ol|li|table|h[1-6]|blockquote|pre|code)\b/i.test(html);
-
-    let payload = "";
-    if (plainHasLineBreaks && !htmlHasRichFormatting) {
-      // Prioriza o texto puro quando vier de fontes como Bloco de Notas
-      // para preservar quebras/paragraphos de forma consistente.
-      payload = normalizePastedPlainText(text);
-    } else if (html) {
-      payload = sanitizePastedHtml(html);
-    } else if (text) {
-      payload = normalizePastedPlainText(text);
-    }
-
-    if (payload) {
-      document.execCommand("insertHTML", false, payload);
-      syncValue();
-    }
-  };
-
-  return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border bg-white dark:bg-slate-900 dark:border-slate-700">
-      <div className="border-b dark:border-slate-700 px-5 py-4">
-        <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">{label}</div>
-        {helper ? <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helper}</div> : null}
-      </div>
-
-      <div className="overflow-x-auto border-b dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 px-3">
-        <div className="flex flex-wrap gap-x-1 gap-y-1 text-sm font-medium text-slate-700 dark:text-slate-300">
-          {["Editar", "Inserir", "Visualizar", "Formatar", "Tabela", "Ferramentas"].map((item) => (
-            <button
-              key={item}
-              type="button"
-              className="rounded-xl px-3 py-3 transition hover:bg-white dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100"
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="overflow-x-auto border-b dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("undo")}>
-            ↶
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("redo")}>
-            ↷
-          </Button>
-          <select
-            defaultValue="P"
-            onChange={(event) => runCommand("formatBlock", event.target.value)}
-            className="min-h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
-          >
-            <option value="P">Parágrafo</option>
-            <option value="H2">Título</option>
-            <option value="H3">Subtítulo</option>
-            <option value="BLOCKQUOTE">Citação</option>
-          </select>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("bold")}>
-            B
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("italic")}>
-            I
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyLeft")}>
-            ⬅
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyCenter")}>
-            ☰
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyRight")}>
-            ➡
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("justifyFull")}>
-            ≣
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("insertUnorderedList")}>
-            • Lista
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("insertOrderedList")}>
-            1. Lista
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("outdent")}>
-            ⟵
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => runCommand("indent")}>
-            ⟶
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={insertLink}>
-            🔗
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={onRequestImage}>
-            🖼
-          </Button>
-          <Button
-            type="button"
-            variant={previewMode ? "primary" : "secondary"}
-            size="sm"
-            onClick={() => setPreviewMode((prev) => !prev)}
-          >
-            ▶
-          </Button>
-        </div>
-      </div>
-
-      <div className="p-5">
-        {previewMode ? (
-          <div
-            className="min-h-[220px] rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 text-sm [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-white [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
-            dangerouslySetInnerHTML={{
-              __html: value || `<p class="text-slate-400">${escapeHtml(placeholder || "Sem conteúdo.")}</p>`,
-            }}
-          />
-        ) : (
-          <div className="relative">
-            {!stripHtml(value) ? (
-              <div className="pointer-events-none absolute left-4 top-4 text-sm text-slate-400 dark:text-slate-500">
-                {placeholder || "Digite aqui..."}
-              </div>
-            ) : null}
-            <div
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              onInput={syncValue}
-              onBlur={syncValue}
-              onPaste={handlePaste}
-              className="min-h-[220px] rounded-xl border dark:border-slate-700 p-4 text-sm dark:text-slate-100 outline-none focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-500/30 dark:bg-slate-900 [&_img]:max-h-[220px] [&_img]:rounded-xl [&_img]:border [&_img]:bg-slate-50 [&_img]:object-contain [&_img]:p-1 [&_a]:text-blue-700 [&_a]:underline"
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function Modal({
@@ -1150,7 +816,7 @@ export function QuestionEditorForm({
                 placeholder="Digite o enunciado completo da questão..."
                 value={form.prompt}
                 onRequestImage={() => void openRichImageModal("prompt")}
-                pendingImageUrl={pendingPromptImageUrl}
+                pendingImageUrl={pendingPromptImageUrl ?? undefined}
                 onPendingImageHandled={() => setPendingPromptImageUrl(null)}
                 onChange={(value) => setForm((prev) => ({ ...prev, prompt: value }))}
                 imageAlt="Imagem adicionada no enunciado"
@@ -1326,7 +992,7 @@ export function QuestionEditorForm({
               placeholder="Escreva o comentário interno/pedagógico da questão..."
               value={form.explanation}
               onRequestImage={() => void openRichImageModal("explanation")}
-              pendingImageUrl={pendingExplanationImageUrl}
+              pendingImageUrl={pendingExplanationImageUrl ?? undefined}
               onPendingImageHandled={() => setPendingExplanationImageUrl(null)}
               onChange={(value) => setForm((prev) => ({ ...prev, explanation: value }))}
               imageAlt="Imagem adicionada no comentário"
