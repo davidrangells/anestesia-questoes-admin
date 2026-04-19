@@ -163,7 +163,26 @@ function explanationHasMeaningfulText(value: unknown) {
     .replace(/&gt;/gi, ">")
     .replace(/\s+/g, " ")
     .trim();
-  return text.length > 0;
+  if (!text.length) return false;
+
+  const normalized = text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  // Placeholders não contam como comentário real.
+  if (
+    normalized === "em breve estara disponivel" ||
+    normalized === "em breve estará disponível" ||
+    normalized === "em breve comentario disponivel" ||
+    normalized === "comentario em breve" ||
+    normalized === "sem comentario"
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function toMillis(value: unknown) {
