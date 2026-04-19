@@ -150,6 +150,75 @@ function sanitizePastedHtml(html: string): string {
 }
 
 /**
+ * Normaliza HTML já salvo no banco: remove parágrafos vazios excessivos,
+ * itens de lista vazios e mescla listas adjacentes do mesmo tipo.
+ * NÃO remove formatação (negrito, itálico, etc.).
+ */
+function normalizeStoredHtml(html: string): string {
+  if (!html) return html;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  // Remove <li> que só têm conteúdo vazio (<p></p> ou <p><br></p>)
+  doc.querySelectorAll("li").forEach((li) => {
+    const hasText = (li.textContent ?? "").trim().length > 0;
+    const hasImage = !!li.querySelector("img");
+    if (!hasText && !hasImage) li.remove();
+  });
+
+  // Mescla listas adjacentes do mesmo tipo (ul+ul / ol+ol) separadas por <p> vazio
+  // Ex.: <ul><li>A</li></ul><p></p><ul><li>B</li></ul> → <ul><li>A</li><li>B</li></ul>
+  Array.from(doc.body.children).forEach((el) => {
+    const tag = el.tagName;
+    if (tag !== "UL" && tag !== "OL") return;
+    let next = el.nextElementSibling;
+    // Pula parágrafos vazios
+    while (next && next.tagName === "P" && !(next.textContent ?? "").trim()) {
+      const toRemove = next;
+      next = next.nextElementSibling;
+      toRemove.remove();
+    }
+    // Mescla lista adjacente do mesmo tipo
+    if (next && next.tagName === tag) {
+      while (next.firstChild) el.appendChild(next.firstChild);
+      next.remove();
+    }
+  });
+
+  // Colapsa parágrafos vazios consecutivos: máximo 1 seguido
+  // (inclui <p></p> e <p><br></p>)
+  let emptyRun = 0;
+  Array.from(doc.body.children).forEach((child) => {
+    const isEmpty =
+      child.tagName === "P" &&
+      !(child.textContent ?? "").trim() &&
+      !child.querySelector("img");
+    if (isEmpty) {
+      emptyRun++;
+      if (emptyRun > 1) child.remove();
+    } else {
+      emptyRun = 0;
+    }
+  });
+
+  // Remove parágrafos vazios no início e fim do documento
+  while (
+    doc.body.firstElementChild?.tagName === "P" &&
+    !(doc.body.firstElementChild.textContent ?? "").trim()
+  ) {
+    doc.body.firstElementChild.remove();
+  }
+  while (
+    doc.body.lastElementChild?.tagName === "P" &&
+    !(doc.body.lastElementChild.textContent ?? "").trim()
+  ) {
+    doc.body.lastElementChild.remove();
+  }
+
+  return doc.body.innerHTML;
+}
+
+/**
  * Converte texto puro em HTML com parágrafos,
  * respeitando quebras de linha simples (→ <br>) e duplas (→ novo <p>).
  */
@@ -232,7 +301,7 @@ export function RichTextEditor({
         placeholder: placeholder ?? "Digite aqui...",
       }),
     ],
-    content: value,
+    content: typeof window !== "undefined" ? normalizeStoredHtml(value) : value,
     onUpdate({ editor }) {
       onChange(editor.getHTML());
     },
@@ -272,12 +341,13 @@ export function RichTextEditor({
     },
   });
 
-  // Sincroniza valor externo → editor
+  // Sincroniza valor externo → editor (normaliza para remover espaços excessivos já salvos)
   useEffect(() => {
     if (!editor) return;
+    const clean = normalizeStoredHtml(value);
     const current = editor.getHTML();
-    if (current !== value) {
-      editor.commands.setContent(value, { emitUpdate: false });
+    if (current !== clean) {
+      editor.commands.setContent(clean, { emitUpdate: false });
     }
   }, [editor, value]);
 
