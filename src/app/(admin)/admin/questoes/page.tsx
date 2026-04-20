@@ -469,21 +469,15 @@ export default function BancoQuestoesPage() {
                       </td>
 
                       <td className="align-top px-5 py-4">
-                        <button
-                          type="button"
-                          onClick={() => void toggleActive(q)}
-                          disabled={togglingId === q.id}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition",
-                            isActive
-                              ? "border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-800"
-                              : "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800",
-                            togglingId === q.id && "cursor-wait opacity-60"
-                          )}
+                        <Badge
+                          tone={isActive ? "emerald" : "amber"}
+                          title="Clique para alternar status"
+                          onClick={() => { if (togglingId !== q.id) void toggleActive(q); }}
+                          className={cn(togglingId === q.id && "cursor-wait opacity-60")}
                         >
                           <span className="text-[10px]">{isActive ? "●" : "○"}</span>
                           {isActive ? "Ativa" : "Inativa"}
-                        </button>
+                        </Badge>
                       </td>
 
                       <td className="align-top px-5 py-4">

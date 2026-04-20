@@ -172,7 +172,7 @@ export default function AlunosPage() {
                     <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{item.cpf}</td>
                     <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{item.cellphone}</td>
                     <td className="px-5 py-4">
-                      <Badge tone={item.active ? "emerald" : "amber"}>{item.active ? "ativo" : "pendente"}</Badge>
+                      <Badge tone={item.active ? "emerald" : "amber"}>{item.active ? "Ativo" : "Pendente"}</Badge>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">

@@ -295,7 +295,7 @@ export default function CatalogManagerPage({
                     <td className="px-5 py-4 font-semibold text-slate-800 dark:text-slate-200">{item.title}</td>
                     {showLevelColumn && <td className="px-5 py-4 text-slate-500 dark:text-slate-400">{item.levelLabel || "—"}</td>}
                     <td className="px-5 py-4">
-                      <Badge tone={item.status === "ativo" ? "emerald" : "amber"}>{item.status}</Badge>
+                      <Badge tone={item.status === "ativo" ? "emerald" : "amber"}>{item.status === "ativo" ? "Ativo" : "Inativo"}</Badge>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
