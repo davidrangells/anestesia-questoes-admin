@@ -459,7 +459,7 @@ export default function BancoQuestoesPage() {
                           <button
                             type="button"
                             onClick={() => { setSelected(q); setOpenImages(true); }}
-                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-700/50 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
                           >
                             <ImageIcon size={11} /> Ver
                           </button>
@@ -476,8 +476,8 @@ export default function BancoQuestoesPage() {
                           className={cn(
                             "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition",
                             isActive
-                              ? "border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:border-emerald-700/60 dark:bg-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-900/80"
-                              : "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-700/60 dark:bg-amber-900/50 dark:text-amber-300 dark:hover:bg-amber-900/80",
+                              ? "border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-800"
+                              : "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800",
                             togglingId === q.id && "cursor-wait opacity-60"
                           )}
                         >

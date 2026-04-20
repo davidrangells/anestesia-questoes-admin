@@ -47,7 +47,7 @@ export function ConfirmDialog({
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div className={cn(
           "relative w-full max-w-sm rounded-2xl border bg-white shadow-2xl dark:bg-slate-900",
-          variant === "danger" ? "dark:border-rose-900/50 border-rose-100" : "dark:border-amber-900/50 border-amber-100"
+          variant === "danger" ? "dark:border-rose-900 border-rose-100" : "dark:border-amber-900 border-amber-100"
         )}>
           <div className="p-6">
             {/* Ícone */}
