@@ -250,7 +250,7 @@ export default function CatalogManagerPage({
       {confirmDialog}
 
       {entity === "temas" && levels.length === 0 && !loading && (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
           Cadastre pelo menos um nível ativo antes de criar temas.
         </div>
       )}
@@ -330,7 +330,7 @@ export default function CatalogManagerPage({
       >
         <div className="space-y-4">
           {formError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300">
               {formError}
             </div>
           )}
