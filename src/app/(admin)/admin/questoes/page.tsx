@@ -105,9 +105,9 @@ export default function BancoQuestoesPage() {
   const status      = (searchParams.get("status") as "todos" | "ativas" | "inativas") ?? "todos";
   const themeFilter = searchParams.get("tema") ?? "";
   const page        = Math.max(1, Number(searchParams.get("page") ?? "1"));
-  const pageSize    = ([20, 30, 50, 100].includes(Number(searchParams.get("pageSize") ?? "20"))
-    ? Number(searchParams.get("pageSize") ?? "20")
-    : 20) as 20 | 30 | 50 | 100;
+  const pageSize    = ([10, 25, 50, 100].includes(Number(searchParams.get("pageSize") ?? "25"))
+    ? Number(searchParams.get("pageSize") ?? "25")
+    : 25) as 10 | 25 | 50 | 100;
 
   // ── estado local ─────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -288,7 +288,7 @@ export default function BancoQuestoesPage() {
 
       {/* Filtros */}
       <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <div className="grid grid-cols-1 items-end gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-1 items-end gap-3 lg:grid-cols-5">
           <div className="lg:col-span-3">
             <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar</label>
             <input
@@ -312,20 +312,6 @@ export default function BancoQuestoesPage() {
               <option value="todos">Todos</option>
               <option value="ativas">Ativas</option>
               <option value="inativas">Inativas</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Por página</label>
-            <select
-              value={pageSize}
-              onChange={(e) => setParam({ pageSize: e.target.value, page: null })}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            >
-              <option value={20}>20</option>
-              <option value={30}>30</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
             </select>
           </div>
 
