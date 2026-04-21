@@ -288,8 +288,9 @@ export default function BancoQuestoesPage() {
 
       {/* Filtros */}
       <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <div className="grid grid-cols-1 items-end gap-3 lg:grid-cols-5">
-          <div className="lg:col-span-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+          {/* Buscar */}
+          <div className="flex-1">
             <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar</label>
             <input
               value={search}
@@ -302,7 +303,8 @@ export default function BancoQuestoesPage() {
             </div>
           </div>
 
-          <div>
+          {/* Status */}
+          <div className="w-full lg:w-44">
             <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Status</label>
             <select
               value={status}
@@ -315,7 +317,8 @@ export default function BancoQuestoesPage() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1 text-right text-sm text-slate-600 dark:text-slate-400">
+          {/* Contagem */}
+          <div className="flex flex-col gap-1 text-right text-sm text-slate-600 dark:text-slate-400 lg:w-36 lg:pt-6">
             <span>Resultados: <strong>{totalFiltered}</strong></span>
             <span>Página <strong>{page}</strong> de <strong>{totalPages}</strong></span>
           </div>

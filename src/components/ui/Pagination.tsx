@@ -66,7 +66,9 @@ export function Pagination({
               value={pageSize}
               onChange={(e) => {
                 onPageSizeChange(Number(e.target.value));
-                onPageChange(1);
+                // Não chama onPageChange(1) separadamente — evita condição de corrida
+                // onde a segunda chamada lê searchParams stale e sobrescreve o novo pageSize.
+                // O consumidor já faz page reset dentro de onPageSizeChange.
               }}
               className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
             >
