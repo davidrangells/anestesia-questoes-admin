@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, RefreshCw, Pencil, Trash2, Users } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -104,17 +105,7 @@ export default function AlunosPage() {
       subtitle={`${loading ? "Carregando..." : `${items.length.toLocaleString("pt-BR")} aluno(s) cadastrado(s)`}`}
       actions={
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
-          {/* Search */}
-          <div className="relative w-full md:w-72">
-            <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filtrar por nome, CPF, e-mail..."
-              aria-label="Filtrar alunos"
-              className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-600 dark:focus:ring-blue-900"
-            />
-          </div>
+          <SearchInput value={search} onChange={setSearch} placeholder="Filtrar por nome, CPF, e-mail..." aria-label="Filtrar alunos" className="w-full md:w-72" />
 
           <Button variant="secondary" onClick={() => void syncEduzz()} loading={syncing}>
             <RefreshCw size={15} aria-hidden="true" />

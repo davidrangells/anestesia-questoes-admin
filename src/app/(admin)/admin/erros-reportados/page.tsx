@@ -3,9 +3,13 @@
 import AdminShell from "@/components/AdminShell";
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { RefreshCw } from "lucide-react";
 import { api } from "@/lib/apiClient";
-import { buttonStyles } from "@/components/ui/Button";
+import { Button, buttonStyles } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { TableRowSkeleton } from "@/components/ui/Skeleton";
 import { Modal } from "@/components/ui/Modal";
 
 type ReportStatus = "aberto" | "resolvido" | "ignorado";
@@ -14,47 +18,26 @@ type Report = {
   id: string;
   createdAt?: unknown;
   updatedAt?: unknown;
-
-  // status padronizado
   status?: ReportStatus | string;
-
-  // conteúdo
   message?: string;
-  mensagem?: string; // fallback (caso exista legado)
+  mensagem?: string;
   details?: string;
-
-  // refs (podem variar)
   questionId?: string;
-  questaoId?: string; // fallback (legado)
+  questaoId?: string;
   attemptId?: string;
   sessionId?: string;
-
-  // user refs (podem variar)
   uid?: string;
   userId?: string;
   userUid?: string;
-  alunoId?: string; // fallback (legado)
-  alunoNome?: string; // às vezes já vem pronto
-
-  // extras possíveis
-  codigo?: string; // seu código numérico
-  questaoPergunta?: string; // às vezes vem um texto já salvo
+  alunoId?: string;
+  alunoNome?: string;
+  codigo?: string;
+  questaoPergunta?: string;
 };
 
-type QuestionMini = {
-  id: string;
-  prompt?: string;
-  questionText?: string;
-  statement?: string;
-};
+type QuestionMini = { id: string; prompt?: string; questionText?: string; statement?: string };
 
 const PAGE_SIZE = 300;
-
-function cn(...xs: Array<string | false | undefined | null>) {
-  return xs.filter(Boolean).join(" ");
-}
-
-// ---------- Helpers (robustos para campos legados) ----------
 
 function getReportStatus(r: Report): ReportStatus {
   const s = String(r.status || "").toLowerCase();
@@ -63,36 +46,21 @@ function getReportStatus(r: Report): ReportStatus {
   return "aberto";
 }
 
-function getUid(r: Report) {
-  return r.uid || r.userId || r.userUid || r.alunoId || "";
-}
-
-function getQuestionId(r: Report) {
-  return r.questionId || r.questaoId || "";
-}
-
-function getMessage(r: Report) {
-  return (r.message || r.mensagem || r.details || "").trim();
-}
+function getUid(r: Report) { return r.uid || r.userId || r.userUid || r.alunoId || ""; }
+function getQuestionId(r: Report) { return r.questionId || r.questaoId || ""; }
+function getMessage(r: Report) { return (r.message || r.mensagem || r.details || "").trim(); }
 
 function toDateLabel(ts: unknown) {
   try {
     const withToDate =
-      typeof ts === "object" &&
-      ts !== null &&
-      "toDate" in ts &&
+      typeof ts === "object" && ts !== null && "toDate" in ts &&
       typeof (ts as { toDate?: unknown }).toDate === "function"
         ? (ts as { toDate: () => Date })
         : null;
     const d = withToDate ? withToDate.toDate() : null;
     if (!d) return "—";
-    return new Intl.DateTimeFormat("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    }).format(d);
-  } catch {
-    return "—";
-  }
+    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(d);
+  } catch { return "—"; }
 }
 
 function getQuestionText(q?: QuestionMini | null) {
@@ -106,26 +74,23 @@ function clip(s: string, max = 120) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
-// -----------------------------------------------------------
+const STATUS_TONE: Record<ReportStatus, "amber" | "green" | "slate"> = {
+  aberto: "amber", resolvido: "green", ignorado: "slate",
+};
+const STATUS_LABEL: Record<ReportStatus, string> = {
+  aberto: "Aberto", resolvido: "Resolvido", ignorado: "Ignorado",
+};
 
 export default function ErrosReportadosPage() {
   const [loading, setLoading] = useState(true);
-
   const [items, setItems] = useState<Report[]>([]);
-
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState<"todos" | ReportStatus>("aberto");
-
-  // cache: users + questions
   const [questionCache, setQuestionCache] = useState<Record<string, QuestionMini>>({});
   const [userCache, setUserCache] = useState<Record<string, { name?: string; email?: string }>>({});
-
-  // modal
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Report | null>(null);
-
-  // action loading
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchFirst = async () => {
@@ -136,117 +101,87 @@ export default function ErrosReportadosPage() {
         questionCache?: Record<string, QuestionMini>;
         userCache?: Record<string, { name?: string; email?: string }>;
       }>("/api/admin/erros-reportados");
-
       setItems(Array.isArray(data.items) ? data.items : []);
-      setQuestionCache(
-        data.questionCache && typeof data.questionCache === "object" ? data.questionCache : {}
-      );
+      setQuestionCache(data.questionCache && typeof data.questionCache === "object" ? data.questionCache : {});
       setUserCache(data.userCache && typeof data.userCache === "object" ? data.userCache : {});
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível carregar erros reportados.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível carregar erros reportados.");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchNext = async () => {};
-  const fetchPrev = async () => {};
-
-  useEffect(() => {
-    void fetchFirst();
-  }, []);
+  useEffect(() => { void fetchFirst(); }, []);
 
   const filtered = useMemo(() => {
     const s = deferredSearch.trim().toLowerCase();
-
     return items.filter((r) => {
       const st = getReportStatus(r);
-      const okStatus = statusFilter === "todos" ? true : st === statusFilter;
-      if (!okStatus) return false;
-
+      if (statusFilter !== "todos" && st !== statusFilter) return false;
       if (!s) return true;
-
       const uid = getUid(r).toLowerCase();
       const qid = getQuestionId(r).toLowerCase();
       const msg = getMessage(r).toLowerCase();
       const alunoNome = (r.alunoNome || "").toLowerCase();
-
       const cachedQ = questionCache[getQuestionId(r)];
       const qText = cachedQ ? getQuestionText(cachedQ).toLowerCase() : "";
-      const qPreviewSaved = (r.questaoPergunta || "").toLowerCase();
-
-      return (
-        uid.includes(s) ||
-        alunoNome.includes(s) ||
-        qid.includes(s) ||
-        msg.includes(s) ||
-        qText.includes(s) ||
-        qPreviewSaved.includes(s)
-      );
+      return uid.includes(s) || alunoNome.includes(s) || qid.includes(s) || msg.includes(s) || qText.includes(s) || (r.questaoPergunta || "").toLowerCase().includes(s);
     });
   }, [items, deferredSearch, statusFilter, questionCache]);
 
-  const hasNextPage = false;
+  const counts = useMemo(() => ({
+    aberto: items.filter((x) => getReportStatus(x) === "aberto").length,
+    resolvido: items.filter((x) => getReportStatus(x) === "resolvido").length,
+    ignorado: items.filter((x) => getReportStatus(x) === "ignorado").length,
+  }), [items]);
 
-  const openModal = (r: Report) => {
-    setSelected(r);
-    setOpen(true);
-  };
+  const openModal = (r: Report) => { setSelected(r); setOpen(true); };
 
   const setStatus = async (r: Report, nextStatus: ReportStatus) => {
     setUpdatingId(r.id);
-
-    // otimista
     setItems((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: nextStatus } : x)));
-
+    // atualiza também o modal se estiver aberto
+    setSelected((prev) => prev?.id === r.id ? { ...prev, status: nextStatus } : prev);
     try {
       await api.patch(`/api/admin/erros-reportados/${r.id}`, { status: nextStatus });
-    } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
-      await fetchFirst(); // rollback seguro
+      toast.success(`Status atualizado: ${STATUS_LABEL[nextStatus]}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
+      await fetchFirst();
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const counts = useMemo(() => {
-    const aberto = items.filter((x) => getReportStatus(x) === "aberto").length;
-    const resolvido = items.filter((x) => getReportStatus(x) === "resolvido").length;
-    const ignorado = items.filter((x) => getReportStatus(x) === "ignorado").length;
-    return { aberto, resolvido, ignorado };
-  }, [items]);
+  const StatusBadge = ({ r }: { r: Report }) => {
+    const st = getReportStatus(r);
+    return <Badge tone={STATUS_TONE[st]}>{STATUS_LABEL[st]}</Badge>;
+  };
 
   return (
     <AdminShell
       title="Erros reportados"
       subtitle="Revisão de erros enviados pelos alunos no app."
       actions={
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchFirst}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Atualizar
-          </button>
-        </div>
+        <Button variant="secondary" size="sm" onClick={() => void fetchFirst()} loading={loading}>
+          <RefreshCw size={14} /> Atualizar
+        </Button>
       }
     >
-      {/* Cards topo */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div className="rounded-2xl border bg-white p-4">
-          <div className="text-xs font-semibold text-slate-500">Carregados nesta página</div>
-          <div className="mt-2 text-2xl font-black text-slate-900">{items.length}</div>
-          <div className="mt-1 text-sm text-slate-500">Limite por página: {PAGE_SIZE}</div>
+      {/* KPIs */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total carregados</div>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-50">{items.length}</div>
+          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">Limite: {PAGE_SIZE}</div>
         </div>
-
-        <div className="rounded-2xl border bg-white p-4">
-          <div className="text-xs font-semibold text-slate-500">Exibidos (após filtros)</div>
-          <div className="mt-2 text-2xl font-black text-slate-900">{filtered.length}</div>
-          <div className="mt-1 text-sm text-slate-500">Status + busca</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Exibidos (após filtros)</div>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-50">{filtered.length}</div>
+          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">Status + busca</div>
         </div>
-
-        <div className="rounded-2xl border bg-white p-4">
-          <div className="text-xs font-semibold text-slate-500">Resumo rápido</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Resumo rápido</div>
           <div className="mt-2 flex flex-wrap gap-2">
             <Badge tone="amber">{counts.aberto} abertos</Badge>
             <Badge tone="green">{counts.resolvido} resolvidos</Badge>
@@ -256,24 +191,18 @@ export default function ErrosReportadosPage() {
       </div>
 
       {/* Filtros */}
-      <div className="rounded-2xl border bg-white p-4 mb-4">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 items-end">
-          <div className="lg:col-span-3">
-            <div className="text-xs font-semibold text-slate-600 mb-1">Buscar</div>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="UID, aluno, mensagem, questionId, trecho do enunciado..."
-              className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-            />
+      <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+          <div className="flex-1">
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar</label>
+            <SearchInput value={search} onChange={setSearch} placeholder="UID, aluno, mensagem, questionId, trecho do enunciado..." />
           </div>
-
-          <div className="lg:col-span-1">
-            <div className="text-xs font-semibold text-slate-600 mb-1">Status</div>
+          <div className="w-full lg:w-48">
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Status</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as "todos" | ReportStatus)}
-              className="w-full rounded-xl border px-4 py-3 text-sm bg-white"
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="todos">Todos</option>
               <option value="aberto">Abertos</option>
@@ -281,156 +210,89 @@ export default function ErrosReportadosPage() {
               <option value="ignorado">Ignorados</option>
             </select>
           </div>
-
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Badge tone="blue">{filtered.length} exibidos</Badge>
+          <div className="flex items-end pb-0.5 lg:pt-6">
+            <Badge tone="blue">{filtered.length} exibidos</Badge>
+          </div>
         </div>
       </div>
 
       {/* Tabela */}
-      <div className="rounded-2xl border bg-white overflow-hidden">
-        <div className="px-5 py-4 border-b">
-          <div className="text-sm font-extrabold text-slate-900">Lista</div>
-          <div className="text-xs text-slate-500 mt-0.5">Clique em “Ver” para abrir os detalhes.</div>
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <div className="text-sm font-extrabold text-slate-900 dark:text-slate-50">Lista</div>
+          <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Clique em "Ver" para abrir os detalhes.</div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1120px] text-sm">
-            <thead className="text-xs uppercase text-slate-500 border-b bg-slate-50/60">
+            <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
               <tr>
-                <th className="text-left px-5 py-3">Data</th>
-                <th className="text-left px-5 py-3">Aluno</th>
-                <th className="text-left px-5 py-3">Questão</th>
-                <th className="text-left px-5 py-3">Mensagem</th>
-                <th className="text-left px-5 py-3">Status</th>
-                <th className="text-right px-5 py-3">Ações</th>
+                {["Data", "Aluno", "Questão", "Mensagem", "Status", "Ações"].map((h) => (
+                  <th key={h} className={`px-5 py-3.5 text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 ${h === "Ações" ? "text-right" : "text-left"}`}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
 
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
-                <tr>
-                  <td className="px-5 py-6 text-slate-500" colSpan={6}>
-                    Carregando…
-                  </td>
-                </tr>
+                <TableRowSkeleton cols={6} rows={6} />
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-6 text-slate-500" colSpan={6}>
+                  <td className="px-5 py-8 text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
                     Nenhum erro encontrado com esses filtros.
                   </td>
                 </tr>
               ) : (
                 filtered.map((r) => {
-                  const st = getReportStatus(r);
                   const uid = getUid(r);
                   const qId = getQuestionId(r);
-
                   const userMini = uid ? userCache[uid] : undefined;
                   const alunoNome = (r.alunoNome || userMini?.name || "").trim();
-
                   const qMini = qId ? questionCache[qId] : undefined;
-                  const qText =
-                    qMini ? getQuestionText(qMini) : r.questaoPergunta?.trim() ? r.questaoPergunta!.trim() : "";
+                  const qText = qMini ? getQuestionText(qMini) : r.questaoPergunta?.trim() ?? "";
+                  const isUpdating = updatingId === r.id;
+                  const st = getReportStatus(r);
 
                   return (
-                    <tr key={r.id} className="hover:bg-slate-50/50">
+                    <tr key={r.id} className="transition hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-5 py-4">
-                        <div className="font-semibold text-slate-900">{toDateLabel(r.createdAt)}</div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          ID: {r.id}
-                          {r.codigo ? ` • Código: ${r.codigo}` : ""}
-                        </div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">{toDateLabel(r.createdAt)}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">ID: {r.id}{r.codigo ? ` · ${r.codigo}` : ""}</div>
                       </td>
-
                       <td className="px-5 py-4">
-                        <div className="font-semibold text-slate-900">
-                          {alunoNome ? alunoNome : uid ? "Aluno" : "—"}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-1">{uid ? `UID: ${uid}` : "—"}</div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">{alunoNome || (uid ? "Aluno" : "—")}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{uid ? `UID: ${uid}` : "—"}</div>
                       </td>
-
                       <td className="px-5 py-4">
-                        <div className="font-semibold text-slate-900 line-clamp-2">
+                        <div className="line-clamp-2 font-semibold text-slate-900 dark:text-slate-100">
                           {qText ? clip(qText, 120) : qId ? "(carregando…)" : "—"}
                         </div>
-                        <div className="text-xs text-slate-500 mt-1">{qId ? `QID: ${qId}` : "—"}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{qId ? `QID: ${qId}` : "—"}</div>
                       </td>
-
                       <td className="px-5 py-4">
-                        <div className="text-slate-700 line-clamp-2">{clip(getMessage(r), 140)}</div>
+                        <div className="line-clamp-2 text-slate-700 dark:text-slate-300">{clip(getMessage(r), 140)}</div>
                       </td>
-
-                      <td className="px-5 py-4">
-                        {st === "aberto" ? (
-                          <Badge tone="amber">Aberto</Badge>
-                        ) : st === "resolvido" ? (
-                          <Badge tone="green">Resolvido</Badge>
-                        ) : (
-                          <Badge tone="slate">Ignorado</Badge>
-                        )}
-                      </td>
-
+                      <td className="px-5 py-4"><StatusBadge r={r} /></td>
                       <td className="px-5 py-4 text-right">
-                        <div className="inline-flex flex-wrap items-center justify-end gap-2">
-                          <button
-                            onClick={() => openModal(r)}
-                            className={buttonStyles({ variant: "secondary", size: "sm" })}
-                          >
-                            Ver
-                          </button>
-
+                        <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                          <Button variant="secondary" size="sm" onClick={() => openModal(r)}>Ver</Button>
                           {st !== "resolvido" ? (
-                            <button
-                              onClick={() => setStatus(r, "resolvido")}
-                              disabled={updatingId === r.id}
-                              className={cn(buttonStyles({ variant: "primary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
-                              title="Marcar como resolvido"
-                            >
-                              {updatingId === r.id ? "Salvando..." : "Resolver"}
-                            </button>
+                            <Button variant="primary" size="sm" loading={isUpdating} onClick={() => void setStatus(r, "resolvido")}>Resolver</Button>
                           ) : (
-                            <button
-                              onClick={() => setStatus(r, "aberto")}
-                              disabled={updatingId === r.id}
-                              className={cn(buttonStyles({ variant: "secondary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
-                              title="Reabrir"
-                            >
-                              {updatingId === r.id ? "Salvando..." : "Reabrir"}
-                            </button>
+                            <Button variant="secondary" size="sm" loading={isUpdating} onClick={() => void setStatus(r, "aberto")}>Reabrir</Button>
                           )}
-
                           {st !== "ignorado" ? (
-                            <button
-                              onClick={() => setStatus(r, "ignorado")}
-                              disabled={updatingId === r.id}
-                              className={cn(buttonStyles({ variant: "secondary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
-                              title="Marcar como ignorado"
-                            >
-                              Ignorar
-                            </button>
+                            <Button variant="secondary" size="sm" loading={isUpdating} onClick={() => void setStatus(r, "ignorado")}>Ignorar</Button>
                           ) : (
-                            <button
-                              onClick={() => setStatus(r, "aberto")}
-                              disabled={updatingId === r.id}
-                              className={cn(buttonStyles({ variant: "secondary", size: "sm" }), updatingId === r.id ? "opacity-60 cursor-wait" : "")}
-                              title="Voltar para aberto"
-                            >
-                              Reabrir
-                            </button>
+                            <Button variant="secondary" size="sm" loading={isUpdating} onClick={() => void setStatus(r, "aberto")}>Reabrir</Button>
                           )}
-
-                          {qId ? (
-                            <Link
-                              href={`/admin/questoes/${qId}`}
-                              className={buttonStyles({ variant: "secondary", size: "sm" })}
-                              title="Abrir edição da questão"
-                            >
+                          {qId && (
+                            <Link href={`/admin/questoes/${qId}`} className={buttonStyles({ variant: "secondary", size: "sm" })}>
                               Ir para questão
                             </Link>
-                          ) : null}
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -440,168 +302,86 @@ export default function ErrosReportadosPage() {
             </tbody>
           </table>
         </div>
-
-        <div className="px-5 py-4 border-t bg-white flex items-center justify-between">
-          <div className="text-xs text-slate-500">
-            Página atual: <b>1</b>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={fetchPrev}
-              disabled
-              className={buttonStyles({ variant: "secondary", size: "sm" })}
-            >
-              Anterior
-            </button>
-            <button
-              onClick={fetchNext}
-              disabled={loading || !hasNextPage}
-              className={buttonStyles({ variant: "secondary", size: "sm" })}
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Modal detalhes */}
       <Modal
         open={open}
         title={selected ? `Detalhes do erro (${selected.id})` : "Detalhes do erro"}
-        onClose={() => {
-          setOpen(false);
-          setSelected(null);
-        }}
+        size="lg"
+        onClose={() => { setOpen(false); setSelected(null); }}
       >
         {!selected ? (
           <div className="text-sm text-slate-500">Nenhum item selecionado.</div>
-        ) : (
-          (() => {
-            const st = getReportStatus(selected);
-            const uid = getUid(selected);
-            const qId = getQuestionId(selected);
+        ) : (() => {
+          const st = getReportStatus(selected);
+          const uid = getUid(selected);
+          const qId = getQuestionId(selected);
+          const userMini = uid ? userCache[uid] : undefined;
+          const alunoNome = (selected.alunoNome || userMini?.name || "").trim();
+          const qMini = qId ? questionCache[qId] : undefined;
+          const qText = qMini ? getQuestionText(qMini) : selected.questaoPergunta?.trim() ?? "";
+          const isUpdating = updatingId === selected.id;
 
-            const userMini = uid ? userCache[uid] : undefined;
-            const alunoNome = (selected.alunoNome || userMini?.name || "").trim();
-
-            const qMini = qId ? questionCache[qId] : undefined;
-            const qText =
-              qMini ? getQuestionText(qMini) : selected.questaoPergunta?.trim() ? selected.questaoPergunta!.trim() : "";
-
-            return (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="rounded-2xl border bg-white p-4 lg:col-span-2">
-                    <div className="text-xs font-extrabold text-slate-700 mb-2">Mensagem</div>
-                    <div className="text-sm text-slate-800 whitespace-pre-wrap">
-                      {getMessage(selected) || "—"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border bg-white p-4">
-                    <div className="text-xs font-extrabold text-slate-700 mb-2">Status</div>
-
-                    <div className="flex items-center gap-2">
-                      {st === "aberto" ? (
-                        <Badge tone="amber">Aberto</Badge>
-                      ) : st === "resolvido" ? (
-                        <Badge tone="green">Resolvido</Badge>
-                      ) : (
-                        <Badge tone="slate">Ignorado</Badge>
-                      )}
-
-                      <div className="text-xs text-slate-500">
-                        Criado: {toDateLabel(selected.createdAt)}
-                        <br />
-                        Atualizado: {toDateLabel(selected.updatedAt)}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        onClick={() => setStatus(selected, "aberto")}
-                        disabled={updatingId === selected.id}
-                        className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
-                      >
-                        Reabrir
-                      </button>
-
-                      <button
-                        onClick={() => setStatus(selected, "resolvido")}
-                        disabled={updatingId === selected.id}
-                        className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                      >
-                        Resolver
-                      </button>
-
-                      <button
-                        onClick={() => setStatus(selected, "ignorado")}
-                        disabled={updatingId === selected.id}
-                        className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
-                      >
-                        Ignorar
-                      </button>
-
-                      {qId ? (
-                        <Link
-                          href={`/admin/questoes/${qId}`}
-                          className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
-                        >
-                          Abrir questão
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:col-span-2">
+                  <div className="mb-2 text-xs font-extrabold text-slate-700 dark:text-slate-300">Mensagem</div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{getMessage(selected) || "—"}</div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="rounded-2xl border bg-white p-4">
-                    <div className="text-xs font-extrabold text-slate-700 mb-2">Referências</div>
-                    <div className="text-sm text-slate-700 space-y-1">
-                      <div>
-                        <b>Código:</b> {selected.codigo || "—"}
-                      </div>
-                      <div>
-                        <b>questionId:</b> {qId || "—"}
-                      </div>
-                      <div>
-                        <b>sessionId:</b> {selected.sessionId || "—"}
-                      </div>
-                      <div>
-                        <b>attemptId:</b> {selected.attemptId || "—"}
-                      </div>
-                      <div>
-                        <b>uid:</b> {uid || "—"}
-                      </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                  <div className="mb-2 text-xs font-extrabold text-slate-700 dark:text-slate-300">Status</div>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={STATUS_TONE[st]}>{STATUS_LABEL[st]}</Badge>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      Criado: {toDateLabel(selected.createdAt)}<br />
+                      Atualizado: {toDateLabel(selected.updatedAt)}
                     </div>
                   </div>
-
-                  <div className="rounded-2xl border bg-white p-4">
-                    <div className="text-xs font-extrabold text-slate-700 mb-2">Aluno</div>
-                    <div className="text-sm text-slate-700 space-y-1">
-                      <div>
-                        <b>Nome:</b> {alunoNome || "—"}
-                      </div>
-                      <div>
-                        <b>Email:</b> {userMini?.email || "—"}
-                      </div>
-                    </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="secondary" size="sm" loading={isUpdating} onClick={() => void setStatus(selected, "aberto")}>Reabrir</Button>
+                    <Button variant="primary" size="sm" loading={isUpdating} onClick={() => void setStatus(selected, "resolvido")}>Resolver</Button>
+                    <Button variant="secondary" size="sm" loading={isUpdating} onClick={() => void setStatus(selected, "ignorado")}>Ignorar</Button>
+                    {qId && (
+                      <Link href={`/admin/questoes/${qId}`} className={buttonStyles({ variant: "secondary", size: "sm" })}>
+                        Abrir questão
+                      </Link>
+                    )}
                   </div>
                 </div>
-
-                {qId ? (
-                  <div className="rounded-2xl border bg-slate-50 p-4">
-                    <div className="text-xs font-extrabold text-slate-700 mb-2">Enunciado (preview)</div>
-                    <div className="text-sm text-slate-800 whitespace-pre-wrap">
-                      {qText ? qText : "(carregando…)"}
-                    </div>
-                  </div>
-                ) : null}
               </div>
-            );
-          })()
-        )}
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                  <div className="mb-2 text-xs font-extrabold text-slate-700 dark:text-slate-300">Referências</div>
+                  <div className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+                    <div><b>Código:</b> {selected.codigo || "—"}</div>
+                    <div><b>questionId:</b> {qId || "—"}</div>
+                    <div><b>sessionId:</b> {selected.sessionId || "—"}</div>
+                    <div><b>attemptId:</b> {selected.attemptId || "—"}</div>
+                    <div><b>uid:</b> {uid || "—"}</div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                  <div className="mb-2 text-xs font-extrabold text-slate-700 dark:text-slate-300">Aluno</div>
+                  <div className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+                    <div><b>Nome:</b> {alunoNome || "—"}</div>
+                    <div><b>Email:</b> {userMini?.email || "—"}</div>
+                  </div>
+                </div>
+              </div>
+
+              {qId && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                  <div className="mb-2 text-xs font-extrabold text-slate-700 dark:text-slate-300">Enunciado (preview)</div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{qText || "(carregando…)"}</div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Modal>
     </AdminShell>
   );
