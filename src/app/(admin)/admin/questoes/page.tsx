@@ -49,8 +49,22 @@ function hasAnyImage(q: QBQuestion) {
 
 function isQuestionActive(q: QBQuestion) { return q.isActive !== false; }
 
+function stripHtml(html: string) {
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getEnunciado(q: QBQuestion) {
-  const text = (q.prompt_text ?? q.prompt ?? q.questionText ?? q.statement ?? "").trim();
+  const raw = (q.prompt_text ?? q.prompt ?? q.questionText ?? q.statement ?? "").trim();
+  const text = stripHtml(raw);
   return text.length ? text : "(sem enunciado)";
 }
 
