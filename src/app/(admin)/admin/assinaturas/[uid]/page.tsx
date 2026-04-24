@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
 import { dateFromUnknown } from "@/lib/dateValue";
@@ -91,7 +92,6 @@ export default function EditarAssinaturaPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [form, setForm] = useState<AssinaturaForm>({
     aluno: "",
     email: "",
@@ -199,7 +199,6 @@ export default function EditarAssinaturaPage() {
 
     setSaving(true);
     setErrorMsg(null);
-    setSuccessMsg(null);
 
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -229,9 +228,9 @@ export default function EditarAssinaturaPage() {
         throw new Error(data.error || "Não foi possível salvar a assinatura.");
       }
 
-      setSuccessMsg("Dados salvos com sucesso.");
+      toast.success("Assinatura salva com sucesso.");
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Erro ao salvar assinatura.");
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar assinatura.");
     } finally {
       setSaving(false);
     }
@@ -263,11 +262,12 @@ export default function EditarAssinaturaPage() {
               </div>
             ) : null}
 
-            {successMsg ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                {successMsg}
+            {!form.planId && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                <span className="font-semibold">Assinatura sem plano.</span>{" "}
+                Selecione um plano abaixo, defina a validade e salve para ativar o acesso do aluno.
               </div>
-            ) : null}
+            )}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>

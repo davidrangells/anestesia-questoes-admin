@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -177,7 +178,8 @@ export default function NovoAlunoPage() {
         },
       });
 
-      router.push(data.uid ? `/admin/alunos/${data.uid}` : "/admin/alunos");
+      toast.success("Aluno criado! Configure a assinatura abaixo.");
+      router.push(data.uid ? `/admin/assinaturas/${data.uid}` : "/admin/alunos");
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Erro ao criar aluno.");
     } finally {

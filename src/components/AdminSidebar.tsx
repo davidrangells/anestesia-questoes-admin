@@ -224,7 +224,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
         onClick={() => setMobileOpen((prev) => !prev)}
         className={cn(
           buttonStyles({ variant: "secondary", size: "sm" }),
-          "fixed left-4 z-50 h-11 w-11 rounded-2xl p-0 shadow-sm lg:hidden",
+          "fixed left-4 z-[70] h-11 w-11 rounded-2xl p-0 shadow-sm lg:hidden",
           "top-[calc(env(safe-area-inset-top)+0.9rem)]"
         )}
       >
@@ -238,7 +238,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
       {/* Overlay mobile */}
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-sm transition lg:hidden",
+          "fixed inset-0 z-[60] bg-slate-900/30 backdrop-blur-sm transition lg:hidden",
           mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={() => setMobileOpen(false)}
@@ -248,7 +248,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
       {/* Sidebar mobile */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[88vw] max-w-[300px] flex-col overflow-hidden border-r border-slate-200/70 bg-white shadow-2xl transition-transform lg:hidden dark:border-slate-800 dark:bg-slate-950",
+          "fixed inset-y-0 left-0 z-[65] flex w-[88vw] max-w-[300px] flex-col overflow-hidden border-r border-slate-200/70 bg-white shadow-2xl transition-transform lg:hidden dark:border-slate-800 dark:bg-slate-950",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
         aria-label="Menu lateral"
