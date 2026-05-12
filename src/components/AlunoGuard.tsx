@@ -12,6 +12,25 @@ export default function AlunoGuard({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopHeartbeat = () => {
+    if (!heartbeatRef.current) return;
+    clearInterval(heartbeatRef.current);
+    heartbeatRef.current = null;
+  };
+
+  const sendActivityPing = async (user: NonNullable<typeof auth.currentUser>) => {
+    const token = await user.getIdToken();
+    await fetch("/api/telemetry/activity", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ client: "web" }),
+    }).catch(() => undefined);
+  };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -21,6 +40,7 @@ export default function AlunoGuard({ children }: { children: React.ReactNode }) 
         const isLogin = pathname?.startsWith("/aluno/entrar") ?? false;
 
         if (!user) {
+          stopHeartbeat();
           if (isLogin) {
             if (mountedRef.current) setLoading(false);
             return;
@@ -36,9 +56,16 @@ export default function AlunoGuard({ children }: { children: React.ReactNode }) 
         const active = entSnap.exists() ? hasActiveEntitlement(entSnap.data()) : false;
 
         if (!active) {
+          stopHeartbeat();
           router.replace("/aluno/entrar?erro=assinatura_inativa");
           return;
         }
+
+        void sendActivityPing(user);
+        stopHeartbeat();
+        heartbeatRef.current = setInterval(() => {
+          void sendActivityPing(user);
+        }, 60_000);
 
         if (isLogin) {
           router.replace("/aluno");
@@ -53,6 +80,7 @@ export default function AlunoGuard({ children }: { children: React.ReactNode }) 
 
     return () => {
       mountedRef.current = false;
+      stopHeartbeat();
       unsub();
     };
   }, [router, pathname]);

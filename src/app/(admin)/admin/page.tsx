@@ -15,6 +15,12 @@ type DashboardStats = {
   alunosTotal: number;
   alunosAtivos: number;
   alunosInativos: number;
+  usuariosOnline: number;
+  usuariosOnlineWeb: number;
+  usuariosOnlineApp: number;
+  usuariosHoje: number;
+  usuariosWebHoje: number;
+  usuariosAppHoje: number;
 };
 
 const EMPTY_STATS: DashboardStats = {
@@ -24,6 +30,12 @@ const EMPTY_STATS: DashboardStats = {
   alunosTotal: 0,
   alunosAtivos: 0,
   alunosInativos: 0,
+  usuariosOnline: 0,
+  usuariosOnlineWeb: 0,
+  usuariosOnlineApp: 0,
+  usuariosHoje: 0,
+  usuariosWebHoje: 0,
+  usuariosAppHoje: 0,
 };
 
 export default function AdminDashboardPage() {
@@ -226,6 +238,30 @@ export default function AdminDashboardPage() {
                 subtitle="Sem acesso no momento"
                 value={stats.alunosInativos}
                 pill={{ label: "Inativo", tone: "warn" }}
+              />
+
+              <KpiCard
+                icon="🟢"
+                title="Online agora"
+                subtitle={`${stats.usuariosOnlineWeb} web · ${stats.usuariosOnlineApp} app`}
+                value={stats.usuariosOnline}
+                pill={{ label: "Tempo real", tone: "ok" }}
+              />
+
+              <KpiCard
+                icon="📍"
+                title="Usaram hoje"
+                subtitle="Alunos com acesso registrado hoje"
+                value={stats.usuariosHoje}
+                pill={{ label: "Hoje", tone: "neutral" }}
+              />
+
+              <KpiCard
+                icon="📱"
+                title="Web / App hoje"
+                subtitle={`${stats.usuariosWebHoje} web · ${stats.usuariosAppHoje} app`}
+                value={`${stats.usuariosWebHoje}/${stats.usuariosAppHoje}`}
+                pill={{ label: "Origem", tone: "neutral" }}
               />
             </div>
 

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
 import { hasActiveEntitlement } from "@/lib/entitlementStatus";
-import { secondsFromUnknown } from "@/lib/dateValue";
+import { dateFromUnknown, secondsFromUnknown } from "@/lib/dateValue";
 
 function buildLast7DayBuckets() {
   const today = new Date();
@@ -76,14 +76,19 @@ export async function GET(req: NextRequest) {
     const errorsCollection = adminDb.collection("erros_reportados");
     const studentsCollection = adminDb.collection("users").where("role", "==", "student");
     const entitlementsCollection = adminDb.collection("entitlements");
+    const activityCollection = adminDb.collection("user_activity");
     const resolvedStatuses = ["resolvido", "Resolvido", "RESOLVIDO"];
     const ignoredStatuses = ["ignorado", "Ignorado", "IGNORADO"];
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const onlineThreshold = new Date(Date.now() - 2 * 60 * 1000);
 
     const [
       questionsTotalAgg,
       studentsTotalAgg,
       studentsSnap,
       entitlementsActiveSnap,
+      activitySnap,
       errorsTotalAgg,
       errorsResolvedAgg,
       errorsIgnoredAgg,
@@ -92,6 +97,7 @@ export async function GET(req: NextRequest) {
       studentsCollection.count().get(),
       studentsCollection.get(),
       entitlementsCollection.get(),
+      activityCollection.get(),
       errorsCollection.count().get(),
       errorsCollection.where("status", "in", resolvedStatuses).count().get(),
       errorsCollection.where("status", "in", ignoredStatuses).count().get(),
@@ -137,6 +143,35 @@ export async function GET(req: NextRequest) {
       return count;
     }, 0);
     const studentsInactive = Math.max(studentsTotal - studentsActive, 0);
+    const activity = activitySnap.docs.reduce(
+      (acc, docSnap) => {
+        if (!studentUids.has(docSnap.id)) return acc;
+        const data = docSnap.data();
+        const lastSeenAt = dateFromUnknown(data.lastSeenAt);
+        if (!lastSeenAt) return acc;
+
+        const client = String(data.client ?? "web").toLowerCase() === "app" ? "app" : "web";
+        if (lastSeenAt >= onlineThreshold) {
+          acc.online += 1;
+          if (client === "app") acc.onlineApp += 1;
+          else acc.onlineWeb += 1;
+        }
+        if (lastSeenAt >= todayStart) {
+          acc.today += 1;
+          if (client === "app") acc.todayApp += 1;
+          else acc.todayWeb += 1;
+        }
+        return acc;
+      },
+      {
+        online: 0,
+        onlineWeb: 0,
+        onlineApp: 0,
+        today: 0,
+        todayWeb: 0,
+        todayApp: 0,
+      }
+    );
 
     return NextResponse.json(
       {
@@ -148,6 +183,12 @@ export async function GET(req: NextRequest) {
           alunosTotal: studentsTotal,
           alunosAtivos: studentsActive,
           alunosInativos: studentsInactive,
+          usuariosOnline: activity.online,
+          usuariosOnlineWeb: activity.onlineWeb,
+          usuariosOnlineApp: activity.onlineApp,
+          usuariosHoje: activity.today,
+          usuariosWebHoje: activity.todayWeb,
+          usuariosAppHoje: activity.todayApp,
         },
         series: {
           buckets,
