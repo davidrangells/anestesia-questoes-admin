@@ -5,6 +5,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { auth, db } from "@/lib/firebase";
+import { hasActiveEntitlement } from "@/lib/entitlementStatus";
 
 export default function AlunoGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function AlunoGuard({ children }: { children: React.ReactNode }) 
         const entRef = doc(db, "entitlements", user.uid);
         const entSnap = await getDoc(entRef);
 
-        const active = entSnap.exists() ? entSnap.data()?.active === true : false;
+        const active = entSnap.exists() ? hasActiveEntitlement(entSnap.data()) : false;
 
         if (!active) {
           router.replace("/aluno/entrar?erro=assinatura_inativa");

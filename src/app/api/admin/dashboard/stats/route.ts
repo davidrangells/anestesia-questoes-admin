@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
+import { hasActiveEntitlement } from "@/lib/entitlementStatus";
 import { secondsFromUnknown } from "@/lib/dateValue";
 
 function buildLast7DayBuckets() {
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
       questionsCollection.count().get(),
       studentsCollection.count().get(),
       studentsCollection.get(),
-      entitlementsCollection.where("active", "==", true).get(),
+      entitlementsCollection.get(),
       errorsCollection.count().get(),
       errorsCollection.where("status", "in", resolvedStatuses).count().get(),
       errorsCollection.where("status", "in", ignoredStatuses).count().get(),
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
     const studentsTotal = studentsTotalAgg.data().count;
     const studentUids = new Set(studentsSnap.docs.map((docSnap) => docSnap.id));
     const studentsActive = entitlementsActiveSnap.docs.reduce((count, docSnap) => {
-      if (studentUids.has(docSnap.id)) return count + 1;
+      if (studentUids.has(docSnap.id) && hasActiveEntitlement(docSnap.data())) return count + 1;
       return count;
     }, 0);
     const studentsInactive = Math.max(studentsTotal - studentsActive, 0);

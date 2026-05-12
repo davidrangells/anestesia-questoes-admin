@@ -20,7 +20,7 @@ type AssinaturaItem = {
   origem: string;
   plano: string;
   planoOrigem: "catalogo" | "eduzz" | "manual" | "sem-plano";
-  status: "ativo" | "pendente" | "inativo";
+  status: "ativo" | "pendente" | "inativo" | "vencido";
   validade: string;
   planId: string;
   productId: string;
@@ -41,15 +41,17 @@ function planoOrigemLabel(origem: AssinaturaItem["planoOrigem"]) {
   return "Sem plano";
 }
 
-function statusTone(status: AssinaturaItem["status"]): "emerald" | "amber" | "slate" {
+function statusTone(status: AssinaturaItem["status"]): "emerald" | "amber" | "slate" | "red" {
   if (status === "ativo") return "emerald";
   if (status === "pendente") return "amber";
+  if (status === "vencido") return "red";
   return "slate";
 }
 
 function statusLabel(status: AssinaturaItem["status"]) {
   if (status === "ativo") return "Ativo";
   if (status === "pendente") return "Pendente";
+  if (status === "vencido") return "Vencido";
   return "Inativo";
 }
 

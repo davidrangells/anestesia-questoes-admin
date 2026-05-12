@@ -2,9 +2,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
+import type { WriteBatch } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
 import { dateFromUnknown, secondsFromUnknown } from "@/lib/dateValue";
+import { getEffectiveEntitlementStatus } from "@/lib/entitlementStatus";
 
 type AssinaturaItem = {
   uid: string;
@@ -13,7 +15,7 @@ type AssinaturaItem = {
   origem: string;
   plano: string;
   planoOrigem: "catalogo" | "eduzz" | "manual" | "sem-plano";
-  status: "ativo" | "pendente" | "inativo";
+  status: "ativo" | "pendente" | "inativo" | "vencido";
   validade: string;
   planId: string;
   productId: string;
@@ -42,19 +44,41 @@ export async function GET(req: NextRequest) {
 
   try {
     const snap = await adminDb.collection("users").where("role", "==", "student").get();
+    const now = new Date();
+    const batches: WriteBatch[] = [adminDb.batch()];
+    let expiredUpdates = 0;
+
+    const currentBatch = () => batches[batches.length - 1];
 
     const rawRows = await Promise.all(
       snap.docs.map(async (userDoc) => {
+        const entRef = adminDb.collection("entitlements").doc(userDoc.id);
         const [profileSnap, entSnap] = await Promise.all([
           adminDb.collection("users").doc(userDoc.id).collection("profile").doc("main").get(),
-          adminDb.collection("entitlements").doc(userDoc.id).get(),
+          entRef.get(),
         ]);
 
         const userData = userDoc.data();
         const profile = profileSnap.exists ? profileSnap.data() ?? {} : {};
         const ent = entSnap.exists ? entSnap.data() ?? {} : {};
-        const status =
-          ent.active === true ? "ativo" : ent.pending === true ? "pendente" : "inativo";
+        const status = getEffectiveEntitlementStatus(ent, now);
+        if (status === "vencido" && ent.active === true) {
+          if (expiredUpdates > 0 && expiredUpdates % 450 === 0) {
+            batches.push(adminDb.batch());
+          }
+          currentBatch().set(
+            entRef,
+            {
+              active: false,
+              pending: false,
+              expired: true,
+              expiredAt: now,
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+          expiredUpdates += 1;
+        }
         const validUntilSeconds = secondsFromUnknown(ent.validUntil);
         const planId = String(ent.planId ?? "").trim();
         const productId = String(ent.productId ?? "").trim();
@@ -92,6 +116,10 @@ export async function GET(req: NextRequest) {
         } satisfies AssinaturaItem;
       })
     );
+
+    if (expiredUpdates > 0) {
+      await Promise.all(batches.map((batch) => batch.commit()));
+    }
 
     const items = rawRows
       .sort((a, b) => b.sortSeconds - a.sortSeconds)

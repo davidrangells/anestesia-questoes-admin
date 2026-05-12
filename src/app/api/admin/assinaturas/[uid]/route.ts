@@ -96,6 +96,7 @@ export async function PATCH(
         email: pickString(body.email) || current.email || null,
         active,
         pending,
+        expired: false,
         source: current.source || "admin",
         planId: planId || null,
         productId: productId || null,

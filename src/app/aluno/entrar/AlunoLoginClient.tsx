@@ -6,6 +6,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Button } from "@/components/ui/Button";
+import { hasActiveEntitlement } from "@/lib/entitlementStatus";
 
 function mapMsg(code: string) {
   switch (code) {
@@ -37,7 +38,7 @@ export default function AlunoLoginClient() {
 
       // Checa entitlement
       const entSnap = await getDoc(doc(db, "entitlements", uid));
-      const active = entSnap.exists() && entSnap.data()?.active === true;
+      const active = entSnap.exists() && hasActiveEntitlement(entSnap.data());
 
       if (!active) {
         router.replace("/aluno/entrar?msg=sem_acesso");

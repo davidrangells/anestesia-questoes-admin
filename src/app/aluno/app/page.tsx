@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { hasActiveEntitlement } from "@/lib/entitlementStatus";
 
 export default function AlunoAppPage() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function AlunoAppPage() {
         return;
       }
       const entSnap = await getDoc(doc(db, "entitlements", u.uid));
-      const active = entSnap.exists() && entSnap.data()?.active === true;
+      const active = entSnap.exists() && hasActiveEntitlement(entSnap.data());
 
       if (!active) {
         router.replace("/aluno/entrar?msg=sem_acesso");
