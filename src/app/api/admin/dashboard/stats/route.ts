@@ -7,6 +7,10 @@ import { requireAdmin } from "@/lib/adminRoute";
 import { hasActiveEntitlement } from "@/lib/entitlementStatus";
 import { dateFromUnknown, secondsFromUnknown } from "@/lib/dateValue";
 
+// ─── Cache em memória (5 min) para evitar leituras excessivas no Firestore ───
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let _statsCache: { payload: object; ts: number } | null = null;
+
 function buildLast7DayBuckets() {
   const today = new Date();
   return Array.from({ length: 7 }, (_, index) => {
@@ -66,6 +70,15 @@ export async function GET(req: NextRequest) {
   const authCheck = await requireAdmin(req);
   if ("error" in authCheck) return authCheck.error;
 
+  // Retorna cache se ainda válido (ignora cache com ?refresh=1)
+  const forceRefresh = new URL(req.url).searchParams.get("refresh") === "1";
+  if (!forceRefresh && _statsCache && Date.now() - _statsCache.ts < CACHE_TTL_MS) {
+    return NextResponse.json(_statsCache.payload, {
+      status: 200,
+      headers: { "X-Stats-Cache": "HIT" },
+    });
+  }
+
   try {
     const buckets = buildLast7DayBuckets();
     const startDate = new Date();
@@ -104,9 +117,10 @@ export async function GET(req: NextRequest) {
     ]);
 
     const [allQuestionsSnap, recentQuestionsSnap, recentErrorsSnap] = await Promise.all([
-      questionsCollection.get(),
-      questionsCollection.where("createdAt", ">=", startDate).get(),
-      errorsCollection.where("createdAt", ">=", startDate).get(),
+      // select("explanation") busca só o campo necessário — reduz payload mas mantém count
+      questionsCollection.select("explanation").get(),
+      questionsCollection.select("createdAt", "updatedAt").where("createdAt", ">=", startDate).get(),
+      errorsCollection.select("createdAt", "updatedAt").where("createdAt", ">=", startDate).get(),
     ]);
 
     let questionsWithCommentCount = 0;
@@ -173,8 +187,7 @@ export async function GET(req: NextRequest) {
       }
     );
 
-    return NextResponse.json(
-      {
+    const payload = {
         ok: true,
         stats: {
           questoesTotal: questionsTotalAgg.data().count,
@@ -195,9 +208,13 @@ export async function GET(req: NextRequest) {
           questoes: buckets.map((bucket) => Number(questionMap.get(bucket) ?? 0)),
           erros: buckets.map((bucket) => Number(errorMap.get(bucket) ?? 0)),
         },
-      },
-      { status: 200 }
-    );
+    };
+
+    _statsCache = { payload, ts: Date.now() };
+    return NextResponse.json(payload, {
+      status: 200,
+      headers: { "X-Stats-Cache": "MISS" },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Não foi possível carregar os indicadores.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
