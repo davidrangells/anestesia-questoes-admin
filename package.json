@@ -22,6 +22,7 @@
     "students:reset-passwords": "node scripts/reset-student-passwords.mjs"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
     "@tiptap/extension-image": "^3.22.4",
     "@tiptap/extension-link": "^3.22.4",
     "@tiptap/extension-placeholder": "^3.22.4",
