@@ -27,7 +27,10 @@ import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { Storage } from "@google-cloud/storage";
 
 const PROJECT_ID = process.env.FIREBASE_ADMIN_PROJECT_ID ?? "estudoquiz-e23ef";
-const GCS_BUCKET_NAME = `${PROJECT_ID}.appspot.com`;
+// Bucket padrão do Firebase Storage. Projetos novos usam .firebasestorage.app
+// (não mais .appspot.com). Permite override via env.
+const GCS_BUCKET_NAME =
+  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? `${PROJECT_ID}.firebasestorage.app`;
 const GCS_BUCKET = `gs://${GCS_BUCKET_NAME}`;
 const FIRESTORE_EXPORT_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default):exportDocuments`;
 
