@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Plus, CreditCard } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { StatusBadge, statusLabel } from "@/components/ui/StatusBadge";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
@@ -39,20 +39,6 @@ function planoOrigemLabel(origem: AssinaturaItem["planoOrigem"]) {
   if (origem === "eduzz") return "Eduzz";
   if (origem === "manual") return "Manual";
   return "Sem plano";
-}
-
-function statusTone(status: AssinaturaItem["status"]): "emerald" | "amber" | "slate" | "red" {
-  if (status === "ativo") return "emerald";
-  if (status === "pendente") return "amber";
-  if (status === "vencido") return "red";
-  return "slate";
-}
-
-function statusLabel(status: AssinaturaItem["status"]) {
-  if (status === "ativo") return "Ativo";
-  if (status === "pendente") return "Pendente";
-  if (status === "vencido") return "Vencido";
-  return "Inativo";
 }
 
 // ─── Nova assinatura modal ────────────────────────────────────────────────────
@@ -324,7 +310,7 @@ export default function AssinaturasPage() {
                     </td>
                     <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{item.validade}</td>
                     <td className="px-5 py-4">
-                      <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                      <StatusBadge status={item.status} />
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">

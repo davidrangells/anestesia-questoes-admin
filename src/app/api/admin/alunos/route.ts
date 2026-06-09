@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { secondsFromUnknown } from "@/lib/dateValue";
 import { requireAdmin } from "@/lib/adminRoute";
-import { hasActiveEntitlement } from "@/lib/entitlementStatus";
+import { hasActiveEntitlement, getEffectiveEntitlementStatus } from "@/lib/entitlementStatus";
 
 function pickString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
           email:
             String(userData.email ?? entitlement.email ?? "").trim() || "—",
           active: hasActiveEntitlement(entitlement),
+          status: getEffectiveEntitlementStatus(entitlement),
           sortSeconds:
             secondsFromUnknown(userData.createdAt) || secondsFromUnknown(userData.updatedAt),
         };
@@ -92,6 +93,7 @@ export async function GET(req: NextRequest) {
         cellphone: item.cellphone,
         email: item.email,
         active: item.active,
+        status: item.status,
       }));
 
     return NextResponse.json({ ok: true, items }, { status: 200 });

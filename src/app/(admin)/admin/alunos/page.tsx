@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Plus, RefreshCw, Pencil, Trash2, Users } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { Button, buttonStyles } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { StatusBadge, type EntitlementStatus } from "@/components/ui/StatusBadge";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
@@ -22,6 +22,7 @@ type AlunoListItem = {
   cellphone: string;
   email: string;
   active: boolean;
+  status?: EntitlementStatus;
 };
 
 export default function AlunosPage() {
@@ -163,7 +164,7 @@ export default function AlunosPage() {
                     <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{item.cpf}</td>
                     <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{item.cellphone}</td>
                     <td className="px-5 py-4">
-                      <Badge tone={item.active ? "emerald" : "amber"}>{item.active ? "Ativo" : "Pendente"}</Badge>
+                      <StatusBadge status={item.status ?? (item.active ? "ativo" : "inativo")} />
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
