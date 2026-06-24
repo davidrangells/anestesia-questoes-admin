@@ -65,6 +65,41 @@ function onlyDigits(value: string) {
   return value.replace(/\D+/g, "");
 }
 
+/**
+ * Normaliza telefone para o formato aceito pelo Bling.
+ * - Remove tudo que nao for digito
+ * - Remove o "55" do codigo do pais se sobrar mais de 11 digitos
+ * - Aceita 10 (fixo) ou 11 (celular) digitos
+ * - Retorna formato "(DD) XXXXX-XXXX" / "(DD) XXXX-XXXX"
+ * - Retorna undefined se nao for valido (assim o campo eh omitido no payload)
+ */
+function normalizePhoneForBling(raw: string): string | undefined {
+  let digits = onlyDigits(raw);
+  if (!digits) return undefined;
+
+  // Remove +55 do codigo do pais quando aplicavel
+  if (digits.length === 13 && digits.startsWith("55")) digits = digits.slice(2);
+  if (digits.length === 12 && digits.startsWith("55")) digits = digits.slice(2);
+
+  // Telefone fixo (10 digitos) ou celular (11 digitos)
+  if (digits.length !== 10 && digits.length !== 11) return undefined;
+
+  const ddd = digits.slice(0, 2);
+  const numero = digits.slice(2);
+  if (numero.length === 9) {
+    return `(${ddd}) ${numero.slice(0, 5)}-${numero.slice(5)}`;
+  }
+  return `(${ddd}) ${numero.slice(0, 4)}-${numero.slice(4)}`;
+}
+
+function pickFirstValidPhone(...candidates: string[]): string | undefined {
+  for (const c of candidates) {
+    const normalized = normalizePhoneForBling(c);
+    if (normalized) return normalized;
+  }
+  return undefined;
+}
+
 function formatDateOnly(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -236,6 +271,14 @@ function validateContactPayload(payload: RecordData) {
 
   if (tipo === "J" && numeroDocumento.length !== 14) {
     throw new Error("CNPJ inválido para o Bling. O contato precisa de 14 dígitos.");
+  }
+
+  const telefone = pickString(payload.telefone);
+  const celular = pickString(payload.celular);
+  if (!telefone && !celular) {
+    throw new Error(
+      "Telefone do aluno ausente ou em formato invalido. Cadastre um telefone valido (10 ou 11 digitos) antes de emitir a nota."
+    );
   }
 
   if (!email && !numeroDocumento) {
@@ -683,14 +726,16 @@ function buildContactPayload(
     email,
     emailNotaFiscal: email || undefined,
     numeroDocumento: numericDocument || undefined,
-    telefone:
-      pickString(input.profile.phone) ||
-      pickString(input.profile.cellphone) ||
-      pickString(input.user.phone),
-    celular:
-      pickString(input.profile.cellphone) ||
-      pickString(input.profile.phone) ||
-      pickString(input.user.phone),
+    telefone: pickFirstValidPhone(
+      pickString(input.profile.phone),
+      pickString(input.profile.cellphone),
+      pickString(input.user.phone)
+    ),
+    celular: pickFirstValidPhone(
+      pickString(input.profile.cellphone),
+      pickString(input.profile.phone),
+      pickString(input.user.phone)
+    ),
     indicadorIe: 9,
     endereco: {
       geral: {
@@ -891,10 +936,11 @@ function buildInvoicePayload(
       nome: customerName,
       email: contact.email,
       numeroDocumento: document,
-      telefone:
-        pickString(input.profile.phone) ||
-        pickString(input.profile.cellphone) ||
-        pickString(input.user.phone),
+      telefone: pickFirstValidPhone(
+        pickString(input.profile.phone),
+        pickString(input.profile.cellphone),
+        pickString(input.user.phone)
+      ),
       ie: undefined,
       im: undefined,
       endereco: {
