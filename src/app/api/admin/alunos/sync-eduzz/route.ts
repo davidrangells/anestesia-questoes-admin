@@ -134,6 +134,41 @@ function addMonths(date: Date, months: number) {
   return next;
 }
 
+/**
+ * Escolhe a melhor data de criacao para o aluno.
+ *
+ * Logica:
+ * - Aluno novo: usa a data da venda no Eduzz (eduzzDate)
+ * - Aluno existente: se a data salva eh MAIS RECENTE que a data da venda,
+ *   significa que foi um sync errado anterior — corrige usando eduzzDate
+ * - Caso contrario, preserva a data ja salva
+ *
+ * Isso faz com que alunos antigos importados em massa (todos com a data do sync)
+ * sejam corrigidos automaticamente para ter a data real da venda.
+ */
+function pickCreatedAt(
+  storedCreatedAt: unknown,
+  eduzzDate: Date | null,
+  now: Date
+): Date {
+  const stored = timestampLikeToDate(storedCreatedAt);
+
+  // Aluno novo (nunca foi salvo): usa data do Eduzz se houver
+  if (!stored) return eduzzDate ?? now;
+
+  // Sem data do Eduzz: preserva a salva
+  if (!eduzzDate) return stored;
+
+  // Data do Eduzz eh anterior a data salva: corrige (sync anterior errado)
+  // Tolerancia de 1 dia para evitar correcoes desnecessarias por horarios proximos
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  if (eduzzDate.getTime() < stored.getTime() - ONE_DAY_MS) {
+    return eduzzDate;
+  }
+
+  return stored;
+}
+
 function formatEduzzDateTime(date: Date) {
   return date.toISOString();
 }
@@ -970,7 +1005,7 @@ export async function POST(req: NextRequest) {
             role: existingRole === "admin" ? "admin" : "student",
             name: mergedCandidate.name || null,
             updatedAt: now,
-            createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
+            createdAt: pickCreatedAt(userSnap.data()?.createdAt, mergedCandidate.paidAt, now),
           },
           { merge: true }
         ),
@@ -1144,7 +1179,11 @@ export async function POST(req: NextRequest) {
             role: existingRole === "admin" ? "admin" : "student",
             name: subscription.name || null,
             updatedAt: now,
-            createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
+            createdAt: pickCreatedAt(
+              userSnap.data()?.createdAt,
+              latestPaid?.paidAt ?? subscription.createdAt ?? null,
+              now
+            ),
           },
           { merge: true }
         ),
@@ -1261,7 +1300,7 @@ export async function POST(req: NextRequest) {
             role: existingRole === "admin" ? "admin" : "student",
             name: candidate.name || null,
             updatedAt: now,
-            createdAt: userSnap.exists ? userSnap.data()?.createdAt ?? now : now,
+            createdAt: pickCreatedAt(userSnap.data()?.createdAt, candidate.paidAt, now),
           },
           { merge: true }
         ),
