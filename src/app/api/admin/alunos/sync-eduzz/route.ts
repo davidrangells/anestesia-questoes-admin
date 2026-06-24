@@ -471,6 +471,26 @@ function isInactiveSubscription(status: string) {
   );
 }
 
+/**
+ * Verifica se o status da ultima fatura indica que a assinatura
+ * NAO deve dar acesso (reembolso, chargeback, cancelamento, recusa).
+ */
+function isRefundedOrCanceledStatus(status: string) {
+  const normalized = (status || "").toLowerCase().trim();
+  if (!normalized) return false;
+  return (
+    normalized.includes("refund") ||      // refunded / refund
+    normalized.includes("reembols") ||    // reembolsado / reembolso
+    normalized.includes("chargeback") ||
+    normalized.includes("cancel") ||      // canceled / cancelled / cancelado
+    normalized.includes("denied") ||
+    normalized.includes("declined") ||
+    normalized.includes("recusad") ||
+    normalized.includes("estornad") ||
+    normalized === "3" || normalized === "4" // codigos numericos comuns do Eduzz para reembolso
+  );
+}
+
 function isPaidInvoice(status: string) {
   const normalized = status.toLowerCase();
   return (
@@ -1026,7 +1046,7 @@ export async function POST(req: NextRequest) {
           {
             uid,
             email: mergedCandidate.email,
-            active: true,
+            active: !isRefundedOrCanceledStatus(mergedCandidate.invoiceStatus),
             pending: false,
             source: "eduzz",
             sourceDetail: "eduzz_sales_import",
@@ -1204,7 +1224,7 @@ export async function POST(req: NextRequest) {
           {
             uid,
             email: subscription.email,
-            active: true,
+            active: !isRefundedOrCanceledStatus(latestPaid?.status || subscription.status),
             pending: false,
             source: "eduzz",
             sourceDetail: "eduzz_import",
@@ -1321,7 +1341,7 @@ export async function POST(req: NextRequest) {
           {
             uid,
             email: candidate.email,
-            active: true,
+            active: !isRefundedOrCanceledStatus(candidate.invoiceStatus),
             pending: false,
             source: "eduzz",
             sourceDetail: "eduzz_event_import",
