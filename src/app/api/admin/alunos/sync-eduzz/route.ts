@@ -744,7 +744,14 @@ async function fetchRecentPaidEventCandidates(cutoff: Date) {
 async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
   // Busca tambem reembolsos/cancelamentos junto com vendas pagas, para que
   // assinaturas reembolsadas sejam desativadas corretamente no sync.
-  return fetchSalesCandidatesByStatus(token, cutoff, ["paid", "refunded", "chargeback", "canceled"]);
+  // Status validos na API Eduzz: paid, refunded, partialRefund, canceled, refused
+  return fetchSalesCandidatesByStatus(token, cutoff, [
+    "paid",
+    "refunded",
+    "partialRefund",
+    "canceled",
+    "refused",
+  ]);
 }
 
 async function fetchSalesCandidatesByStatus(token: string, cutoff: Date, statuses: string[]) {
