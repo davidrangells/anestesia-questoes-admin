@@ -649,6 +649,23 @@ async function blingRequest(
     ({ res, data, rawText } = await attempt(currentSettings.accessToken));
   }
 
+  // Retry com backoff em rate limit (429) ou erros temporarios do servidor (502/503/504).
+  // Bling permite 3 req/s na API v3.
+  const RETRYABLE_STATUSES = [429, 502, 503, 504];
+  const MAX_RETRIES = 3;
+  let retryCount = 0;
+  while (RETRYABLE_STATUSES.includes(res.status) && retryCount < MAX_RETRIES) {
+    retryCount += 1;
+    // Backoff exponencial: 1.5s, 3s, 6s. Respeita Retry-After se enviado.
+    const retryAfterHeader = res.headers.get("retry-after");
+    const retryAfterSec = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : NaN;
+    const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+      ? retryAfterSec * 1000
+      : 1500 * Math.pow(2, retryCount - 1);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    ({ res, data, rawText } = await attempt(currentSettings.accessToken));
+  }
+
   if (!res.ok) {
     const baseMsg = extractBlingError(data) || "";
     const genericMessages = new Set([
