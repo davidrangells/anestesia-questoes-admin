@@ -742,6 +742,21 @@ async function fetchRecentPaidEventCandidates(cutoff: Date) {
 }
 
 async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
+  // Busca tambem reembolsos/cancelamentos junto com vendas pagas, para que
+  // assinaturas reembolsadas sejam desativadas corretamente no sync.
+  return fetchSalesCandidatesByStatus(token, cutoff, ["paid", "refunded", "chargeback", "canceled"]);
+}
+
+async function fetchSalesCandidatesByStatus(token: string, cutoff: Date, statuses: string[]) {
+  const allCandidates: EduzzSaleCandidate[] = [];
+  for (const status of statuses) {
+    const items = await fetchSalesPaginated(token, cutoff, status);
+    allCandidates.push(...items);
+  }
+  return allCandidates;
+}
+
+async function fetchSalesPaginated(token: string, cutoff: Date, status: string) {
   const candidates: EduzzSaleCandidate[] = [];
   const endDate = new Date();
 
@@ -752,7 +767,7 @@ async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
       startDate: formatEduzzDate(cutoff),
       endDate: formatEduzzDate(endDate),
       referenceDate: "paidAt",
-      status: "paid",
+      status,
     });
     const payload = await eduzzRequest(`/myeduzz/v1/sales?${params.toString()}`, token);
     const rawItems = extractArray(payload);
@@ -937,7 +952,27 @@ export async function POST(req: NextRequest) {
     const eventByEmail = new Map(
       eventCandidates.map((candidate) => [candidate.email, candidate] as const)
     );
-    const salesCandidates = await fetchPaidSalesCandidates(token, rangeStart);
+    const rawSalesCandidates = await fetchPaidSalesCandidates(token, rangeStart);
+
+    // Para cada e-mail, mantem APENAS o registro mais recente (por paidAt).
+    // Assim, se houve venda paga seguida de reembolso, o reembolso vence — e
+    // desativa a assinatura corretamente.
+    const latestByEmail = new Map<string, EduzzSaleCandidate>();
+    for (const candidate of rawSalesCandidates) {
+      if (!candidate.email) continue;
+      const existing = latestByEmail.get(candidate.email);
+      if (!existing) {
+        latestByEmail.set(candidate.email, candidate);
+        continue;
+      }
+      const existingTime = existing.paidAt?.getTime() ?? 0;
+      const candidateTime = candidate.paidAt?.getTime() ?? 0;
+      if (candidateTime >= existingTime) {
+        latestByEmail.set(candidate.email, candidate);
+      }
+    }
+    const salesCandidates = Array.from(latestByEmail.values());
+
     const subscriptions = await fetchAllSubscriptions(token, rangeStart, rangeEnd);
     let scanned = 0;
     let imported = 0;
