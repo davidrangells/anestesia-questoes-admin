@@ -742,23 +742,29 @@ async function fetchRecentPaidEventCandidates(cutoff: Date) {
 }
 
 async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
-  // Busca tambem reembolsos/cancelamentos junto com vendas pagas, para que
-  // assinaturas reembolsadas sejam desativadas corretamente no sync.
-  // Status validos na API Eduzz: paid, refunded, partialRefund, canceled, refused
+  // Busca vendas pagas + reembolsos/cancelamentos (que TEM paidAt — ja foram pagas
+  // em algum momento). Nao incluimos "refused" porque essa nunca foi paga e
+  // nao bate com o filtro referenceDate=paidAt (gera erro 500 na API).
   return fetchSalesCandidatesByStatus(token, cutoff, [
     "paid",
     "refunded",
     "partialRefund",
     "canceled",
-    "refused",
   ]);
 }
 
 async function fetchSalesCandidatesByStatus(token: string, cutoff: Date, statuses: string[]) {
   const allCandidates: EduzzSaleCandidate[] = [];
   for (const status of statuses) {
-    const items = await fetchSalesPaginated(token, cutoff, status);
-    allCandidates.push(...items);
+    try {
+      const items = await fetchSalesPaginated(token, cutoff, status);
+      allCandidates.push(...items);
+    } catch (error) {
+      // Se um status falhar na API do Eduzz, loga e continua com os outros.
+      // Assim um erro pontual nao quebra o sync inteiro.
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn(`[sync-eduzz] Falha ao buscar vendas com status "${status}": ${msg}`);
+    }
   }
   return allCandidates;
 }
