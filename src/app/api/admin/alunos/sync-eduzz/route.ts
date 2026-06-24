@@ -411,10 +411,13 @@ function mapInvoice(raw: RecordData): EduzzInvoice | null {
         raw.date
     ),
     dueAt: toDateOrNull(raw.dueAt ?? raw.due_at ?? raw.dueDate ?? raw.expireDate ?? raw.expire_date),
+    // IMPORTANTE: usar o valor da VENDA (price.value), nao o valor PAGO (paid.value).
+    // Em parcelamentos no cartao, paid.value inclui os juros (que vao para a operadora,
+    // nao para o produtor). Para a NFS-e, o valor correto eh o do servico (preco a vista).
     amountPaid:
-      pickNumber(paidNode.value) ??
       pickNumber(priceNode.value) ??
-      pickNumber(raw.amountPaid ?? raw.total ?? raw.value),
+      pickNumber(raw.amountPaid ?? raw.total ?? raw.value) ??
+      pickNumber(paidNode.value),
     currency:
       pickString(paidNode.currency) ||
       pickString(priceNode.currency) ||
@@ -634,12 +637,15 @@ async function fetchRecentPaidEventCandidates(cutoff: Date) {
           envelopeData.edz_cnt_titulo,
           (items as RecordData | null)?.name
         ) || null,
+      // IMPORTANTE: price.value (preco a vista da venda) tem prioridade sobre
+      // price.paid.value (que inclui juros do parcelamento no cartao). Para a NFS-e
+      // o valor correto eh o do servico, sem os juros que vao para a operadora.
       amountPaid:
+        pickNumber((envelopeData.price as RecordData | undefined)?.value) ??
+        pickNumber(envelopeData.value) ??
         pickNumber(
           ((envelopeData.price as RecordData | undefined)?.paid as RecordData | undefined)?.value
-        ) ??
-        pickNumber((envelopeData.price as RecordData | undefined)?.value) ??
-        pickNumber(envelopeData.value),
+        ),
       currency:
         pickFirstString(
           ((envelopeData.price as RecordData | undefined)?.paid as RecordData | undefined)?.currency,
@@ -741,9 +747,10 @@ async function fetchPaidSalesCandidates(token: string, cutoff: Date) {
         productTitle:
           pickFirstString(product.name, product.title, item.productName, (item.offer as RecordData | undefined)?.title) ||
           null,
+        // IMPORTANTE: usar value da venda (sem juros). totalInterest inclui juros
+        // do parcelamento — nao serve para NFS-e (juros vao para a operadora do cartao).
         amountPaid:
           pickNumber((item.total as RecordData | undefined)?.value) ??
-          pickNumber((item.totalInterest as RecordData | undefined)?.value) ??
           pickNumber(item.value),
         currency:
           pickFirstString(
