@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, FileText, BookOpen, Tags, Brain,
   AlertTriangle, FlaskConical, CreditCard, Receipt, Package,
   Image, Download, Banknote, ShieldCheck, Settings, LogOut,
-  Sun, Moon, type LucideIcon,
+  Sun, Moon, Sparkles, type LucideIcon,
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { Button, buttonStyles } from "@/components/ui/Button";
@@ -142,6 +142,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
             <Item href="/admin/questoes" label="Questões" icon={Brain} onNavigate={handleNavigate} />
             <Item href="/admin/erros-reportados" label="Erros Reportados" icon={AlertTriangle} onNavigate={handleNavigate} />
             <Item href="/admin/simulados" label="Simulados" icon={FlaskConical} onNavigate={handleNavigate} />
+            <Item href="/admin/flashcards" label="Flashcards" icon={Sparkles} onNavigate={handleNavigate} />
           </Section>
 
           <Section title="Financeiro">
