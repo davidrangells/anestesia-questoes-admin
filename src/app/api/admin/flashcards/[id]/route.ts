@@ -112,7 +112,7 @@ export async function PATCH(
         update.isActive = true;
         update.needsReview = false;
         update.reviewedAt = now;
-        update.reviewedBy = authCheck.user?.uid ?? null;
+        update.reviewedBy = authCheck.adminUid ?? null;
       }
       if (v === "archived" || v === "draft") {
         update.isActive = false;
