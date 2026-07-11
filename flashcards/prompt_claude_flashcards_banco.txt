@@ -1,0 +1,185 @@
+Você é o Claude Code atuando no projeto Anestesia Questões.
+
+Objetivo:
+Implementar suporte a um novo banco de dados de Flashcards no Firestore usando a planilha de importação "anestesia_flashcards_import_2026-06-26.xlsx".
+
+Contexto:
+Antes, os flashcards estavam sendo exibidos diretamente a partir do banco de questões. Isso deixava a experiência confusa, porque a frente do card mostrava um enunciado de questão e o verso mostrava apenas a alternativa correta, às vezes como "Letra C", sem as alternativas na frente. A nova abordagem separa conceitualmente:
+
+- Questões = treino de prova, com enunciado, alternativas e comentário completo.
+- Flashcards = revisão rápida, curta e objetiva, com frente, verso e explicação resumida.
+
+Como a planilha foi criada:
+A planilha original exportada do Firebase tinha 2.300 questões. Para cada questão, foi gerado 1 flashcard inicial em modo rascunho/revisão, mantendo vínculo com a questão original.
+
+A lógica usada foi:
+1. sourceQuestionId recebeu o docId original da questão.
+2. frontText recebeu o enunciado limpo de HTML e encurtado quando necessário.
+3. backText recebeu o texto da alternativa correta.
+4. shortExplanation recebeu um resumo inicial da explicação original.
+5. themeId foi gerado a partir do tema principal em formato slug.
+6. deckIds foi preenchido com decks sugeridos, separados por ponto e vírgula.
+7. tags foi preenchido com tags sugeridas, separadas por ponto e vírgula.
+8. status ficou como "pending_review".
+9. isActive ficou como false para evitar publicação automática.
+10. needsReview ficou como true para obrigar revisão humana antes de publicar.
+
+Importante:
+A planilha é uma base inicial de importação e revisão. Não publicar automaticamente os cards para os alunos. O admin deve revisar/editar/aprovar antes de tornar isActive=true e status=published.
+
+Estrutura das abas:
+1. Flashcards_Import
+   Contém os flashcards a importar.
+2. Decks_Import
+   Contém decks sugeridos para organização dos flashcards.
+3. Estrutura_Campos
+   Documenta o significado de cada campo.
+4. Validacoes
+   Lista status, difficulty e sourceType permitidos.
+
+Criar/ajustar coleções no Firestore:
+
+1. flashcards
+Documento sugerido:
+{
+  frontText: string,
+  backText: string,
+  shortExplanation: string,
+  themeId: string,
+  themeName: string,
+  moduleId: string,
+  examType: string,
+  examYear: string | null,
+  level: string | null,
+  deckIds: string[],
+  tags: string[],
+  difficulty: "easy" | "medium" | "hard",
+  status: "pending_review" | "published" | "draft" | "archived",
+  isActive: boolean,
+  sourceType: "question" | "manual" | "ai_generated",
+  sourceQuestionId: string | null,
+  sourceCorrectOptionId: string | null,
+  sourceCorrectOptionText: string | null,
+  sourceReference: string | null,
+  needsReview: boolean,
+  reviewNotes: string | null,
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  createdBy: string | null,
+  reviewedBy: string | null,
+  reviewedAt: Timestamp | null
+}
+
+2. flashcardDecks
+Documento sugerido:
+{
+  title: string,
+  description: string,
+  moduleId: string | null,
+  themeId: string | null,
+  cardCount: number,
+  isActive: boolean,
+  order: number,
+  status: "pending_review" | "published" | "draft" | "archived",
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+
+3. userFlashcardProgress
+Documento sugerido:
+{
+  userId: string,
+  flashcardId: string,
+  deckId: string | null,
+  box: number,
+  status: "new" | "learning" | "reviewing" | "mastered" | "archived",
+  lastReviewedAt: Timestamp | null,
+  nextReviewAt: Timestamp | null,
+  timesReviewed: number,
+  timesCorrect: number,
+  timesAlmost: number,
+  timesWrong: number,
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+
+Regras de importação da planilha:
+- Ler a aba Flashcards_Import.
+- Para cada linha:
+  - Usar flashcardId como ID do documento, se possível.
+  - Converter deckIds de string separada por ";" para array.
+  - Converter tags de string separada por ";" para array.
+  - Converter isActive e needsReview para boolean.
+  - Não publicar automaticamente cards com status pending_review.
+  - Ignorar ou registrar erro se frontText/backText estiverem vazios.
+- Ler a aba Decks_Import.
+  - Usar deckId como ID do documento.
+  - Importar decks inicialmente como pending_review e isActive=false.
+
+No app do aluno:
+- Exibir apenas flashcards com status=="published" e isActive==true.
+- Na frente do card, mostrar frontText.
+- No verso, mostrar backText e shortExplanation.
+- Mostrar botão "Ver questão original" apenas quando sourceQuestionId existir.
+- Ao clicar em "Ver questão original", abrir a questão do banco atual usando sourceQuestionId.
+- Botões de revisão:
+  - Não sabia
+  - Quase
+  - Sabia
+
+Lógica inicial de repetição espaçada:
+- Não sabia: nextReviewAt = amanhã, box = 1, timesWrong +1.
+- Quase: nextReviewAt = hoje + 3 dias, box = max(box, 2), timesAlmost +1.
+- Sabia: nextReviewAt = hoje + 7 dias, box = box + 1, timesCorrect +1.
+- Se box avançar bastante, pode marcar como mastered depois de critérios definidos.
+
+No admin:
+Criar um menu "Flashcards" com:
+- Todos os flashcards
+- Novo flashcard
+- Decks
+- Importar planilha
+- Pendentes de revisão
+- Publicados
+
+Na listagem:
+- Mostrar frontText, themeName, examType, difficulty, status, isActive e needsReview.
+- Permitir filtros por status, tema, prova, dificuldade e deck.
+- Permitir edição do frontText, backText e shortExplanation antes da publicação.
+
+Fluxo de aprovação:
+1. Importar todos como pending_review e isActive=false.
+2. Gestor revisa o card.
+3. Gestor ajusta frontText/backText/shortExplanation.
+4. Gestor muda status para published.
+5. Sistema define isActive=true.
+6. Card passa a aparecer no app.
+
+Cuidados técnicos:
+- Não alterar o banco atual de questões.
+- Não remover a funcionalidade existente sem antes testar a nova.
+- Criar importador com validação e logs.
+- Evitar duplicação: usar sourceQuestionId para vincular à questão original, não copiar a questão inteira para o documento final.
+- Se decidir manter sourceQuestionPreview, usar apenas para revisão no admin, não para exibição principal no app.
+- Criar índices Firestore para consultas por:
+  - status + isActive
+  - deckIds + status + isActive
+  - themeId + status + isActive
+  - examType + status + isActive
+  - userId + nextReviewAt em userFlashcardProgress
+
+Antes de implementar:
+1. Localize a estrutura atual dos flashcards no projeto.
+2. Localize services/hooks/telas usados pelo app e admin.
+3. Faça um plano curto explicando quais arquivos serão criados/alterados.
+4. Peça autorização antes de migrar ou substituir a tela atual.
+5. Comece pelo importador e modelos/tipos, depois admin, depois app do aluno.
+
+Entrega esperada:
+- Tipos/interfaces dos novos documentos.
+- Serviço de importação da planilha.
+- CRUD admin para flashcards e decks.
+- Tela do aluno lendo a nova coleção flashcards.
+- Progresso individual em userFlashcardProgress.
+- Botão "Ver questão original" usando sourceQuestionId.
+- Documentação breve das coleções e regras de segurança necessárias.
