@@ -1085,8 +1085,9 @@ export function QuestionEditorForm({
                       levelId: event.target.value,
                       // Sempre sincroniza com o titulo do nivel selecionado (nunca mantem valor antigo)
                       level: nextLevel?.title || "",
-                      themeIds: [],
-                      themes: [],
+                      // Preserva os temas selecionados: availableThemes ja mostra
+                      // todos independente do nivel. Sem isso, o botao Salvar
+                      // fica desabilitado ao trocar o nivel (temas ficam vazios).
                     }));
                   }}
                   className="w-full rounded-xl border px-4 py-3 text-sm bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
