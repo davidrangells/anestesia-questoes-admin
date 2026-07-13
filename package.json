@@ -13,6 +13,7 @@
     "flashcards:import": "node scripts/import-flashcards.mjs",
     "flashcards:clear": "node scripts/clear-flashcards.mjs",
     "flashcards:cleanup-vf": "node scripts/cleanup-vf-flashcards.mjs",
+    "flashcards:recalc-decks": "node scripts/recalc-deck-counts.mjs",
     "questions:sync": "node scripts/sync-questions-from-xlsx.mjs",
     "questions:convert-recovered": "node scripts/convert-recovered-questions-xlsx.mjs",
     "questions:convert-generic": "node scripts/convert-questions-to-firebase-import.mjs",
