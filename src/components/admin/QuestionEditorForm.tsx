@@ -170,7 +170,9 @@ export function createEmptyQuestionForm(): QuestionFormState {
     examId: "",
     examType: "TSA",
     levelId: "",
-    level: "R1",
+    // Nao usa default fixo (ex: "R1") — o valor real vem do catalogo carregado.
+    // Se ficasse "R1", o select podia mostrar outro nivel mas o campo salvar R1.
+    level: "",
     examYear: "",
     themes: [],
     themeIds: [],
@@ -503,12 +505,22 @@ export function QuestionEditorForm({
             .filter(Boolean);
           const nextThemeIds = Array.from(new Set([...persistedThemeIds, ...fallbackThemeIds]));
 
+          // Sempre garante que level (string) fica sincronizado com levelId (doc id).
+          // Se o levelId estiver vazio, usa o primeiro do catalogo.
+          // Se levelId ja existir, usa o title do nivel correspondente.
+          const resolvedLevelId = prev.levelId || level?.id || "";
+          const resolvedLevel =
+            nextLevels.find((item) => item.id === resolvedLevelId)?.title ||
+            prev.level ||
+            level?.title ||
+            "";
+
           return {
             ...prev,
             examId: prev.examId || exam?.id || "",
             examType: prev.examType || exam?.title || prev.examType,
-            levelId: prev.levelId || level?.id || "",
-            level: prev.level || level?.title || prev.level,
+            levelId: resolvedLevelId,
+            level: resolvedLevel,
             themeIds: nextThemeIds,
             themes: nextThemeIds
               .map(
@@ -1071,7 +1083,8 @@ export function QuestionEditorForm({
                     setForm((prev) => ({
                       ...prev,
                       levelId: event.target.value,
-                      level: nextLevel?.title || prev.level,
+                      // Sempre sincroniza com o titulo do nivel selecionado (nunca mantem valor antigo)
+                      level: nextLevel?.title || "",
                       themeIds: [],
                       themes: [],
                     }));

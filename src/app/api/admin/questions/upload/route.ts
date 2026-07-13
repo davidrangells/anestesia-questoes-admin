@@ -68,8 +68,10 @@ export async function POST(req: NextRequest) {
 
     let uploadedBucket = "";
     let lastError: unknown = null;
+    const attemptedBuckets: string[] = [];
 
     for (const bucketName of bucketCandidates) {
+      attemptedBuckets.push(bucketName);
       try {
         const bucket = getStorage().bucket(bucketName);
         const object = bucket.file(path);
@@ -89,11 +91,15 @@ export async function POST(req: NextRequest) {
         break;
       } catch (error) {
         lastError = error;
+        console.error(`[upload] Falha no bucket ${bucketName}:`, error instanceof Error ? error.message : error);
       }
     }
 
     if (!uploadedBucket) {
-      throw lastError instanceof Error ? lastError : new Error("Não foi possível salvar no Storage.");
+      const detail = lastError instanceof Error ? lastError.message : "Erro desconhecido";
+      throw new Error(
+        `Nao foi possivel salvar no Storage. Buckets tentados: ${attemptedBuckets.join(", ")}. Ultimo erro: ${detail}`
+      );
     }
 
     const url = buildPublicDownloadUrl(uploadedBucket, path, token);
