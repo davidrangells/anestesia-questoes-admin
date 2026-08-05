@@ -34,9 +34,12 @@ export type QuestionCatalogOption = {
   levelLabel?: string | null;
 };
 
+export type QuestionExplanationSource = "" | "ia" | "exclusivo";
+
 export type QuestionFormState = {
   prompt: string;
   explanation: string;
+  explanationSource: QuestionExplanationSource;
   examId: string;
   examType: string;
   levelId: string;
@@ -59,6 +62,7 @@ type QuestionDocLike = {
   prompt?: string;
   prompt_text?: string;
   explanation?: string;
+  explanationSource?: string | null;
   imageUrl?: string | null;
   promptImageWidth?: number | null;
   options?: QuestionOption[];
@@ -167,6 +171,7 @@ export function createEmptyQuestionForm(): QuestionFormState {
   return {
     prompt: "",
     explanation: "",
+    explanationSource: "",
     examId: "",
     examType: "TSA",
     levelId: "",
@@ -240,9 +245,14 @@ export function questionDocToForm(data: QuestionDocLike): QuestionFormState {
 
   const correctOptionId = (data.correctOptionId ?? "A") as QuestionOption["id"];
 
+  const rawSource = (data.explanationSource ?? "").toString().trim().toLowerCase();
+  const explanationSource: QuestionExplanationSource =
+    rawSource === "ia" || rawSource === "exclusivo" ? rawSource : "";
+
   return {
     prompt,
     explanation: (data.explanation ?? "").toString(),
+    explanationSource,
     examId: (data.examId ?? "").toString(),
     examType: (data.examType ?? data.prova_tipo ?? "").toString(),
     levelId: (data.levelId ?? "").toString(),
@@ -289,6 +299,7 @@ export function buildQuestionPayload(form: QuestionFormState) {
     prompt_text: form.prompt.trim(),
     explanation: form.explanation.trim(),
     explanationFormat: "html",
+    explanationSource: form.explanationSource || null,
     examId: form.examId || null,
     examType: form.examType,
     prova_tipo: form.examType,
@@ -1006,9 +1017,54 @@ export function QuestionEditorForm({
               onRequestImage={() => void openRichImageModal("explanation")}
               pendingImageUrl={pendingExplanationImageUrl ?? undefined}
               onPendingImageHandled={() => setPendingExplanationImageUrl(null)}
-              onChange={(value) => setForm((prev) => ({ ...prev, explanation: value }))}
+              onChange={(value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  explanation: value,
+                  // Editar o texto de um comentário de IA promove para "exclusivo";
+                  // o admin ainda pode voltar para "IA" no seletor abaixo.
+                  explanationSource:
+                    prev.explanationSource === "ia" && value !== initialValue.explanation
+                      ? "exclusivo"
+                      : prev.explanationSource,
+                }))
+              }
               imageAlt="Imagem adicionada no comentário"
             />
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Origem do comentário
+              </div>
+              <select
+                value={form.explanationSource}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    explanationSource: event.target.value as QuestionExplanationSource,
+                  }))
+                }
+                className="rounded-xl border dark:border-slate-700 px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
+              >
+                <option value="">Não informado</option>
+                <option value="ia">Gerado por IA</option>
+                <option value="exclusivo">Comentário exclusivo</option>
+              </select>
+              {form.explanationSource === "ia" ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300">
+                  ✨ IA
+                </span>
+              ) : null}
+              {form.explanationSource === "exclusivo" ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  ✍️ Exclusivo
+                </span>
+              ) : null}
+              {form.explanationSource === "ia" ? (
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Ao editar o texto, muda automaticamente para “Comentário exclusivo”.
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <div className="min-w-0 rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5">

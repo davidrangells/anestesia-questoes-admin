@@ -27,7 +27,7 @@ type QBQuestion = {
   correctOptionId?: string; shuffleOptions?: boolean;
   examType?: string; prova_tipo?: string; examYear?: number | null; prova_ano?: number | string | null;
   examSource?: string; Prova?: string; level?: string; nivel?: string;
-  themes?: string[] | string; isActive?: boolean;
+  themes?: string[] | string; isActive?: boolean; explanationSource?: string | null;
   optionA_imageUrl?: string | null; optionB_imageUrl?: string | null;
   optionC_imageUrl?: string | null; optionD_imageUrl?: string | null; optionE_imageUrl?: string | null;
   optionA_text?: string; optionB_text?: string; optionC_text?: string;
@@ -90,6 +90,7 @@ function sanitizeForCopy(q: QBQuestion) {
   return {
     prompt: (q.prompt_text ?? q.prompt ?? q.questionText ?? q.statement ?? "").toString().trim(),
     explanation: (q.explanation ?? "").toString(),
+    explanationSource: q.explanationSource ?? null,
     imageUrl: (q.imageUrl ?? "").toString(),
     options: (Array.isArray(q.options) && q.options.length ? q.options : optionFallbacks)
       .map((o) => ({ id: o.id, text: (o.text ?? "").toString(), imageUrl: (o.imageUrl ?? "").toString() })),
@@ -424,7 +425,25 @@ export default function BancoQuestoesPage() {
                         <div className="line-clamp-2 max-w-[340px] font-semibold text-slate-900 dark:text-slate-100">
                           {getEnunciado(q)}
                         </div>
-                        <div className="mt-1 font-mono text-[11px] text-slate-400">ID: {q.id}</div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="font-mono text-[11px] text-slate-400">ID: {q.id}</span>
+                          {q.explanationSource === "ia" ? (
+                            <span
+                              title="Comentário gerado por IA"
+                              className="inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300"
+                            >
+                              ✨ IA
+                            </span>
+                          ) : null}
+                          {q.explanationSource === "exclusivo" ? (
+                            <span
+                              title="Comentário exclusivo (revisado manualmente)"
+                              className="inline-flex items-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
+                            >
+                              ✍️ Exclusivo
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
 
                       <td className="align-top px-5 py-4">

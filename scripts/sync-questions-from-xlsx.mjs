@@ -357,6 +357,14 @@ async function loadCatalogContext(db) {
   return { exams, levels, themes };
 }
 
+function parseExplanationSource(value) {
+  const key = normalizeKey(value);
+  if (!key) return null;
+  if (["ia", "ai"].includes(key)) return "ia";
+  if (["exclusivo", "manual", "proprio", "autoral"].includes(key)) return "exclusivo";
+  return undefined;
+}
+
 function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
   const docId = normalizeText(row.docId);
   const prompt = normalizeText(row.prompt_text);
@@ -429,11 +437,22 @@ function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
   const optionMap = Object.fromEntries(options.map((option) => [option.id, option]));
   const existingData = existing || {};
 
+  const parsedExplanationSource = parseExplanationSource(row.explanationSource);
+  if (parsedExplanationSource === undefined) {
+    warnings.push(
+      `explanationSource inválido (use "ia" ou "exclusivo"): ${normalizeText(row.explanationSource)}`
+    );
+  }
+  const explanationSource =
+    parsedExplanationSource ??
+    (typeof existingData.explanationSource === "string" ? existingData.explanationSource : null);
+
   const payload = {
     prompt,
     prompt_text: prompt,
     explanation: normalizeText(row.explanation),
     explanationFormat: "html",
+    explanationSource,
     examId,
     examType,
     prova_tipo: examType,
