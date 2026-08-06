@@ -1,0 +1,23 @@
+[
+ {
+  "id": "fc_vADF98hecyX6QDda0N1t_01",
+  "frontText": "Por que a raquianestesia é vantajosa sobre a anestesia geral em cirurgia ambulatorial no que se refere a náuseas e vômitos?",
+  "backText": "Menor incidência de náuseas e vômitos pós-operatórios",
+  "shortExplanation": "Dispensa halogenados e opioides sistêmicos, principais gatilhos de NVPO, o que favorece a alta precoce. A hipotensão do bloqueio simpático, porém, ainda pode causar náusea no intraoperatório.",
+  "difficulty": "easy"
+ },
+ {
+  "id": "fc_2148_01",
+  "frontText": "Ordene, da mais próxima à mais distante da osmolaridade plasmática: NaCl 0,45%, NaCl 3%, Ringer lactato e salina 0,9%.",
+  "backText": "Salina 0,9% > Ringer lactato > NaCl 0,45% > NaCl 3%",
+  "shortExplanation": "O plasma tem cerca de 290 mOsm/L. A salina 0,9% fica em 308, o Ringer lactato em 273 e o NaCl 0,45% em 154. O NaCl 3%, com cerca de 1027, é o mais distante por ser francamente hipertônico.",
+  "difficulty": "hard"
+ },
+ {
+  "id": "fc_vxefjtdBHGO2v2Edbwoi_01",
+  "frontText": "Quanto à compatibilidade ABO, qual é a característica do crioprecipitado na transfusão?",
+  "backText": "Baixo teor antigênico, mas pode sensibilizar para o grupo ABO",
+  "shortExplanation": "O volume de plasma residual é pequeno, de modo que a prova cruzada costuma ser dispensada. Ainda assim há anticorpos capazes de sensibilizar o receptor, e prefere-se compatibilidade ABO em crianças e em grandes volumes.",
+  "difficulty": "medium"
+ }
+]
