@@ -165,6 +165,7 @@ function normalizeFlashcardRow(row, index) {
     sourceCorrectOptionText: pickString(row.sourceCorrectOptionText) || null,
     sourceReference: pickString(row.sourceReference) || null,
     sourceQuestionPreview: pickString(row.sourceQuestionPreview) || null,
+    generationMethod: pickString(row.generationMethod) || null,
     needsReview: parseBool(row.needsReview, true),
     reviewNotes: pickString(row.reviewNotes) || null,
     createdBy: null,
