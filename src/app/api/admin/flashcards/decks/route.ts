@@ -28,8 +28,12 @@ export async function GET(req: NextRequest) {
     if (moduleParam && MODULES.includes(moduleParam)) {
       query = query.where("moduleId", "==", moduleParam);
     }
-    const snap = await query.orderBy("order", "asc").get();
-    const items = snap.docs.map((doc) => {
+    // Ordena em memoria (where + orderBy exigiria indice composto).
+    const snap = await query.get();
+    const docs = [...snap.docs].sort(
+      (a, b) => ((a.data().order as number) ?? 0) - ((b.data().order as number) ?? 0)
+    );
+    const items = docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,

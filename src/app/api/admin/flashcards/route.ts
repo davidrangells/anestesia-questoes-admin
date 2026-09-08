@@ -15,6 +15,15 @@ import {
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
 
+function toMillis(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object" && value !== null && "toMillis" in value) {
+    const t = value as { toMillis?: () => number };
+    if (typeof t.toMillis === "function") return t.toMillis();
+  }
+  return 0;
+}
+
 function toIsoOrNull(value: unknown): string | null {
   if (!value) return null;
   if (value instanceof Date) return value.toISOString();
@@ -44,7 +53,8 @@ export async function GET(req: NextRequest) {
         ? Math.min(limitParam, MAX_PAGE_SIZE)
         : DEFAULT_PAGE_SIZE;
 
-    let query: FirebaseFirestore.Query = adminDb.collection(COL_FLASHCARDS);
+    const baseQuery: FirebaseFirestore.Query = adminDb.collection(COL_FLASHCARDS);
+    let query = baseQuery;
 
     if (statusParam && STATUSES.includes(statusParam)) {
       query = query.where("status", "==", statusParam);
@@ -67,11 +77,21 @@ export async function GET(req: NextRequest) {
       query = query.where("needsReview", "==", false);
     }
 
-    // Ordena por updatedAt desc para mostrar os mais recentes primeiro
-    query = query.orderBy("updatedAt", "desc").limit(limit);
+    // Sem filtros: ordena no Firestore. Com filtros: buscar tudo e ordenar em
+    // memoria, para nao exigir um indice composto por combinacao de filtros
+    // (status+updatedAt, status+needsReview+updatedAt, moduleId+updatedAt...).
+    const hasFilters = query !== baseQuery;
+    if (!hasFilters) {
+      query = query.orderBy("updatedAt", "desc").limit(limit);
+    }
 
     const snap = await query.get();
-    let items = snap.docs.map((doc) => {
+    const docs = hasFilters
+      ? [...snap.docs]
+          .sort((a, b) => toMillis(b.data().updatedAt) - toMillis(a.data().updatedAt))
+          .slice(0, limit)
+      : snap.docs;
+    let items = docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
