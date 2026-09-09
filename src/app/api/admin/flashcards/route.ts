@@ -13,7 +13,7 @@ import {
 } from "@/lib/flashcards/constants";
 
 const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 200;
+const MAX_PAGE_SIZE = 2000;
 
 function toMillis(value: unknown): number {
   if (value instanceof Date) return value.getTime();
@@ -56,9 +56,6 @@ export async function GET(req: NextRequest) {
     const baseQuery: FirebaseFirestore.Query = adminDb.collection(COL_FLASHCARDS);
     let query = baseQuery;
 
-    if (statusParam && STATUSES.includes(statusParam)) {
-      query = query.where("status", "==", statusParam);
-    }
     if (moduleParam && MODULES.includes(moduleParam)) {
       query = query.where("moduleId", "==", moduleParam);
     }
@@ -75,6 +72,14 @@ export async function GET(req: NextRequest) {
       query = query.where("needsReview", "==", true);
     } else if (needsReviewParam === "false") {
       query = query.where("needsReview", "==", false);
+    }
+
+    // Guarda a query sem o filtro de status: as contagens de pendentes e
+    // publicados precisam dela, senao teriam duas condicoes de igualdade
+    // conflitantes sobre o mesmo campo.
+    const queryWithoutStatus = query;
+    if (statusParam && STATUSES.includes(statusParam)) {
+      query = query.where("status", "==", statusParam);
     }
 
     // Sem filtros: ordena no Firestore. Com filtros: buscar tudo e ordenar em
@@ -122,7 +127,27 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ ok: true, items, total: items.length }, { status: 200 });
+    // Contagens reais no Firestore (agregacao count, nao le documentos).
+    // Sem isso o "total" seria apenas o tamanho da pagina retornada.
+    const countBase = queryWithoutStatus;
+    const [totalSnap, pendingSnap, publishedSnap] = await Promise.all([
+      query.count().get(),
+      countBase.where("status", "==", "pending_review").count().get(),
+      countBase.where("status", "==", "published").where("isActive", "==", true).count().get(),
+    ]);
+
+    const counts = {
+      total: totalSnap.data().count,
+      pending: pendingSnap.data().count,
+      published: publishedSnap.data().count,
+      // Quantos vieram nesta pagina — util para saber se a lista foi truncada.
+      returned: items.length,
+    };
+
+    return NextResponse.json(
+      { ok: true, items, counts, total: counts.total },
+      { status: 200 }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao listar flashcards.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

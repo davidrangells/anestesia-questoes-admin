@@ -58,6 +58,13 @@ export default function FlashcardsPage() {
   const [statusFilter, setStatusFilter] = useState<FlashcardStatus | "">("");
   const [moduleFilter, setModuleFilter] = useState<Module | "">("");
   const [difficultyFilter, setDifficultyFilter] = useState<Difficulty | "">("");
+  // Contagens reais vindas do Firestore — os itens carregados podem ser
+  // apenas uma pagina, entao contar em memoria subestimaria o total.
+  const [counts, setCounts] = useState<{
+    total: number;
+    pending: number;
+    published: number;
+  } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -66,11 +73,13 @@ export default function FlashcardsPage() {
       if (statusFilter) params.set("status", statusFilter);
       if (moduleFilter) params.set("module", moduleFilter);
       if (difficultyFilter) params.set("difficulty", difficultyFilter);
-      params.set("limit", "200");
-      const data = await api.get<{ items?: FlashcardListItem[] }>(
-        `/api/admin/flashcards?${params.toString()}`
-      );
+      params.set("limit", "2000");
+      const data = await api.get<{
+        items?: FlashcardListItem[];
+        counts?: { total: number; pending: number; published: number };
+      }>(`/api/admin/flashcards?${params.toString()}`);
       setItems(Array.isArray(data.items) ? data.items : []);
+      setCounts(data.counts ?? null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Nao foi possivel carregar flashcards."
@@ -94,6 +103,10 @@ export default function FlashcardsPage() {
   }, [items, search]);
 
   const stats = useMemo(() => {
+    if (counts) {
+      return { total: counts.total, pending: counts.pending, active: counts.published };
+    }
+    // Fallback (API antiga sem `counts`): conta o que veio na pagina.
     return items.reduce(
       (acc, item) => {
         acc.total += 1;
@@ -103,7 +116,7 @@ export default function FlashcardsPage() {
       },
       { total: 0, pending: 0, active: 0 }
     );
-  }, [items]);
+  }, [items, counts]);
 
   return (
     <AdminShell
