@@ -185,6 +185,27 @@ export async function GET(req: NextRequest) {
       errorsTotalAgg.data().count - errorsResolvedAgg.data().count - errorsIgnoredAgg.data().count;
     const studentsTotal = studentsTotalAgg.data().count;
     const studentUids = new Set(studentsSnap.docs.map((docSnap) => docSnap.id));
+
+    // "Usaram hoje" vem do registro por dia (user_activity/{uid}/days/{dia}),
+    // gravado pelo portal (web: true) e pelo app (app: true). Diferente do
+    // lastSeenAt do documento pai, nao e sobrescrito quando o aluno troca de
+    // cliente no mesmo dia, e preserva historico. Leitura em lote, sem indice.
+    const todayKey = brDayKey(new Date());
+    const dayRefs = Array.from(studentUids).map((uid) =>
+      activityCollection.doc(uid).collection("days").doc(todayKey)
+    );
+    const daySnaps = dayRefs.length ? await adminDb.getAll(...dayRefs) : [];
+    const today = daySnaps.reduce(
+      (acc, snap) => {
+        if (!snap.exists) return acc;
+        const data = snap.data() ?? {};
+        acc.total += 1;
+        if (data.web === true) acc.web += 1;
+        if (data.app === true) acc.app += 1;
+        return acc;
+      },
+      { total: 0, web: 0, app: 0 }
+    );
     const studentsActive = entitlementsActiveSnap.docs.reduce((count, docSnap) => {
       if (studentUids.has(docSnap.id) && hasActiveEntitlement(docSnap.data())) return count + 1;
       return count;
@@ -203,21 +224,9 @@ export async function GET(req: NextRequest) {
           if (client === "app") acc.onlineApp += 1;
           else acc.onlineWeb += 1;
         }
-        if (lastSeenAt >= todayStart) {
-          acc.today += 1;
-          if (client === "app") acc.todayApp += 1;
-          else acc.todayWeb += 1;
-        }
         return acc;
       },
-      {
-        online: 0,
-        onlineWeb: 0,
-        onlineApp: 0,
-        today: 0,
-        todayWeb: 0,
-        todayApp: 0,
-      }
+      { online: 0, onlineWeb: 0, onlineApp: 0 }
     );
 
     const payload = {
@@ -232,9 +241,9 @@ export async function GET(req: NextRequest) {
           usuariosOnline: activity.online,
           usuariosOnlineWeb: activity.onlineWeb,
           usuariosOnlineApp: activity.onlineApp,
-          usuariosHoje: activity.today,
-          usuariosWebHoje: activity.todayWeb,
-          usuariosAppHoje: activity.todayApp,
+          usuariosHoje: today.total,
+          usuariosWebHoje: today.web,
+          usuariosAppHoje: today.app,
         },
         series: {
           buckets,
