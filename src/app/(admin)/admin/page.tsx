@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { auth } from "@/lib/firebase";
 
-type ChartMode = "erros" | "questoes";
+type ChartMode = "erros" | "questoes" | "alunos";
 
 type DashboardStats = {
   questoesTotal: number;
@@ -46,6 +46,7 @@ export default function AdminDashboardPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
   const [errorSeries, setErrorSeries] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [studentSeries, setStudentSeries] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [questionSeries, setQuestionSeries] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
 
   const loadDashboard = async () => {
@@ -70,6 +71,7 @@ export default function AdminDashboardPage() {
           buckets?: string[];
           questoes?: number[];
           erros?: number[];
+          alunos?: number[];
         };
       };
 
@@ -83,6 +85,9 @@ export default function AdminDashboardPage() {
       );
       setErrorSeries(
         Array.isArray(data.series?.erros) ? data.series?.erros : [0, 0, 0, 0, 0, 0, 0]
+      );
+      setStudentSeries(
+        Array.isArray(data.series?.alunos) ? data.series?.alunos : [0, 0, 0, 0, 0, 0, 0]
       );
     } catch (error) {
       setErrorMsg(
@@ -98,8 +103,10 @@ export default function AdminDashboardPage() {
   }, []);
 
   const chartData = useMemo(() => {
-    return chartMode === "erros" ? errorSeries : questionSeries;
-  }, [chartMode, errorSeries, questionSeries]);
+    if (chartMode === "erros") return errorSeries;
+    if (chartMode === "alunos") return studentSeries;
+    return questionSeries;
+  }, [chartMode, errorSeries, questionSeries, studentSeries]);
 
   const submitGlobalSearch = () => {
     const value = globalSearch.trim();
@@ -179,6 +186,7 @@ export default function AdminDashboardPage() {
                   options={[
                     { value: "erros", label: "Erros (7 dias)" },
                     { value: "questoes", label: "Questões (7 dias)" },
+                    { value: "alunos", label: "Alunos ativos (7 dias)" },
                   ]}
                 />
               </div>
@@ -270,7 +278,13 @@ export default function AdminDashboardPage() {
               {/* chart (smaller) */}
               <div className="lg:col-span-2">
                 <PremiumMiniChartCard
-                  title={chartMode === "erros" ? "Erros reportados" : "Criação de questões"}
+                  title={
+                    chartMode === "erros"
+                      ? "Erros reportados"
+                      : chartMode === "alunos"
+                      ? "Alunos ativos por dia"
+                      : "Criação de questões"
+                  }
                   subtitle="Últimos 7 dias"
                   data={chartData}
                   height={170} // << menor aqui

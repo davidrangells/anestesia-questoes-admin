@@ -190,22 +190,23 @@ export async function GET(req: NextRequest) {
     // gravado pelo portal (web: true) e pelo app (app: true). Diferente do
     // lastSeenAt do documento pai, nao e sobrescrito quando o aluno troca de
     // cliente no mesmo dia, e preserva historico. Leitura em lote, sem indice.
-    const todayKey = brDayKey(new Date());
-    const dayRefs = Array.from(studentUids).map((uid) =>
-      activityCollection.doc(uid).collection("days").doc(todayKey)
+    // Le o registro de cada aluno para cada um dos 7 dias (uma leitura em lote).
+    // O ultimo bucket e hoje; os anteriores alimentam o grafico de alunos ativos.
+    const uids = Array.from(studentUids);
+    const dayRefs = buckets.flatMap((day) =>
+      uids.map((uid) => activityCollection.doc(uid).collection("days").doc(day))
     );
     const daySnaps = dayRefs.length ? await adminDb.getAll(...dayRefs) : [];
-    const today = daySnaps.reduce(
-      (acc, snap) => {
-        if (!snap.exists) return acc;
-        const data = snap.data() ?? {};
-        acc.total += 1;
-        if (data.web === true) acc.web += 1;
-        if (data.app === true) acc.app += 1;
-        return acc;
-      },
-      { total: 0, web: 0, app: 0 }
-    );
+    const perDay = buckets.map(() => ({ total: 0, web: 0, app: 0 }));
+    daySnaps.forEach((snap, i) => {
+      if (!snap.exists) return;
+      const data = snap.data() ?? {};
+      const acc = perDay[Math.floor(i / Math.max(uids.length, 1))]!;
+      acc.total += 1;
+      if (data.web === true) acc.web += 1;
+      if (data.app === true) acc.app += 1;
+    });
+    const today = perDay[perDay.length - 1] ?? { total: 0, web: 0, app: 0 };
     const studentsActive = entitlementsActiveSnap.docs.reduce((count, docSnap) => {
       if (studentUids.has(docSnap.id) && hasActiveEntitlement(docSnap.data())) return count + 1;
       return count;
@@ -249,6 +250,7 @@ export async function GET(req: NextRequest) {
           buckets,
           questoes: buckets.map((bucket) => Number(questionMap.get(bucket) ?? 0)),
           erros: buckets.map((bucket) => Number(errorMap.get(bucket) ?? 0)),
+          alunos: perDay.map((d) => d.total),
         },
     };
 
