@@ -11,24 +11,60 @@ import { dateFromUnknown, secondsFromUnknown } from "@/lib/dateValue";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let _statsCache: { payload: object; ts: number } | null = null;
 
+// Todos os cortes por dia usam o horario de Brasilia. O servidor (Vercel)
+// roda em UTC: sem isso, "hoje" comecava as 21h do dia anterior e, a noite,
+// o card "Usaram hoje" descartava quem tinha usado a plataforma mais cedo.
+const BR_TZ = "America/Sao_Paulo";
+const brDayFormatter = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: BR_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** "YYYY-MM-DD" da data no fuso de Brasilia. */
+function brDayKey(date: Date) {
+  return brDayFormatter.format(date);
+}
+
+/** Instante (UTC) em que comecou o dia de Brasilia que contem `date`. */
+function brStartOfDay(date: Date) {
+  const [y, m, d] = brDayKey(date).split("-").map(Number);
+  // Candidato: meia-noite UTC dessa data; ajusta pelo offset real de Brasilia.
+  const guess = new Date(Date.UTC(y, m - 1, d));
+  const offsetMin = tzOffsetMinutes(guess);
+  return new Date(guess.getTime() - offsetMin * 60_000);
+}
+
+/** Offset de Brasilia em minutos (ex.: -180) para o instante dado. */
+function tzOffsetMinutes(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BR_TZ,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"), get("second"));
+  return Math.round((asUtc - date.getTime()) / 60_000);
+}
+
 function buildLast7DayBuckets() {
-  const today = new Date();
+  const todayStart = brStartOfDay(new Date());
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (6 - index));
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-      date.getDate()
-    ).padStart(2, "0")}`;
+    const date = new Date(todayStart.getTime() - (6 - index) * 24 * 60 * 60 * 1000);
+    return brDayKey(date);
   });
 }
 
 function getDayBucket(value: unknown) {
   const seconds = secondsFromUnknown(value);
   if (!seconds) return "";
-  const date = new Date(seconds * 1000);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
+  return brDayKey(new Date(seconds * 1000));
 }
 
 function explanationHasMeaningfulText(value: unknown) {
@@ -81,9 +117,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const buckets = buildLast7DayBuckets();
-    const startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
-    startDate.setDate(startDate.getDate() - 6);
+    const todayStart = brStartOfDay(new Date());
+    const startDate = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
 
     const questionsCollection = adminDb.collection("questionsBank");
     const errorsCollection = adminDb.collection("erros_reportados");
@@ -92,8 +127,6 @@ export async function GET(req: NextRequest) {
     const activityCollection = adminDb.collection("user_activity");
     const resolvedStatuses = ["resolvido", "Resolvido", "RESOLVIDO"];
     const ignoredStatuses = ["ignorado", "Ignorado", "IGNORADO"];
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
     const onlineThreshold = new Date(Date.now() - 2 * 60 * 1000);
 
     const [
