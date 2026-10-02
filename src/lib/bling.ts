@@ -31,6 +31,8 @@ type BlingInvoiceInput = {
   entitlement: RecordData;
   invoiceCode: string;
   amountOverride?: number | null;
+  /** Data de emissao desejada (YYYY-MM-DD, Brasilia). Padrao: hoje. */
+  issueDate?: string | null;
 };
 
 type BlingInvoiceResult = {
@@ -103,7 +105,19 @@ function pickFirstValidPhone(...candidates: string[]): string | undefined {
 }
 
 function formatDateOnly(date: Date) {
-  return date.toISOString().slice(0, 10);
+  // Dia em Brasilia (UTC-3). toISOString() puro virava "amanha" apos as 21h.
+  return new Date(date.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/** Valida YYYY-MM-DD, data real e nao futura. Retorna null se invalida. */
+export function normalizeIssueDate(value: unknown) {
+  const raw = pickString(value);
+  if (!raw) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const parsed = new Date(`${raw}T12:00:00-03:00`);
+  if (Number.isNaN(parsed.getTime()) || formatDateOnly(parsed) !== raw) return null;
+  if (raw > formatDateOnly(new Date())) return null;
+  return raw;
 }
 
 const STATE_TO_UF: Record<string, string> = {
@@ -1049,8 +1063,8 @@ function buildInvoicePayload(
         cep: address.zipCode,
       },
     },
-    data: formatDateOnly(new Date()),
-    dataEmissao: formatDateOnly(new Date()),
+    data: normalizeIssueDate(input.issueDate) ?? formatDateOnly(new Date()),
+    dataEmissao: normalizeIssueDate(input.issueDate) ?? formatDateOnly(new Date()),
     baseCalculo: total,
     reterISS: false,
     servicos: [

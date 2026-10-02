@@ -42,6 +42,11 @@ type FaturaPayload = {
   movements: BillingMovement[];
 };
 
+/** YYYY-MM-DD no fuso de Brasilia (UTC-3). */
+function brDay(date: Date) {
+  return new Date(date.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function formatDate(value: unknown) {
   const parsed = dateFromUnknown(value);
   if (!parsed) return "—";
@@ -93,6 +98,8 @@ export default function FaturaPage() {
   const [statusDraft, setStatusDraft] = useState("pendente");
   const [commentDraft, setCommentDraft] = useState("");
   const [amountDraft, setAmountDraft] = useState("");
+  // Data de emissao da NFS-e (YYYY-MM-DD em Brasilia). Padrao: hoje.
+  const [issueDateDraft, setIssueDateDraft] = useState(() => brDay(new Date()));
   const [payload, setPayload] = useState<FaturaPayload>({
     aluno: "",
     email: "",
@@ -233,6 +240,7 @@ export default function FaturaPage() {
           status: statusDraft,
           comment: commentDraft,
           ...(shouldSendAmount ? { amount: parsedAmount } : {}),
+          ...(mode === "generate_invoice" && issueDateDraft ? { issueDate: issueDateDraft } : {}),
         }),
       });
 
@@ -324,6 +332,52 @@ export default function FaturaPage() {
                 </div>
                 <ReadonlyField label="Aluno" value={payload.aluno} />
               </div>
+
+              {(() => {
+                const today = brDay(new Date());
+                const saleParsed = dateFromUnknown(payload.createdAt);
+                const saleDay = saleParsed ? brDay(saleParsed) : "";
+                const otherMonth = Boolean(issueDateDraft) && issueDateDraft.slice(0, 7) !== today.slice(0, 7);
+                return (
+                  <div className="mt-4 rounded-2xl border border-slate-200 p-4">
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      Data de emissão da nota
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        type="date"
+                        value={issueDateDraft}
+                        max={today}
+                        onChange={(e) => setIssueDateDraft(e.target.value)}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
+                      />
+                      {saleDay && saleDay !== issueDateDraft && (
+                        <button
+                          type="button"
+                          onClick={() => setIssueDateDraft(saleDay)}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Usar data da venda ({formatDate(payload.createdAt)})
+                        </button>
+                      )}
+                      {issueDateDraft !== today && (
+                        <button
+                          type="button"
+                          onClick={() => setIssueDateDraft(today)}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Hoje
+                        </button>
+                      )}
+                    </div>
+                    <div className={`mt-2 text-xs ${otherMonth ? "font-semibold text-amber-700" : "text-slate-500"}`}>
+                      {otherMonth
+                        ? "Data em mês diferente do atual: a prefeitura pode recusar a nota ou cobrar ISS em atraso da competência antiga. Confirme com a contabilidade antes de transmitir."
+                        : "Vale para a próxima nota gerada nesta tela. Padrão: hoje."}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="mt-4 grid gap-4 md:grid-cols-4">
                 <ReadonlyField label="Criado em" value={formatDate(payload.createdAt)} />

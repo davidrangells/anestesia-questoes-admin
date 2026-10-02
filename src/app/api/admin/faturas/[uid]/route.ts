@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
-import { generateBlingServiceInvoice } from "@/lib/bling";
+import { generateBlingServiceInvoice, normalizeIssueDate } from "@/lib/bling";
 
 function pickString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -127,6 +127,15 @@ export async function PATCH(
     const hasAmount = Object.prototype.hasOwnProperty.call(body, "amount");
     const amount = hasAmount ? pickNumber(body.amount) : null;
 
+    const rawIssueDate = pickString(body.issueDate);
+    const issueDate = rawIssueDate ? normalizeIssueDate(rawIssueDate) : null;
+    if (rawIssueDate && !issueDate) {
+      return NextResponse.json(
+        { ok: false, error: "Data de emissão inválida. Use uma data real, não futura." },
+        { status: 400 }
+      );
+    }
+
     if (hasAmount && (amount == null || amount < 0)) {
       return NextResponse.json(
         { ok: false, error: "Informe um valor válido para a fatura." },
@@ -213,6 +222,7 @@ export async function PATCH(
           pickString(entitlement.lastEventId) ||
           uid,
         amountOverride: effectiveAmount,
+        issueDate,
       });
 
       const invoice = {
