@@ -98,8 +98,11 @@ export default function FaturaPage() {
   const [statusDraft, setStatusDraft] = useState("pendente");
   const [commentDraft, setCommentDraft] = useState("");
   const [amountDraft, setAmountDraft] = useState("");
-  // Data de emissao da NFS-e (YYYY-MM-DD em Brasilia). Padrao: hoje.
+  // Data de emissao da NFS-e (YYYY-MM-DD em Brasilia). Padrao: data da venda
+  // (ou hoje, se a fatura nao tiver data). `issueDateTouched` impede que o
+  // carregamento da fatura sobrescreva uma data escolhida a mao.
   const [issueDateDraft, setIssueDateDraft] = useState(() => brDay(new Date()));
+  const [issueDateTouched, setIssueDateTouched] = useState(false);
   const [payload, setPayload] = useState<FaturaPayload>({
     aluno: "",
     email: "",
@@ -217,6 +220,12 @@ export default function FaturaPage() {
     if (payload.service) return payload.service;
     return "—";
   }, [payload.paymentMethod, payload.service]);
+
+  useEffect(() => {
+    if (issueDateTouched) return;
+    const sale = dateFromUnknown(payload.createdAt);
+    if (sale) setIssueDateDraft(brDay(sale));
+  }, [payload.createdAt, issueDateTouched]);
 
   const runAction = async (mode: "generate_invoice" | "change_status") => {
     setSaving(true);
@@ -348,13 +357,19 @@ export default function FaturaPage() {
                         type="date"
                         value={issueDateDraft}
                         max={today}
-                        onChange={(e) => setIssueDateDraft(e.target.value)}
+                        onChange={(e) => {
+                          setIssueDateTouched(true);
+                          setIssueDateDraft(e.target.value);
+                        }}
                         className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-200"
                       />
                       {saleDay && saleDay !== issueDateDraft && (
                         <button
                           type="button"
-                          onClick={() => setIssueDateDraft(saleDay)}
+                          onClick={() => {
+                            setIssueDateTouched(true);
+                            setIssueDateDraft(saleDay);
+                          }}
                           className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Usar data da venda ({formatDate(payload.createdAt)})
@@ -363,7 +378,10 @@ export default function FaturaPage() {
                       {issueDateDraft !== today && (
                         <button
                           type="button"
-                          onClick={() => setIssueDateDraft(today)}
+                          onClick={() => {
+                            setIssueDateTouched(true);
+                            setIssueDateDraft(today);
+                          }}
                           className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Hoje
@@ -373,7 +391,7 @@ export default function FaturaPage() {
                     <div className={`mt-2 text-xs ${otherMonth ? "font-semibold text-amber-700" : "text-slate-500"}`}>
                       {otherMonth
                         ? "Data em mês diferente do atual: a prefeitura pode recusar a nota ou cobrar ISS em atraso da competência antiga. Confirme com a contabilidade antes de transmitir."
-                        : "Vale para a próxima nota gerada nesta tela. Padrão: hoje."}
+                        : "Vale para a próxima nota gerada nesta tela. Padrão: data da venda."}
                     </div>
                   </div>
                 );
