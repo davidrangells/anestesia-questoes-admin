@@ -475,7 +475,12 @@ export default function BlingSettingsCard() {
             <input
               value={accessTokenDraft}
               onChange={(e) => setAccessTokenDraft(e.target.value)}
-              type="password"
+              type="text"
+              name="bling-access-token"
+              autoComplete="off"
+              spellCheck={false}
+              data-1p-ignore
+              data-lpignore="true"
               placeholder={form.hasAccessToken ? "Mantido. Cole apenas se quiser trocar." : "Cole o token atual"}
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200"
             />
@@ -485,7 +490,12 @@ export default function BlingSettingsCard() {
             <input
               value={refreshTokenDraft}
               onChange={(e) => setRefreshTokenDraft(e.target.value)}
-              type="password"
+              type="text"
+              name="bling-refresh-token"
+              autoComplete="off"
+              spellCheck={false}
+              data-1p-ignore
+              data-lpignore="true"
               placeholder={
                 form.hasRefreshToken
                   ? "Mantido. Cole apenas se quiser trocar."

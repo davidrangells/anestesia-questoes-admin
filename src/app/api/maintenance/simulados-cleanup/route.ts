@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { runSimuladoRetentionCleanup } from "@/lib/simuladoRetention";
+import { keepBlingTokenAlive } from "@/lib/bling";
 
 function pickBearerToken(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
@@ -56,7 +57,11 @@ async function handle(req: NextRequest) {
       maxUsers: maxUsers > 0 ? maxUsers : undefined,
     });
 
-    return NextResponse.json({ ok: true, summary }, { status: 200 });
+    // Aproveita o cron diario para renovar o token do Bling (best-effort):
+    // o refresh token vence apos 30 dias sem uso. Nao roda em dryRun.
+    const bling = dryRun ? { ok: true, skipped: "dryRun" } : await keepBlingTokenAlive();
+
+    return NextResponse.json({ ok: true, summary, bling }, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro na limpeza de simulados.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

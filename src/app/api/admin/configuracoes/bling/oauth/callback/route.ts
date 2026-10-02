@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
       {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
+        accessTokenExpiresIn: tokens.expiresIn,
       },
       "oauth_callback"
     );

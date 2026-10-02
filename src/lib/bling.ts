@@ -17,6 +17,8 @@ export type BlingSettings = {
   defaultComment: string;
   accessToken: string;
   refreshToken: string;
+  /** Epoch ms em que o access token expira (null = desconhecido). */
+  accessTokenExpiresAt: number | null;
   autoCreateContact: boolean;
   updatedAt?: unknown;
   updatedBy?: string | null;
@@ -313,6 +315,7 @@ async function readSettingsDoc() {
     defaultComment: pickString(data.defaultComment),
     accessToken: pickString(data.accessToken) || pickString(process.env.BLING_ACCESS_TOKEN),
     refreshToken: pickString(data.refreshToken) || pickString(process.env.BLING_REFRESH_TOKEN),
+    accessTokenExpiresAt: pickNumber(data.accessTokenExpiresAt),
     autoCreateContact: normalizeBool(data.autoCreateContact, false),
     updatedAt: data.updatedAt ?? null,
     updatedBy: pickString(data.updatedBy) || null,
@@ -334,10 +337,12 @@ export async function getBlingSettingsSummary() {
 }
 
 export async function updateBlingSettings(
-  input: Partial<Omit<BlingSettings, "issRate">> & {
+  input: Partial<Omit<BlingSettings, "issRate" | "accessTokenExpiresAt">> & {
     issRate?: unknown;
     accessToken?: string;
     refreshToken?: string;
+    /** Segundos de validade do access token (resposta do OAuth). */
+    accessTokenExpiresIn?: number | null;
   },
   adminUid: string
 ) {
@@ -382,26 +387,74 @@ export async function updateBlingSettings(
   const nextAccessToken = pickString(input.accessToken);
   const nextRefreshToken = pickString(input.refreshToken);
 
-  if (nextAccessToken) payload.accessToken = nextAccessToken;
+  // Um token real do Bling tem 40 caracteres (opaco) ou 1.500+ (JWT). Valores
+  // curtos sao quase sempre o gerenciador de senhas do navegador preenchendo o
+  // campo sozinho — gravar isso derruba a integracao.
+  for (const [label, value] of [["access token", nextAccessToken], ["refresh token", nextRefreshToken]] as const) {
+    if (value && (value.length < 30 || /\s/.test(value))) {
+      throw new Error(
+        `O ${label} informado não parece um token do Bling (${value.length} caracteres). ` +
+          "Deixe o campo vazio e use “Autorizar no Bling”."
+      );
+    }
+  }
+
+  if (nextAccessToken) {
+    payload.accessToken = nextAccessToken;
+    const expiresIn = pickNumber(input.accessTokenExpiresIn);
+    // Sem validade conhecida (token colado a mao): null forca a checagem por 401.
+    payload.accessTokenExpiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
+  }
   if (nextRefreshToken) payload.refreshToken = nextRefreshToken;
 
   await SETTINGS_DOC.set(payload, { merge: true });
 }
 
+/** Margem para renovar antes de o access token vencer. */
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+function accessTokenLooksFresh(settings: BlingSettings) {
+  return Boolean(
+    settings.accessToken &&
+      settings.accessTokenExpiresAt &&
+      settings.accessTokenExpiresAt - Date.now() > TOKEN_REFRESH_MARGIN_MS
+  );
+}
+
+/**
+ * Renova o access token e ATUALIZA `settings` no lugar.
+ *
+ * O Bling rotaciona o refresh token a cada renovacao: o antigo deixa de valer.
+ * Por isso (1) partimos sempre do refresh token mais recente gravado no banco,
+ * nunca de uma copia em memoria, e (2) o objeto recebido e mutado, para que as
+ * proximas chamadas da mesma emissao (contato, depois NFS-e) usem o token novo
+ * em vez de tentar renovar de novo com o refresh token ja consumido — o que
+ * devolvia `invalid_grant`.
+ */
 async function refreshBlingAccessToken(settings: BlingSettings) {
   const clientId = pickString(process.env.BLING_CLIENT_ID);
   const clientSecret = pickString(process.env.BLING_CLIENT_SECRET);
 
-  if (!settings.refreshToken || !clientId || !clientSecret) {
+  // Outra requisicao pode ter renovado nesse meio-tempo: adota o que esta salvo.
+  const stored = await readSettingsDoc();
+  if (stored.refreshToken && stored.refreshToken !== settings.refreshToken && accessTokenLooksFresh(stored)) {
+    settings.accessToken = stored.accessToken;
+    settings.refreshToken = stored.refreshToken;
+    settings.accessTokenExpiresAt = stored.accessTokenExpiresAt;
+    return settings;
+  }
+  const currentRefreshToken = stored.refreshToken || settings.refreshToken;
+
+  if (!currentRefreshToken || !clientId || !clientSecret) {
     throw new Error(
-      "Acesso ao Bling expirado. Configure BLING_CLIENT_ID/BLING_CLIENT_SECRET e salve um refresh token."
+      "Acesso ao Bling expirado. Configure BLING_CLIENT_ID/BLING_CLIENT_SECRET e reconecte em Configurações → Bling."
     );
   }
 
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const body = new URLSearchParams({
     grant_type: "refresh_token",
-    refresh_token: settings.refreshToken,
+    refresh_token: currentRefreshToken,
   });
 
   const res = await fetch("https://www.bling.com.br/Api/v3/oauth/token", {
@@ -418,6 +471,13 @@ async function refreshBlingAccessToken(settings: BlingSettings) {
   const data = (await res.json().catch(() => ({}))) as RecordData;
 
   if (!res.ok) {
+    const code = typeof data.error === "string" ? data.error : "";
+    if (code === "invalid_grant") {
+      // Refresh token vencido (30 dias sem uso) ou revogado: so reautorizando.
+      throw new Error(
+        "A conexão com o Bling expirou. Abra Configurações → Bling e clique em “Autorizar no Bling” para reconectar."
+      );
+    }
     const msg =
       pickString(data.error_description) ||
       pickString(data.error) ||
@@ -427,26 +487,41 @@ async function refreshBlingAccessToken(settings: BlingSettings) {
   }
 
   const accessToken = pickString(data.access_token);
-  const refreshToken = pickString(data.refresh_token) || settings.refreshToken;
+  const refreshToken = pickString(data.refresh_token) || currentRefreshToken;
 
   if (!accessToken) {
     throw new Error("O Bling não retornou um access token válido.");
   }
 
+  const expiresIn = pickNumber(data.expires_in);
+  const accessTokenExpiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
+
   await SETTINGS_DOC.set(
-    {
-      accessToken,
-      refreshToken,
-      updatedAt: new Date(),
-    },
+    { accessToken, refreshToken, accessTokenExpiresAt, tokenRefreshedAt: new Date() },
     { merge: true }
   );
 
-  return {
-    ...settings,
-    accessToken,
-    refreshToken,
-  };
+  settings.accessToken = accessToken;
+  settings.refreshToken = refreshToken;
+  settings.accessTokenExpiresAt = accessTokenExpiresAt;
+  return settings;
+}
+
+/**
+ * Renova o token uma vez por dia (chamado pela manutencao diaria). O refresh
+ * token do Bling vence apos 30 dias sem uso; sem isso, um mes sem emitir nota
+ * derrubava a integracao e exigia reautorizacao manual.
+ */
+export async function keepBlingTokenAlive() {
+  const settings = await readSettingsDoc();
+  if (!settings.enabled) return { ok: true, skipped: "integracao desativada" };
+  if (!settings.refreshToken) return { ok: false, error: "sem refresh token — reconectar o Bling" };
+  try {
+    await refreshBlingAccessToken(settings);
+    return { ok: true, expiresAt: settings.accessTokenExpiresAt };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "falha ao renovar" };
+  }
 }
 
 export function resolveBlingRedirectUri(origin: string) {
@@ -617,6 +692,8 @@ async function blingRequest(
         Accept: "application/json",
         ...(init.headers ?? {}),
         Authorization: `Bearer ${token}`,
+        // Exigido pela migracao do Bling para JWT em todas as requisicoes.
+        "enable-jwt": "1",
       },
     });
 
@@ -634,18 +711,20 @@ async function blingRequest(
     return { res, data, rawText };
   };
 
-  let currentSettings = settings;
-  let token = currentSettings.accessToken;
+  // `settings` e compartilhado por todas as chamadas da mesma emissao e e
+  // atualizado no lugar pela renovacao — ver refreshBlingAccessToken.
+  const currentSettings = settings;
+  const expired =
+    currentSettings.accessTokenExpiresAt !== null && !accessTokenLooksFresh(currentSettings);
 
-  if (!token) {
-    currentSettings = await refreshBlingAccessToken(currentSettings);
-    token = currentSettings.accessToken;
+  if (!currentSettings.accessToken || expired) {
+    await refreshBlingAccessToken(currentSettings);
   }
 
-  let { res, data, rawText } = await attempt(token);
+  let { res, data, rawText } = await attempt(currentSettings.accessToken);
 
   if (res.status === 401 && currentSettings.refreshToken) {
-    currentSettings = await refreshBlingAccessToken(currentSettings);
+    await refreshBlingAccessToken(currentSettings);
     ({ res, data, rawText } = await attempt(currentSettings.accessToken));
   }
 
