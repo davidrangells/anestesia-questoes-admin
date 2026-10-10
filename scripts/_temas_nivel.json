@@ -1,0 +1,218 @@
+{
+ "Ética Médica e Bioética. Responsabilidade Profissional do Anestesiologista": {
+  "ponto": 1,
+  "nivel": "R1"
+ },
+ "Organização da SBA, Cooperativismo e SUS": {
+  "ponto": 2,
+  "nivel": "R1"
+ },
+ "Risco Profissional do Anestesiologista": {
+  "ponto": 3,
+  "nivel": "R1"
+ },
+ "Avaliação e Preparo Pré-Anestésico": {
+  "ponto": 4,
+  "nivel": "R1"
+ },
+ "Vias Aéreas": {
+  "ponto": 5,
+  "nivel": "R1"
+ },
+ "Posicionamento": {
+  "ponto": 6,
+  "nivel": "R1"
+ },
+ "Equipamentos": {
+  "ponto": 7,
+  "nivel": "R1"
+ },
+ "Sistema Nervoso Central e Autônomo": {
+  "ponto": 8,
+  "nivel": "R1"
+ },
+ "Fisiologia e Farmacologia do Sistema Cardiocirculatório": {
+  "ponto": 9,
+  "nivel": "R1"
+ },
+ "Fisiologia e Farmacologia do Sistema Respiratório": {
+  "ponto": 10,
+  "nivel": "R1"
+ },
+ "Farmacologia Geral": {
+  "ponto": 11,
+  "nivel": "R1"
+ },
+ "Farmacologia dos Anestésicos Venosos": {
+  "ponto": 12,
+  "nivel": "R1"
+ },
+ "Farmacologia dos Anestésicos Inalatórios": {
+  "ponto": 13,
+  "nivel": "R1"
+ },
+ "Farmacologia dos Anestésicos Locais": {
+  "ponto": 14,
+  "nivel": "R1"
+ },
+ "Transmissão e Bloqueio Neuromuscular": {
+  "ponto": 15,
+  "nivel": "R1"
+ },
+ "Parada Cardíaca e Reanimação": {
+  "ponto": 16,
+  "nivel": "R1"
+ },
+ "Bloqueios Subaracnóideo e Peridural": {
+  "ponto": 17,
+  "nivel": "R1"
+ },
+ "Complicações da Anestesia": {
+  "ponto": 18,
+  "nivel": "R1"
+ },
+ "Recuperação Pós-anestésica": {
+  "ponto": 19,
+  "nivel": "R1"
+ },
+ "Metodologia Científica": {
+  "ponto": 20,
+  "nivel": "R2"
+ },
+ "Monitorização": {
+  "ponto": 21,
+  "nivel": "R2"
+ },
+ "Sistemas de Administração de Anestesia Inalatória": {
+  "ponto": 22,
+  "nivel": "R2"
+ },
+ "Anestesia Inalatória": {
+  "ponto": 23,
+  "nivel": "R2"
+ },
+ "Anestesia Venosa": {
+  "ponto": 24,
+  "nivel": "R2"
+ },
+ "Bloqueios Periféricos": {
+  "ponto": 25,
+  "nivel": "R2"
+ },
+ "Equilíbrio Hidroeletrolítico e Acidobásico": {
+  "ponto": 26,
+  "nivel": "R2"
+ },
+ "Reposição Volêmica e Transfusão": {
+  "ponto": 27,
+  "nivel": "R2"
+ },
+ "Hemostasia e Anticoagulação": {
+  "ponto": 28,
+  "nivel": "R2"
+ },
+ "Fisiologia e Farmacologia do Sistema Urinário": {
+  "ponto": 29,
+  "nivel": "R2"
+ },
+ "Anestesia em Urologia": {
+  "ponto": 30,
+  "nivel": "R2"
+ },
+ "Anestesia em Obstetrícia": {
+  "ponto": 31,
+  "nivel": "R2"
+ },
+ "Anestesia em Ortopedia": {
+  "ponto": 32,
+  "nivel": "R2"
+ },
+ "Anestesia para Cirurgia Abdominal": {
+  "ponto": 33,
+  "nivel": "R2"
+ },
+ "Anestesia para Otorrinolaringologia": {
+  "ponto": 34,
+  "nivel": "R2"
+ },
+ "Anestesia para Oftalmologia": {
+  "ponto": 35,
+  "nivel": "R2"
+ },
+ "Anestesia Ambulatorial": {
+  "ponto": 36,
+  "nivel": "R2"
+ },
+ "Anestesia e Sistema Endócrino": {
+  "ponto": 37,
+  "nivel": "R3"
+ },
+ "Anestesia em Urgências e no Trauma": {
+  "ponto": 38,
+  "nivel": "R3"
+ },
+ "Anestesia para Cirurgia Plástica": {
+  "ponto": 39,
+  "nivel": "R3"
+ },
+ "Anestesia Bucomaxilofacial e para Odontologia": {
+  "ponto": 40,
+  "nivel": "R3"
+ },
+ "Anestesia para Cirurgia Torácica": {
+  "ponto": 41,
+  "nivel": "R3"
+ },
+ "Anestesia e Sistema Cardiovascular": {
+  "ponto": 42,
+  "nivel": "R3"
+ },
+ "Anestesia para Neurocirurgia": {
+  "ponto": 43,
+  "nivel": "R3"
+ },
+ "Hipotermia e Hipotensão Arterial Induzida": {
+  "ponto": 44,
+  "nivel": "R3"
+ },
+ "Choque": {
+  "ponto": 45,
+  "nivel": "R3"
+ },
+ "Anestesia em Geriatria": {
+  "ponto": 46,
+  "nivel": "R3"
+ },
+ "Anestesia em Pediatria": {
+  "ponto": 47,
+  "nivel": "R3"
+ },
+ "Anestesia para Transplantes": {
+  "ponto": 48,
+  "nivel": "R3"
+ },
+ "Anestesia para Procedimentos Fora do Centro Cirúrgico": {
+  "ponto": 49,
+  "nivel": "R3"
+ },
+ "Dor Aguda e Inflamação": {
+  "ponto": 50,
+  "nivel": "R3"
+ },
+ "Dor Crônica": {
+  "ponto": 51,
+  "nivel": "R3"
+ },
+ "Suporte Ventilatório": {
+  "ponto": 52,
+  "nivel": "R3"
+ },
+ "Qualidade e Segurança em Anestesia": {
+  "ponto": 53,
+  "nivel": "R3"
+ },
+ "Gerenciamento do Centro Cirúrgico": {
+  "ponto": 54,
+  "nivel": "R3"
+ }
+}

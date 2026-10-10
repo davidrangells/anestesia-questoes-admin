@@ -13,6 +13,13 @@ figs = sys.argv[5] if len(sys.argv) > 5 else None
 qs = json.load(open(lote))
 urls = json.load(open(os.path.join(figs, '_urls.json'))) if figs and os.path.exists(os.path.join(figs, '_urls.json')) else {}
 
+# O nivel de cada questao e o ano do ponto da SBA a que o tema pertence, nao o ano da prova.
+# O argumento <nivel> da linha de comando vale so para tema fora do catalogo.
+_mapa = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_temas_nivel.json')
+NIVEL_TEMA = {k: v['nivel'] for k, v in json.load(open(_mapa, encoding='utf-8')).items()} if os.path.exists(_mapa) else {}
+def nivel_de(q):
+    return NIVEL_TEMA.get(q.get('tema'), nivel)
+
 COLS = ['docId','prompt_text','imageUrl','optionA_text','optionA_imageUrl','optionB_text','optionB_imageUrl',
         'optionC_text','optionC_imageUrl','optionD_text','optionD_imageUrl','optionE_text','optionE_imageUrl',
         'correctOptionId','shuffleOptions','explanation','explanationSource','reference','themes',
@@ -24,7 +31,7 @@ ano = int(qs[0]['id'].split('_')[1])
 for q in qs:
     img = urls.get(q['img'] + '.png') if q.get('img') else None
     ws.append([q['id'], q['p'], img, q['o'][0], None, q['o'][1], None, q['o'][2], None, q['o'][3], None, None, None,
-               q['gab'], 1, q['e'], 'ia', q['r'], q['tema'], 'ME', ano, nivel, None, 1, q.get('nota')])
+               q['gab'], 1, q['e'], 'ia', q['r'], q['tema'], 'ME', ano, nivel_de(q), None, 1, q.get('nota')])
 for k, v in {'A':24,'B':78,'C':30,'D':44,'F':44,'H':44,'J':44,'N':6,'O':6,'P':78,'Q':8,'R':50,'S':34,'Y':52}.items():
     ws.column_dimensions[k].width = v
 for row in ws.iter_rows(min_row=2):
@@ -42,13 +49,13 @@ p = ['<meta charset="utf-8"><title>' + html.escape(titulo) + '</title>',
  '.ex{background:#fcfcfc;border-left:3px solid #2F5496;padding:.7rem 1rem;margin-top:.7rem;font-size:.94rem}',
  '.nota{background:#fff8e1;border-left:3px solid #f59e0b;padding:.6rem .9rem;margin-top:.6rem;font-size:.85rem}',
  'pre{white-space:pre-wrap;font-family:inherit;margin:.4rem 0}img{max-width:100%;border:1px solid #ddd;border-radius:6px;margin:.5rem 0}</style>',
- f'<h1>{html.escape(titulo)}</h1><p>{len(qs)} questões. Nível {nivel}.</p>']
+ f'<h1>{html.escape(titulo)}</h1><p>{len(qs)} questões.</p>']
 atual = None
 for q in qs:
     prova = q['id'].split('_Q')[0]
     if prova != atual:
         atual = prova; p.append(f'<h2>{prova}</h2>')
-    p.append(f'<div class="q"><span class="tag">{html.escape(q["tema"])}</span><span class="tag">{q["id"]}</span>')
+    p.append(f'<div class="q"><span class="tag">{html.escape(q["tema"])}</span><span class="tag">{nivel_de(q)}</span><span class="tag">{q["id"]}</span>')
     p.append('<pre>' + html.escape(q['p']) + '</pre>')
     if q.get('img') and urls.get(q['img'] + '.png'):
         p.append(f'<img src="{urls[q["img"] + ".png"]}" alt="figura">')
