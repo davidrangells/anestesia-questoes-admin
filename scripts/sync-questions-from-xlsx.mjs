@@ -230,7 +230,7 @@ function parseYear(value) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function parseThemes(value) {
+function parseThemes(value, catalogThemes = null) {
   const raw = normalizeText(value);
   if (!raw) return [];
 
@@ -245,6 +245,13 @@ function parseThemes(value) {
     } catch {
       // segue para o split padrão
     }
+  }
+
+  // Há temas cujo próprio nome tem vírgula, como "Organização da SBA, Cooperativismo e SUS".
+  // Se a célula inteira corresponde a um tema do catálogo, não se divide nada.
+  if (Array.isArray(catalogThemes)) {
+    const rawKey = normalizeKey(raw);
+    if (catalogThemes.some((item) => item.keys?.has(rawKey))) return [raw];
   }
 
   return raw
@@ -373,9 +380,9 @@ function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
   const examType = rawExamType === "-" ? "" : rawExamType;
   const examYear = parseYear(row.prova_ano);
   const rawLevel = normalizeText(row.nivel).toUpperCase();
-  const level = rawLevel === "TODOS" ? "" : rawLevel;
+  let level = rawLevel === "TODOS" ? "" : rawLevel;
   const proofLabel = buildProofLabel(examType, row.prova_ano, row.Prova);
-  const themes = parseThemes(row.themes);
+  const themes = parseThemes(row.themes, catalogs?.themes ?? null);
   const isActive = parseBool(row.isActive);
   const shuffleOptions = parseBoolWithDefault(row.shuffleOptions, true);
   const warnings = [];
@@ -431,6 +438,27 @@ function buildQuestionRecord(row, { existing = null, catalogs = null } = {}) {
         seenThemeIds.add(match.id);
         themeIds.push(match.id);
       }
+    }
+  }
+
+  // O nivel do produto e o ano do programa da SBA a que o tema pertence (ponto 1-19 R1,
+  // 20-36 R2, 37-54 R3), nao a dificuldade da questao nem o ano da prova de origem.
+  // Se a planilha discordar do catalogo, o catalogo manda: assim uma reimportacao de
+  // planilha antiga nao volta a gravar nivel errado.
+  if (catalogs) {
+    const primeiro = themeIds.length
+      ? catalogs.themes.find((item) => item.id === themeIds[0])
+      : null;
+    const rotuloTema = primeiro
+      ? catalogs.levels.find((n) => n.id === primeiro.levelId)?.title || primeiro.levelLabel || ""
+      : "";
+
+    if (rotuloTema && rotuloTema !== level) {
+      warnings.push(
+        `nivel ${level || "(vazio)"} trocado por ${rotuloTema}, que e o ano do tema ${themes[0]} no catalogo`
+      );
+      level = rotuloTema;
+      levelId = resolveCatalogRef(catalogs.levels, [rotuloTema])?.id ?? levelId;
     }
   }
 
@@ -521,6 +549,18 @@ function summarizeValidation(records) {
   };
 }
 
+function initApp() {
+  return getApps().length > 0
+    ? getApps()[0]
+    : initializeApp({
+        credential: cert({
+          projectId: requiredEnv("FIREBASE_ADMIN_PROJECT_ID"),
+          clientEmail: requiredEnv("FIREBASE_ADMIN_CLIENT_EMAIL"),
+          privateKey: requiredEnv("FIREBASE_ADMIN_PRIVATE_KEY").replace(/\\n/g, "\n"),
+        }),
+      });
+}
+
 async function main() {
   const apply = Boolean(getArg("--apply"));
   const prune = Boolean(getArg("--prune"));
@@ -548,7 +588,10 @@ async function main() {
   }
 
   if (!apply) {
-    const records = rows.map((row) => buildQuestionRecord(row));
+    // O dry-run tambem le o catalogo: e ai que aparecem os avisos de tema, nivel e prova,
+    // que sao justamente os que interessa ver antes de gravar.
+    const catalogs = await loadCatalogContext(getFirestore(initApp()));
+    const records = rows.map((row) => buildQuestionRecord(row, { catalogs }));
     const summary = summarizeValidation(records);
 
     console.log(`Dry-run concluído para ${filePath}`);
@@ -583,18 +626,7 @@ async function main() {
     return;
   }
 
-  const app =
-    getApps().length > 0
-      ? getApps()[0]
-      : initializeApp({
-          credential: cert({
-            projectId: requiredEnv("FIREBASE_ADMIN_PROJECT_ID"),
-            clientEmail: requiredEnv("FIREBASE_ADMIN_CLIENT_EMAIL"),
-            privateKey: requiredEnv("FIREBASE_ADMIN_PRIVATE_KEY").replace(/\\n/g, "\n"),
-          }),
-        });
-
-  const db = getFirestore(app);
+  const db = getFirestore(initApp());
   const [currentSnap, catalogs] = await Promise.all([
     db.collection(collectionName).get(),
     loadCatalogContext(db),
