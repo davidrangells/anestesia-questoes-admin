@@ -4,6 +4,32 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
+import { bumpQuestionsIndexVersion } from "@/lib/questionsIndex";
+
+/** Documento completo (explicacao, alternativas, imagens) — a listagem nao o carrega mais. */
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const authCheck = await requireAdmin(req);
+  if ("error" in authCheck) return authCheck.error;
+
+  try {
+    const { id } = await context.params;
+    if (!id) {
+      return NextResponse.json({ ok: false, error: "ID da questão é obrigatório." }, { status: 400 });
+    }
+    const snap = await adminDb.collection("questionsBank").doc(id).get();
+    if (!snap.exists) {
+      return NextResponse.json({ ok: false, error: "Questão não encontrada." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, item: { id: snap.id, ...snap.data() } }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao carregar questão.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
+
 
 export async function PATCH(
   req: NextRequest,
@@ -26,6 +52,7 @@ export async function PATCH(
       },
       { merge: true }
     );
+    await bumpQuestionsIndexVersion();
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
@@ -48,6 +75,7 @@ export async function DELETE(
     }
 
     await adminDb.collection("questionsBank").doc(id).delete();
+    await bumpQuestionsIndexVersion();
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao excluir questão.";

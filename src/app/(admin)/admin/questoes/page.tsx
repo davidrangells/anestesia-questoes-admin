@@ -2,7 +2,7 @@
 
 import AdminShell from "@/components/AdminShell";
 import Link from "next/link";
-import { useDeferredValue, useEffect, useMemo, useCallback, useState } from "react";
+import { useEffect, useMemo, useCallback, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, RefreshCw, Copy, Trash2, Brain, X, ImageIcon } from "lucide-react";
@@ -28,6 +28,8 @@ type QBQuestion = {
   examType?: string; prova_tipo?: string; examYear?: number | null; prova_ano?: number | string | null;
   examSource?: string; Prova?: string; level?: string; nivel?: string;
   themes?: string[] | string; isActive?: boolean; explanationSource?: string | null;
+  // Projecao enviada pela listagem (a API nao manda mais explicacao/alternativas).
+  hasImage?: boolean; hasExplanation?: boolean;
   optionA_imageUrl?: string | null; optionB_imageUrl?: string | null;
   optionC_imageUrl?: string | null; optionD_imageUrl?: string | null; optionE_imageUrl?: string | null;
   optionA_text?: string; optionB_text?: string; optionC_text?: string;
@@ -43,6 +45,7 @@ type QuestionsResponse = {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function hasAnyImage(q: QBQuestion) {
+  if (typeof q.hasImage === "boolean") return q.hasImage;
   return !!(q.imageUrl || (q.options ?? []).some((o) => !!o.imageUrl) ||
     q.optionA_imageUrl || q.optionB_imageUrl || q.optionC_imageUrl || q.optionD_imageUrl || q.optionE_imageUrl);
 }
@@ -107,6 +110,15 @@ async function getAuthToken() {
   return token;
 }
 
+/** A listagem vem enxuta; acoes que precisam do documento inteiro buscam aqui. */
+async function fetchFullQuestion(id: string): Promise<QBQuestion> {
+  const token = await getAuthToken();
+  const res = await fetch(`/api/admin/questions/${id}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  const data = (await res.json()) as { ok: boolean; error?: string; item?: QBQuestion };
+  if (!res.ok || !data.ok || !data.item) throw new Error(data.error || "Não foi possível carregar a questão.");
+  return data.item;
+}
+
 // ─── página ───────────────────────────────────────────────────────────────────
 
 export default function BancoQuestoesPage() {
@@ -136,7 +148,11 @@ export default function BancoQuestoesPage() {
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const deferredSearch = useDeferredValue(search);
+  // Campo de busca com debounce: a URL (e a requisicao) so mudam 300 ms apos a
+  // ultima tecla. Antes cada tecla disparava uma busca de varios segundos.
+  const [searchInput, setSearchInput] = useState(search);
+  useEffect(() => { setSearchInput(search); }, [search]);
+  const abortRef = useRef<AbortController | null>(null);
 
   // ── helper: atualiza URL sem navegar ─────────────────────────────────────
   const setParam = useCallback((updates: Record<string, string | null>) => {
@@ -150,18 +166,24 @@ export default function BancoQuestoesPage() {
 
   // ── fetch ─────────────────────────────────────────────────────────────────
   const fetchPage = useCallback(async () => {
+    // Cancela a requisicao anterior: a resposta de uma busca antiga nao pode
+    // sobrescrever a da busca atual.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     try {
       const token = await getAuthToken();
       const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-      if (deferredSearch.trim()) query.set("search", deferredSearch.trim());
+      if (search.trim()) query.set("search", search.trim());
       if (status !== "todos") query.set("status", status);
       if (themeFilter) query.set("theme", themeFilter);
 
       const res = await fetch(`/api/admin/questions?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal,
       });
       const data = (await res.json()) as QuestionsResponse;
+      if (controller.signal.aborted) return;
       if (!res.ok || !data.ok) throw new Error(data.error || "Não foi possível carregar questões.");
 
       setItems(Array.isArray(data.items) ? data.items : []);
@@ -169,13 +191,20 @@ export default function BancoQuestoesPage() {
       setTotalPages(Math.max(data.pagination?.totalPages ?? 1, 1));
       setSummary({ total: data.summary?.total ?? 0, commented: data.summary?.commented ?? 0, active: data.summary?.active ?? 0, inactive: data.summary?.inactive ?? 0 });
     } catch (error) {
+      if (controller.signal.aborted) return;
       toast.error(error instanceof Error ? error.message : "Não foi possível carregar questões.");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  }, [deferredSearch, status, themeFilter, page, pageSize]);
+  }, [search, status, themeFilter, page, pageSize]);
 
   useEffect(() => { void fetchPage(); }, [fetchPage]);
+
+  useEffect(() => {
+    if (searchInput === search) return;
+    const t = setTimeout(() => setParam({ search: searchInput, page: null }), 300);
+    return () => clearTimeout(t);
+  }, [searchInput, search, setParam]);
 
   // ── ações ─────────────────────────────────────────────────────────────────
 
@@ -211,10 +240,11 @@ export default function BancoQuestoesPage() {
     if (!ok) return;
     setDuplicatingId(q.id);
     try {
+      const full = await fetchFullQuestion(q.id);
       const token = await getAuthToken();
       const res = await fetch("/api/admin/questions", {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(sanitizeForCopy(q)),
+        body: JSON.stringify(sanitizeForCopy(full)),
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error || "Não foi possível duplicar.");
@@ -308,8 +338,8 @@ export default function BancoQuestoesPage() {
           <div className="flex-1">
             <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar</label>
             <input
-              value={search}
-              onChange={(e) => setParam({ search: e.target.value, page: null })}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Busca livre: ano:2017 prova:ME1 tema:pediatria nivel:R1 id:673"
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
             />
@@ -391,8 +421,8 @@ export default function BancoQuestoesPage() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {loading ? (
+            <tbody className={cn("divide-y divide-slate-100 transition-opacity dark:divide-slate-800", loading && items.length > 0 && "opacity-50")}>
+              {loading && items.length === 0 ? (
                 <TableRowSkeleton cols={7} rows={8} />
               ) : items.length === 0 ? (
                 <tr>
@@ -480,7 +510,13 @@ export default function BancoQuestoesPage() {
                         {anyImg ? (
                           <button
                             type="button"
-                            onClick={() => { setSelected(q); setOpenImages(true); }}
+                            onClick={() => {
+                              setSelected({ ...q, options: [] });
+                              setOpenImages(true);
+                              void fetchFullQuestion(q.id).then(setSelected).catch((e: unknown) =>
+                                toast.error(e instanceof Error ? e.message : "Não foi possível carregar as imagens.")
+                              );
+                            }}
                             className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
                           >
                             <ImageIcon size={11} /> Ver
