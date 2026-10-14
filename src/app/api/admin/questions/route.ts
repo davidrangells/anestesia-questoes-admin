@@ -2,12 +2,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
 
 import {
   bumpQuestionsIndexVersion,
   getQuestionsIndex,
+  refreshQuestionsSnapshot,
   parseAdvancedSearch,
   searchIndex,
   toListItem,
@@ -80,7 +82,8 @@ export async function POST(req: NextRequest) {
       createdAt: now,
       updatedAt: now,
     });
-    await bumpQuestionsIndexVersion();
+    await bumpQuestionsIndexVersion({ id: ref.id, data: { ...body, createdAt: now, updatedAt: now } });
+    after(() => refreshQuestionsSnapshot().catch(() => undefined));
 
     return NextResponse.json({ ok: true, id: ref.id }, { status: 201 });
   } catch (error) {

@@ -1,10 +1,14 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Apos salvar/excluir, o snapshot do indice e reconstruido em segundo plano (after());
+// o padrao de 10 s cortaria esse trabalho pela metade.
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
-import { bumpQuestionsIndexVersion } from "@/lib/questionsIndex";
+import { bumpQuestionsIndexVersion, refreshQuestionsSnapshot } from "@/lib/questionsIndex";
 
 /** Documento completo (explicacao, alternativas, imagens) — a listagem nao o carrega mais. */
 export async function GET(
@@ -52,7 +56,9 @@ export async function PATCH(
       },
       { merge: true }
     );
-    await bumpQuestionsIndexVersion();
+    const saved = await adminDb.collection("questionsBank").doc(id).get();
+    await bumpQuestionsIndexVersion({ id, data: (saved.data() as Record<string, unknown>) ?? null });
+    after(() => refreshQuestionsSnapshot().catch(() => undefined));
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
@@ -75,7 +81,8 @@ export async function DELETE(
     }
 
     await adminDb.collection("questionsBank").doc(id).delete();
-    await bumpQuestionsIndexVersion();
+    await bumpQuestionsIndexVersion({ id, data: null });
+    after(() => refreshQuestionsSnapshot().catch(() => undefined));
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao excluir questão.";

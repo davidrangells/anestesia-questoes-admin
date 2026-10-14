@@ -12,6 +12,7 @@
  * criada, editada ou excluida pelo admin (vale entre instancias). Uma busca no
  * indice pronto leva menos de 1 ms.
  */
+import { gunzipSync, gzipSync } from "node:zlib";
 import { adminDb } from "@/lib/firebaseAdmin";
 
 export type QuestionIndexEntry = {
@@ -47,6 +48,14 @@ export type QuestionsIndex = {
 };
 
 const VERSION_DOC = adminDb.collection("system_settings").doc("questionsIndex");
+/**
+ * Snapshot persistido do indice (JSON gzip, em pedacos < 1 MiB). Uma instancia
+ * nova carrega daqui em ~1 s em vez de reconstruir da colecao em ~5 s. E
+ * reconstruido em segundo plano apos cada edicao e pelo cron diario.
+ */
+const SNAPSHOT_COL = VERSION_DOC.collection("snapshot");
+const SNAPSHOT_CHUNK_BYTES = 900 * 1024;
+const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const TTL_MS = 10 * 60 * 1000;
 const SELECT_FIELDS = [
   "prompt", "prompt_text", "questionText", "statement",
@@ -166,12 +175,16 @@ async function readVersion() {
   return Number.isFinite(v) ? v : 0;
 }
 
-async function build(version: number): Promise<QuestionsIndex> {
+async function buildFromCollection(version: number): Promise<QuestionsIndex> {
   const snap = await adminDb.collection("questionsBank").select(...SELECT_FIELDS).get();
   const entries = snap.docs
     .map((d) => toEntry(d.id, d.data() as RecordData))
     .sort((a, b) => Math.max(b.updatedAt, b.createdAt) - Math.max(a.updatedAt, a.createdAt));
-  const summary = entries.reduce(
+  return { version, builtAt: Date.now(), entries, summary: summarize(entries) };
+}
+
+function summarize(entries: QuestionIndexEntry[]) {
+  return entries.reduce(
     (acc, e) => {
       if (e.isActive) acc.active += 1; else acc.inactive += 1;
       if (e.hasExplanation) acc.commented += 1;
@@ -179,7 +192,55 @@ async function build(version: number): Promise<QuestionsIndex> {
     },
     { total: entries.length, active: 0, inactive: 0, commented: 0 }
   );
-  return { version, builtAt: Date.now(), entries, summary };
+}
+
+async function writeSnapshot(index: QuestionsIndex) {
+  const gz = gzipSync(Buffer.from(JSON.stringify(index.entries)), { level: 6 });
+  const chunks: Buffer[] = [];
+  for (let i = 0; i < gz.length; i += SNAPSHOT_CHUNK_BYTES) chunks.push(gz.subarray(i, i + SNAPSHOT_CHUNK_BYTES));
+  const batch = adminDb.batch();
+  chunks.forEach((c, i) => batch.set(SNAPSHOT_COL.doc(`chunk_${i}`), { data: c }));
+  batch.set(SNAPSHOT_COL.doc("meta"), {
+    version: index.version,
+    builtAt: index.builtAt,
+    chunks: chunks.length,
+    entries: index.entries.length,
+    bytes: gz.length,
+  });
+  await batch.commit();
+  // Remove pedacos sobrando de um snapshot anterior maior.
+  const old = await SNAPSHOT_COL.get();
+  const stale = old.docs.filter((d) => /^chunk_\d+$/.test(d.id) && Number(d.id.slice(6)) >= chunks.length);
+  if (stale.length) { const b = adminDb.batch(); stale.forEach((d) => b.delete(d.ref)); await b.commit(); }
+}
+
+async function loadSnapshot(version: number): Promise<QuestionsIndex | null> {
+  const metaSnap = await SNAPSHOT_COL.doc("meta").get();
+  if (!metaSnap.exists) return null;
+  const meta = metaSnap.data() as RecordData;
+  if (Number(meta.version) !== version) return null;
+  if (Date.now() - Number(meta.builtAt) > SNAPSHOT_MAX_AGE_MS) return null;
+  const n = Number(meta.chunks) || 0;
+  if (!n) return null;
+  const refs = Array.from({ length: n }, (_, i) => SNAPSHOT_COL.doc(`chunk_${i}`));
+  const docs = await adminDb.getAll(...refs);
+  const parts: Buffer[] = [];
+  for (const d of docs) {
+    const data = (d.data() as RecordData | undefined)?.data;
+    if (!Buffer.isBuffer(data)) return null;
+    parts.push(data);
+  }
+  const entries = JSON.parse(gunzipSync(Buffer.concat(parts)).toString()) as QuestionIndexEntry[];
+  return { version, builtAt: Number(meta.builtAt), entries, summary: summarize(entries) };
+}
+
+async function build(version: number): Promise<QuestionsIndex> {
+  const fromSnapshot = await loadSnapshot(version).catch(() => null);
+  if (fromSnapshot) return fromSnapshot;
+  const index = await buildFromCollection(version);
+  // Deixa pronto para a proxima instancia fria; nao bloqueia esta resposta.
+  void writeSnapshot(index).catch(() => undefined);
+  return index;
 }
 
 /** Devolve o indice, reconstruindo se a versao mudou ou o cache venceu. */
@@ -194,10 +255,37 @@ export async function getQuestionsIndex(): Promise<QuestionsIndex> {
   return building;
 }
 
-/** Chamar apos criar, editar ou excluir questao: invalida em todas as instancias. */
-export async function bumpQuestionsIndexVersion() {
-  cache = null;
-  await VERSION_DOC.set({ version: Date.now(), updatedAt: new Date() }, { merge: true });
+/**
+ * Chamar apos criar, editar ou excluir questao. Invalida o indice em todas as
+ * instancias (versao) e, nesta instancia, aplica a mudanca ao cache na hora,
+ * para a proxima busca de quem acabou de salvar nao esperar reconstrucao.
+ * Chame `refreshQuestionsSnapshot()` em segundo plano depois (ver `after()`).
+ */
+export async function bumpQuestionsIndexVersion(changed?: { id: string; data: RecordData | null }) {
+  const version = Date.now();
+  await VERSION_DOC.set({ version, updatedAt: new Date() }, { merge: true });
+  if (cache && changed) {
+    const entries = cache.entries.filter((e) => e.id !== changed.id);
+    if (changed.data) entries.unshift(toEntry(changed.id, changed.data));
+    cache = { version, builtAt: cache.builtAt, entries, summary: summarize(entries) };
+  } else {
+    cache = null;
+  }
+  return version;
+}
+
+/**
+ * Reconstroi o indice da colecao e grava o snapshot para a versao atual.
+ * Usado em segundo plano apos edicoes e pelo cron diario (que tambem apanha
+ * importacoes feitas por scripts, que nao passam pela API).
+ */
+export async function refreshQuestionsSnapshot(opts: { bump?: boolean } = {}) {
+  const version = opts.bump ? Date.now() : await readVersion();
+  const index = await buildFromCollection(version);
+  await writeSnapshot(index);
+  if (opts.bump) await VERSION_DOC.set({ version, updatedAt: new Date() }, { merge: true });
+  cache = index;
+  return { version, entries: index.entries.length, builtAt: index.builtAt };
 }
 
 // ─── busca ───────────────────────────────────────────────────────────────────

@@ -1,9 +1,12 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Limpeza + keep-alive do Bling + reconstrucao do indice de questoes: passa de 10 s.
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { runSimuladoRetentionCleanup } from "@/lib/simuladoRetention";
 import { keepBlingTokenAlive } from "@/lib/bling";
+import { refreshQuestionsSnapshot } from "@/lib/questionsIndex";
 
 function pickBearerToken(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
@@ -61,7 +64,16 @@ async function handle(req: NextRequest) {
     // o refresh token vence apos 30 dias sem uso. Nao roda em dryRun.
     const bling = dryRun ? { ok: true, skipped: "dryRun" } : await keepBlingTokenAlive();
 
-    return NextResponse.json({ ok: true, summary, bling }, { status: 200 });
+    // Reconstroi o indice de busca das questoes e o snapshot persistido, para
+    // a primeira busca do dia ja encontrar tudo pronto — inclusive questoes
+    // importadas por script, que nao passam pela API.
+    const questionsIndex = dryRun
+      ? { ok: true, skipped: "dryRun" }
+      : await refreshQuestionsSnapshot({ bump: true })
+          .then((r) => ({ ok: true, ...r }))
+          .catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : "falha" }));
+
+    return NextResponse.json({ ok: true, summary, bling, questionsIndex }, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro na limpeza de simulados.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
