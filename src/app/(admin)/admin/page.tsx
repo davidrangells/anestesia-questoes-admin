@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { auth } from "@/lib/firebase";
+import { NfseAlertCard } from "@/components/admin/NfseAlertCard";
 
 type ChartMode = "erros" | "questoes" | "alunos";
 
@@ -197,6 +198,8 @@ export default function AdminDashboardPage() {
                 {errorMsg}
               </div>
             ) : null}
+
+            <NfseAlertCard />
 
             {/* KPI cards */}
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

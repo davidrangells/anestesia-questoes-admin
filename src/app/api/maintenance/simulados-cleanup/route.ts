@@ -1,12 +1,13 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Limpeza + keep-alive do Bling + reconstrucao do indice de questoes: passa de 10 s.
+// Limpeza + keep-alive do Bling + indice de questoes + situacao das NFS-e: passa de 10 s.
 export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { runSimuladoRetentionCleanup } from "@/lib/simuladoRetention";
 import { keepBlingTokenAlive } from "@/lib/bling";
 import { refreshQuestionsSnapshot } from "@/lib/questionsIndex";
+import { syncOpenNfseStatuses } from "@/lib/nfseStatus";
 
 function pickBearerToken(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
@@ -73,7 +74,16 @@ async function handle(req: NextRequest) {
           .then((r) => ({ ok: true, ...r }))
           .catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : "falha" }));
 
-    return NextResponse.json({ ok: true, summary, bling, questionsIndex }, { status: 200 });
+    // Consulta no Bling a situacao das NFS-e ainda nao autorizadas, para o
+    // dashboard avisar quando uma nota ficou parada ou foi rejeitada. Lote
+    // pequeno: o restante entra nas proximas execucoes.
+    const nfse = dryRun
+      ? { ok: true, skipped: "dryRun" }
+      : await syncOpenNfseStatuses({ limit: 25 })
+          .then((r) => ({ ok: true, ...r }))
+          .catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : "falha" }));
+
+    return NextResponse.json({ ok: true, summary, bling, questionsIndex, nfse }, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro na limpeza de simulados.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

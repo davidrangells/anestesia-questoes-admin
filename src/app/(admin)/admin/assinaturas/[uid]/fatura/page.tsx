@@ -6,6 +6,7 @@ import AdminShell from "@/components/AdminShell";
 import { Button } from "@/components/ui/Button";
 import { dateFromUnknown } from "@/lib/dateValue";
 import { auth } from "@/lib/firebase";
+import { NfseStatusBadge } from "@/components/admin/NfseStatusBadge";
 
 type BillingInvoice = {
   id: string;
@@ -17,6 +18,11 @@ type BillingInvoice = {
   provider?: string | null;
   providerId?: string | null;
   link?: string | null;
+  /** Situação real na prefeitura, consultada no Bling. */
+  nfseStatus?: string | null;
+  nfseNumber?: string | null;
+  nfseCheckedAt?: unknown;
+  nfseError?: string | null;
 };
 
 type BillingMovement = {
@@ -227,7 +233,17 @@ export default function FaturaPage() {
     if (sale) setIssueDateDraft(brDay(sale));
   }, [payload.createdAt, issueDateTouched]);
 
-  const runAction = async (mode: "generate_invoice" | "change_status") => {
+  const hasBlingInvoice = useMemo(
+    () =>
+      payload.invoices.some(
+        (invoice) => String(invoice.provider ?? "").toLowerCase() === "bling"
+      ),
+    [payload.invoices]
+  );
+
+  const runAction = async (
+    mode: "generate_invoice" | "change_status" | "refresh_invoice_status"
+  ) => {
     setSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -244,13 +260,20 @@ export default function FaturaPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          mode,
-          status: statusDraft,
-          comment: commentDraft,
-          ...(shouldSendAmount ? { amount: parsedAmount } : {}),
-          ...(mode === "generate_invoice" && issueDateDraft ? { issueDate: issueDateDraft } : {}),
-        }),
+        body: JSON.stringify(
+          mode === "refresh_invoice_status"
+            ? // Só consulta: não deve gravar valor nem status digitados na tela.
+              { mode }
+            : {
+                mode,
+                status: statusDraft,
+                comment: commentDraft,
+                ...(shouldSendAmount ? { amount: parsedAmount } : {}),
+                ...(mode === "generate_invoice" && issueDateDraft
+                  ? { issueDate: issueDateDraft }
+                  : {}),
+              }
+        ),
       });
 
       const data = (await res.json()) as { ok: boolean; error?: string; message?: string };
@@ -258,11 +281,13 @@ export default function FaturaPage() {
         throw new Error(data.error || "Não foi possível atualizar a fatura.");
       }
 
-      setCommentDraft("");
+      if (mode !== "refresh_invoice_status") setCommentDraft("");
       setSuccessMsg(
         mode === "generate_invoice"
           ? data.message || "Nota fiscal gerada com sucesso."
-          : "Dados salvos com sucesso."
+          : mode === "refresh_invoice_status"
+            ? data.message || "Situação das notas atualizada."
+            : "Dados salvos com sucesso."
       );
       await load();
     } catch (error) {
@@ -442,18 +467,34 @@ export default function FaturaPage() {
             </section>
 
             <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-5 py-5 text-2xl font-black text-slate-900">
-                Notas fiscais
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-5">
+                <div>
+                  <div className="text-2xl font-black text-slate-900">Notas fiscais</div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    Gerar a nota só a cria no Bling. Ela vale depois de enviada e autorizada pela
+                    prefeitura.
+                  </div>
+                </div>
+                {hasBlingInvoice ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={saving}
+                    onClick={() => void runAction("refresh_invoice_status")}
+                  >
+                    Atualizar situação no Bling
+                  </Button>
+                ) : null}
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[760px] w-full text-sm">
+                <table className="min-w-[900px] w-full text-sm">
                   <thead className="border-b bg-slate-100/80 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                     <tr>
                       <th className="px-5 py-4 text-left">Data</th>
                       <th className="px-5 py-4 text-left">Serviço</th>
                       <th className="px-5 py-4 text-left">Número NFSe</th>
                       <th className="px-5 py-4 text-left">Total</th>
-                      <th className="px-5 py-4 text-left">Status</th>
+                      <th className="px-5 py-4 text-left">Situação na prefeitura</th>
                       <th className="px-5 py-4 text-left">Ações</th>
                     </tr>
                   </thead>
@@ -469,14 +510,32 @@ export default function FaturaPage() {
                         <tr key={invoice.id}>
                           <td className="px-5 py-4 text-slate-600">{formatDate(invoice.createdAt)}</td>
                           <td className="px-5 py-4 text-slate-700">{String(invoice.service ?? "—")}</td>
-                          <td className="px-5 py-4 text-slate-700">{String(invoice.invoiceNumber ?? "—")}</td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {String(invoice.nfseNumber || invoice.invoiceNumber || "—")}
+                          </td>
                           <td className="px-5 py-4 text-slate-700">
                             {formatCurrency(
                               typeof invoice.total === "number" ? invoice.total : null
                             )}
                           </td>
-                          <td className="px-5 py-4 text-slate-700 uppercase">
-                            {String(invoice.status ?? "—")}
+                          <td className="px-5 py-4 text-slate-700">
+                            {String(invoice.provider ?? "").toLowerCase() === "bling" ? (
+                              <div className="space-y-1">
+                                <NfseStatusBadge status={invoice.nfseStatus} />
+                                <div className="text-xs text-slate-500">
+                                  {invoice.nfseCheckedAt
+                                    ? `Consultada em ${formatDate(invoice.nfseCheckedAt)}`
+                                    : "Ainda não consultada"}
+                                </div>
+                                {invoice.nfseError ? (
+                                  <div className="text-xs text-rose-600">
+                                    Última consulta falhou: {invoice.nfseError}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="uppercase">{String(invoice.status ?? "—")}</span>
+                            )}
                           </td>
                           <td className="px-5 py-4">
                             {invoice.link ? (

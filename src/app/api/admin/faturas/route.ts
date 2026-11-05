@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
 import { secondsFromUnknown } from "@/lib/dateValue";
+import { invoiceNfseStatus, isBlingInvoice } from "@/lib/nfseStatus";
 
 function getSeconds(value: unknown) {
   return secondsFromUnknown(value);
@@ -80,6 +81,11 @@ export async function GET(req: NextRequest) {
             .trim()
             .toLowerCase(),
           productTitle: String(ent.productTitle ?? "").trim() || "Assinatura",
+          // Situacao real da nota na prefeitura; null quando nao ha nota do Bling.
+          nfseStatus:
+            latestInvoice && isBlingInvoice(latestInvoice as Record<string, unknown>)
+              ? invoiceNfseStatus(latestInvoice as Record<string, unknown>)
+              : null,
           sortSeconds: getSeconds(
             (latestInvoice as Record<string, unknown> | null)?.createdAt ?? billing.updatedAt ?? null
           ),

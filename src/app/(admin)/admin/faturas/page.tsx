@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/AdminShell";
 import { buttonStyles } from "@/components/ui/Button";
 import { api } from "@/lib/apiClient";
+import { NfseStatusBadge, nfseStatusLabel } from "@/components/admin/NfseStatusBadge";
 
 type FaturaItem = {
   uid: string;
@@ -14,6 +15,8 @@ type FaturaItem = {
   createdAt: string;
   status: string;
   productTitle: string;
+  /** Situação real da NFS-e na prefeitura; null quando não há nota do Bling. */
+  nfseStatus: string | null;
 };
 
 function formatMoney(value: number | null) {
@@ -77,7 +80,14 @@ export default function FaturasPage() {
     const s = search.trim().toLowerCase();
     if (!s) return items;
     return items.filter((item) =>
-      [item.aluno, item.email, item.status, item.productTitle, item.createdAt]
+      [
+        item.aluno,
+        item.email,
+        item.status,
+        item.productTitle,
+        item.createdAt,
+        item.nfseStatus ? nfseStatusLabel(item.nfseStatus) : "",
+      ]
         .join(" ")
         .toLowerCase()
         .includes(s)
@@ -116,7 +126,7 @@ export default function FaturasPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
+          <table className="w-full min-w-[1080px] text-sm">
             <thead className="border-b bg-slate-100/80 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
               <tr>
                 <th className="px-5 py-3 text-left">Aluno</th>
@@ -124,13 +134,14 @@ export default function FaturasPage() {
                 <th className="px-5 py-3 text-left">Total</th>
                 <th className="px-5 py-3 text-left">Data</th>
                 <th className="px-5 py-3 text-left">Status</th>
+                <th className="px-5 py-3 text-left">NFS-e</th>
                 <th className="px-5 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {!loading && filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
                     Nenhuma fatura encontrada.
                   </td>
                 </tr>
@@ -147,6 +158,13 @@ export default function FaturasPage() {
                   <td className="px-5 py-4 text-slate-600">{item.createdAt}</td>
                   <td className="px-5 py-4">
                     <StatusBadge status={item.status} />
+                  </td>
+                  <td className="px-5 py-4">
+                    {item.nfseStatus ? (
+                      <NfseStatusBadge status={item.nfseStatus} />
+                    ) : (
+                      <span className="text-slate-400">Sem nota</span>
+                    )}
                   </td>
                   <td className="px-5 py-4 text-right">
                     <Link

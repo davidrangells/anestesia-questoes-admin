@@ -784,7 +784,8 @@ async function blingRequest(
         : detail
           ? `${baseMsg || "O Bling recusou a requisição."} | ${detail}`
           : `${baseMsg || "O Bling recusou a requisição."} (HTTP ${res.status})`;
-    throw new Error(msg);
+    // httpStatus permite a quem chama distinguir "nao encontrado" de falha real.
+    throw Object.assign(new Error(msg), { httpStatus: res.status });
   }
 
   return data;
@@ -1156,5 +1157,117 @@ export async function generateBlingServiceInvoice(
     provider: "bling",
     ...meta,
     requestPayload,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Situacao real da NFS-e                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Situacao da nota no Bling, que so vira "autorizada" depois que a prefeitura
+ * (ou o ambiente nacional) aceita o envio. Criar a nota pela API a deixa
+ * "pendente": ela ainda precisa ser transmitida e pode ser rejeitada.
+ */
+export type NfseStatus = "pendente" | "autorizada" | "cancelada" | "nao_encontrada" | "desconhecido";
+
+export type BlingNfseSnapshot = {
+  nfseStatus: NfseStatus;
+  /** Valor bruto devolvido pelo Bling, guardado para diagnostico. */
+  nfseSituacaoRaw: string;
+  /** Numero da NFS-e na prefeitura; vazio enquanto nao autorizada. */
+  nfseNumber: string | null;
+  nfseLink: string | null;
+  nfseIssueDate: string | null;
+};
+
+/**
+ * Bling API v3: 0 Pendente, 1 Emitida, 2 Disponivel para consulta, 3 Cancelada.
+ * Aceita tambem rotulo em texto ou objeto { id, valor }, porque o formato ja
+ * variou entre versoes da API.
+ */
+export function mapBlingNfseSituacao(value: unknown): { status: NfseStatus; raw: string } {
+  let candidate: unknown = value;
+  if (candidate && typeof candidate === "object") {
+    const obj = candidate as RecordData;
+    candidate = obj.id ?? obj.valor ?? obj.value ?? obj.nome ?? obj.descricao ?? "";
+  }
+  const raw = candidate == null ? "" : String(candidate).trim();
+  const text = normalizeText(raw);
+
+  if (raw === "0" || text.includes("pendente")) return { status: "pendente", raw };
+  if (raw === "3" || text.includes("cancel")) return { status: "cancelada", raw };
+  if (
+    raw === "1" ||
+    raw === "2" ||
+    text.includes("emitida") ||
+    text.includes("autorizada") ||
+    text.includes("disponivel")
+  ) {
+    return { status: "autorizada", raw };
+  }
+  return { status: "desconhecido", raw };
+}
+
+/**
+ * Devolve uma funcao que consulta a situacao de uma nota no Bling. As
+ * configuracoes (e o token renovado) sao compartilhadas entre as chamadas,
+ * entao um lote inteiro faz no maximo uma renovacao de token.
+ */
+export async function createBlingNfseStatusReader() {
+  const settings = await readSettingsDoc();
+  if (!settings.enabled) {
+    throw new Error("A integração com o Bling está desativada em Configurações.");
+  }
+  if (!settings.nfseEndpointPath) {
+    throw new Error("Configure o endpoint de NFS-e do Bling em Configurações.");
+  }
+  const basePath = settings.nfseEndpointPath.replace(/\/+$/, "");
+
+  return async function readNfseStatus(providerId: string): Promise<BlingNfseSnapshot> {
+    const id = pickString(providerId);
+    if (!/^\d+$/.test(id)) {
+      // Notas antigas sem id do Bling (id local "nf_...") nao podem ser consultadas.
+      return {
+        nfseStatus: "nao_encontrada",
+        nfseSituacaoRaw: "",
+        nfseNumber: null,
+        nfseLink: null,
+        nfseIssueDate: null,
+      };
+    }
+
+    let response: unknown;
+    try {
+      response = await blingRequest(settings, `${basePath}/${id}`, { method: "GET" });
+    } catch (error) {
+      if ((error as { httpStatus?: number }).httpStatus === 404) {
+        return {
+          nfseStatus: "nao_encontrada",
+          nfseSituacaoRaw: "404",
+          nfseNumber: null,
+          nfseLink: null,
+          nfseIssueDate: null,
+        };
+      }
+      throw error;
+    }
+
+    const root = (response && typeof response === "object" ? response : {}) as RecordData;
+    const data = (
+      root.data && typeof root.data === "object" ? root.data : root
+    ) as RecordData;
+    const { status, raw } = mapBlingNfseSituacao(data.situacao ?? data.status);
+    const number = pickString(data.numero) || null;
+
+    return {
+      // Numero de NFS-e preenchido e sinal forte de autorizacao mesmo se o
+      // codigo de situacao vier num formato que ainda nao conhecemos.
+      nfseStatus: status === "desconhecido" && number ? "autorizada" : status,
+      nfseSituacaoRaw: raw,
+      nfseNumber: number,
+      nfseLink: pickString(data.link) || pickString(data.linkPDF) || pickString(data.url) || null,
+      nfseIssueDate: pickString(data.dataEmissao) || null,
+    };
   };
 }

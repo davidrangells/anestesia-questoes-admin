@@ -1,10 +1,13 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Gerar a nota e consultar a situacao no Bling podem passar do limite padrao.
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/adminRoute";
 import { generateBlingServiceInvoice, normalizeIssueDate } from "@/lib/bling";
+import { refreshUserNfseStatuses } from "@/lib/nfseStatus";
 
 function pickString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -232,6 +235,10 @@ export async function PATCH(
         invoiceNumber: result.invoiceNumber || `NFSe-${String(invoices.length + 1).padStart(3, "0")}`,
         total: result.total ?? effectiveAmount,
         status: result.status || "emitida",
+        // A nota recem-criada ainda nao foi transmitida a prefeitura: fica
+        // pendente ate a consulta ao Bling confirmar a autorizacao.
+        nfseStatus: "pendente",
+        nfseCheckedAt: now,
         provider: result.provider,
         providerId: result.providerId,
         link: result.link,
@@ -265,6 +272,34 @@ export async function PATCH(
           ok: true,
           message: `Nota fiscal ${String(invoice.invoiceNumber)} gerada no Bling com sucesso.`,
           invoice,
+        },
+        { status: 200 }
+      );
+    }
+
+    if (mode === "refresh_invoice_status") {
+      const result = await refreshUserNfseStatuses(uid);
+      if (result.checked === 0) {
+        return NextResponse.json(
+          { ok: false, error: "Este aluno não tem nota gerada no Bling para consultar." },
+          { status: 400 }
+        );
+      }
+      if (result.errors.length === result.checked) {
+        return NextResponse.json(
+          { ok: false, error: `Não foi possível consultar o Bling: ${result.errors[0]}` },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          ok: true,
+          message:
+            result.errors.length > 0
+              ? `Situação atualizada, com ${result.errors.length} nota(s) sem resposta do Bling.`
+              : "Situação das notas atualizada a partir do Bling.",
+          invoices: result.invoices,
         },
         { status: 200 }
       );
